@@ -36,6 +36,7 @@ import eu.kanade.tachiyomi.data.ocr.OcrQueueActions
 import eu.kanade.tachiyomi.data.ocr.OcrScanManager
 import eu.kanade.tachiyomi.data.ocr.OcrScanNotifier
 import eu.kanade.tachiyomi.data.ocr.OcrScanStore
+import eu.kanade.tachiyomi.data.tts.AndroidTtsEngine
 import eu.kanade.tachiyomi.ui.reader.ReaderSelectionCropper
 import mihon.data.ankidroid.AnkiDroidRepositoryImpl
 import mihon.data.dictionary.DictionaryParserImpl
@@ -82,6 +83,7 @@ import mihon.domain.ocr.repository.OcrRepository
 import mihon.domain.panel.interactor.DetectPanels
 import mihon.domain.panel.repository.PanelDetectionRepository
 import mihon.domain.source.interactor.UpdateMangaFromRemote
+import mihon.domain.tts.engine.TtsEngine
 import mihon.domain.upcoming.interactor.GetUpcomingManga
 import tachiyomi.data.category.CategoryRepositoryImpl
 import tachiyomi.data.chapter.ChapterRepositoryImpl
@@ -280,6 +282,7 @@ class DomainModule : InjektModule {
         addFactory { SearchDictionaryTerms(get(), get()) }
         addSingletonFactory<DictionaryAudioRepository> { DictionaryAudioRepositoryImpl(get<Application>(), get()) }
         addSingletonFactory<DictionaryAudioPlayer> { DictionaryAudioPlayerImpl() }
+        addSingletonFactory<TtsEngine> { AndroidTtsEngine(get<Application>()) }
 
         addSingletonFactory { AnkiDroidPreferences(get()) }
         addSingletonFactory<AnkiDroidRepository> { AnkiDroidRepositoryImpl(get<Application>(), get()) }
