@@ -11,19 +11,22 @@
 
 ```text
 Project:        Yomihon (v0.4.0, vc25) — Android manga reader + OCR/language tooling
-Repo state:     branch main @ b915c9780 ("Release v0.4.0"), up to date with origin/main
-Untracked:      AGENTS.md, architect.md, architect-2.md  (user planning files — DO NOT touch)
+Repo state:     branch main @ 07c64985f + UNCOMMITTED Phases 3–5 work (see git status)
+Untracked:      .opencode/ (tool config); devcontainer.json modified (user env setup — DO NOT touch)
 Primary goal:   Production-quality OCR-integrated Read-Aloud TTS
-Current phase:  Phase 1 (TTS foundation) — NOT_STARTED
-Current status: Phase 0 (repository analysis + documentation system) COMPLETED
-TTS code:       NONE exists yet (verified repo-wide; only DictionaryAudioPlayerImpl MediaPlayer)
+Current phase:  Phase 6 (reader integration) — NEXT
+Current status: Phase 0–5 COMPLETED (3–5 uncommitted at time of writing)
+TTS code:       TtsEngine, TtsAdvancePolicy (+tests), TtsPreferences, SentenceSegmenter
+                (+12 tests) in :domain; AndroidTtsEngine + TtsPlaybackController in :app;
+                DI bindings done. spotlessCheck + testDebugUnitTest + :app:assembleDebug green.
 ```
 
 ## Current objective
 
-Implement the approved Read-Aloud TTS feature per root `architect.md` /
-`architect-2.md` scope decisions, starting with **Phase 1**: `TtsEngine`
-interface, `TtsAdvancePolicy`, `TtsPreferences` in `:domain` + Injekt bindings.
+Implement the Read-Aloud TTS feature per root `architect.md` /
+`architect-2.md` scope decisions. Phases 1–5 landed. Next: **Phase 6** —
+ReaderViewModel/ReaderActivity wiring (`ttsState`, Tts* Events, playback bar,
+bottom-bar entry icon, onStop pause, keep-screen-on), then Phase 7 (settings).
 Follow `docs/phase.md` order exactly.
 
 ## Completed work
@@ -38,20 +41,47 @@ Follow `docs/phase.md` order exactly.
   with the audited architecture
 - Created docs system: prd.md, architecture.md, rules.md, phase.md, design.md,
   memory.md (this file). No source files modified.
+
+[COMPLETED 2026-08-22 — commit 07c64985f]
+- Phase 1: TtsEngine interface, TtsAdvancePolicy (+ TtsAdvancePolicyTest),
+  TtsPreferences in :domain; DomainModule + PreferenceModule bindings
+- Phase 2: AndroidTtsEngine (:app data/tts) — TextToSpeech + AudioFocusRequest,
+  CompletableDeferred bridging
+- Verified: spotlessCheck + :domain:testDebugUnitTest green (JDK17 container;
+  CI toolchain is JDK 21 per .github/.java-version)
+
+[COMPLETED 2026-08-22 — this session, UNCOMMITTED]
+- Phase 4: SentenceSegmenter.toTtsSentences() + TtsSentence model (:domain);
+  SentenceSegmenterTest (12 cases: multi-sentence, remainder, `.`/`...`
+  non-terminal, blank skip, ‼⁇⁉⁈ glyphs, half-width !?, order/bbox
+  preservation, no cross-region merge, consecutive terminals) — TDD RED→GREEN
+- Phase 3+5: TtsPlaybackController (:app ui/reader/tts/) — cached-first
+  acquisition (GetCachedPageOcr → miss via OcrPageSourceResolver +
+  WithOcrScanSession + ScanPageOcr, bitmap recycle in finally), N+1 prefetch
+  with cancellation on page change, TEXT→SEGMENT→SPEAK→ADVANCE loop,
+  TtsPhase state machine exposed as StateFlow<TtsPlaybackState>, advance
+  confirm via CompletableDeferred + 10 s timeout → Paused, onPageSelected
+  arbitration (user navigation wins), next/prev sentence within page,
+  audio-focus loss pauses, live rate/pitch pref collection, events channel
+  (AdvancePage/AdvanceChapter/Failed) for host wiring
+- Verified: spotlessCheck + testDebugUnitTest + :app:assembleDebug green
 ```
 
 ## In progress
 
 ```text
 [IN_PROGRESS]
-Feature: none (between phases)
+Feature: Phase 6 — reader integration
 
-Next up (Phase 1):
-- domain/src/main/java/mihon/domain/tts/engine/TtsEngine.kt      (new)
-- domain/src/main/java/mihon/domain/tts/TtsAdvancePolicy.kt      (new)
-- domain/src/main/java/mihon/domain/tts/service/TtsPreferences.kt(new)
-- app/src/main/java/eu/kanade/domain/DomainModule.kt             (engine binding ~l.282 area)
-- app/src/main/java/eu/kanade/tachiyomi/di/PreferenceModule.kt   (prefs binding ~l.59 area)
+Next up:
+- ReaderViewModel: TtsPlaybackController host (lazy start), State.ttsState,
+  new Events (TtsAdvancePage/TtsAdvanceChapter/TtsError/TtsNoTextFound),
+  stop in onActivityFinish/onCleared, rebind on chapter load
+- ReaderActivity: handle new events (moveToPageIndex/loadNextChapter),
+  render TtsPlaybackBar beside OcrLoadingIndicator (~l.882 inner ContentOverlay),
+  onStop pause, keep-screen-on combination
+- presentation/reader/TtsPlaybackBar.kt + ReaderBottomBar entry icon
+- Then Phase 7: ReadAloud settings tab (rate/pitch/auto-turn/next-chapter/keep-on)
 ```
 
 ## Blocked
@@ -211,19 +241,24 @@ verifySqlDelightMigration → assembleRelease (see rules.md §11)
 ## Last verified build
 
 ```text
-Date:     2026-08-21 (this session)
-Command:  none executed — documentation-only change set
-Result:   n/a (do not claim success without running; first code change MUST run
-          ./gradlew :app:assembleDebug and record it here)
-Environment: linux, branch main @ b915c9780, JDK per repo config (CI: 21)
+Date:     2026-08-22 (this session)
+Command:  ./gradlew spotlessCheck testDebugUnitTest :app:assembleDebug
+Result:   ALL GREEN (spotless clean; all unit tests pass incl. new
+          SentenceSegmenterTest 12/12 + TtsAdvancePolicyTest; debug APK packages)
+Environment: devcontainer image vsc-yomihon (JDK 17) run via docker on WSL2 host;
+          NOTE: assembleDebug packaging OOMs with repo default -Xmx2560m in the
+          7.4 GiB container — run with GRADLE_OPTS="-Dorg.gradle.jvmargs=-Xmx4g
+          -XX:MaxMetaspaceSize=1g" or build on CI/host with more RAM.
+          No repo file changed for this. CI (JDK 21, more RAM) unaffected.
 ```
 
 ## Last verified test
 
 ```text
-Date:     2026-08-21 (this session)
-Command:  none executed — documentation-only change set
-Result:   n/a (first code change MUST run ./gradlew testDebugUnitTest and record)
+Date:     2026-08-22 (this session)
+Command:  ./gradlew testDebugUnitTest
+Result:   PASS (all modules; new: mihon.domain.tts.SentenceSegmenterTest 12 cases,
+          TtsAdvancePolicyTest unchanged-green)
 Environment: same as above
 ```
 
@@ -232,23 +267,27 @@ Environment: same as above
 ## Agent handoff
 
 ```text
-Last agent:                 ox-alpha (documentation-system session)
-Date:                       2026-08-21
-Task completed:             Phase 0 — full repo audit + docs/{prd,architecture,rules,
-                            phase,design,memory}.md created; zero source changes
+Last agent:                 ox-alpha (Phases 3–5 session)
+Date:                       2026-08-22
+Task completed:             Phase 4 (SentenceSegmenter+tests, TDD) · Phase 3+5
+                            (TtsPlaybackController: acquisition, prefetch,
+                            playback loop, arbitration). UNCOMMITTED.
 Current task:               none (handoff point)
-Next recommended task:      Phase 1 (docs/phase.md): create TtsEngine interface,
-                            TtsAdvancePolicy, TtsPreferences in :domain; wire
-                            DomainModule/PreferenceModule bindings; then
-                            ./gradlew :app:assembleDebug + spotlessCheck and
-                            update THIS file (statuses, working files, build/test)
-Files safe to modify:       docs/* ; new files under domain/src/{main,test}/java/mihon/domain/tts/;
-                            app DI modules (DomainModule.kt, PreferenceModule.kt) for bindings
+Next recommended task:      Phase 6 (docs/phase.md): wire controller into
+                            ReaderViewModel/ReaderActivity, TtsPlaybackBar
+                            composable + ReaderBottomBar icon, onStop pause,
+                            keep-screen-on; then Phase 7 settings tab. Run CI
+                            gate order after; update THIS file.
+Files safe to modify:       docs/* ; app ReaderViewModel/ReaderActivity/
+                            presentation-reader files ; new TtsPlaybackBar.kt ;
+                            i18n base strings.xml (snake_case keys only)
 Files currently worked on:  none
-Known risks:                ML models absent locally (device verification needs GLENS
-                            scan or model download); ReaderActivity dual-composition
-                            quirk (#2) when adding overlays; do not touch untracked
-                            AGENTS.md/architect*.md
+Known risks:                ML models absent locally (device verification needs
+                            GLENS scan or model download); ReaderActivity dual-
+                            composition quirk (#2) when adding overlays — bar
+                            goes in INNER ContentOverlay block (~l.882); do not
+                            touch untracked AGENTS.md/architect*.md or the user's
+                            devcontainer.json changes; build env OOM note above.
 ```
 
 ---

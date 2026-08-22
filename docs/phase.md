@@ -5,7 +5,7 @@
 > A phase is COMPLETED only when its verification steps have actually been run
 > and recorded in `docs/memory.md`.
 
-Current phase pointer: **Phase 0 COMPLETED → Phase 1 is next (NOT_STARTED)**.
+Current phase pointer: **Phase 0–5 COMPLETED → Phase 6 (reader integration) is next**.
 
 ---
 
@@ -29,7 +29,7 @@ Current phase pointer: **Phase 0 COMPLETED → Phase 1 is next (NOT_STARTED)**.
 
 ## Phase 1 — TTS foundation
 
-- **Status**: NOT_STARTED
+- **Status**: COMPLETED (commit 07c64985f; spotlessCheck + :domain tests green)
 - **Objective**: framework-free contracts + pure decision logic in `:domain`,
   wired via Injekt.
 - **Tasks**:
@@ -50,7 +50,7 @@ Current phase pointer: **Phase 0 COMPLETED → Phase 1 is next (NOT_STARTED)**.
 
 ## Phase 2 — Android TTS engine
 
-- **Status**: NOT_STARTED
+- **Status**: COMPLETED (commit 07c64985f; device check pending — bundled with Phase 8 device pass)
 - **Objective**: working system-engine implementation behind the abstraction.
 - **Tasks**: `app/.../data/tts/AndroidTtsEngine.kt`; main-thread construction;
   `CompletableDeferred` bridging of `OnInitListener`/`UtteranceProgressListener`;
@@ -65,7 +65,8 @@ Current phase pointer: **Phase 0 COMPLETED → Phase 1 is next (NOT_STARTED)**.
 
 ## Phase 3 — OCR integration
 
-- **Status**: NOT_STARTED
+- **Status**: COMPLETED (acquisition + prefetch inside TtsPlaybackController;
+  device verification deferred to Phase 8 script)
 - **Objective**: feed pages to the pipeline from cache or on-demand scan.
 - **Tasks**: cached-first `GetCachedPageOcr`; miss path via
   `OcrPageSourceResolver` + `WithOcrScanSession` + `ScanPageOcr`; bitmap
@@ -79,7 +80,7 @@ Current phase pointer: **Phase 0 COMPLETED → Phase 1 is next (NOT_STARTED)**.
 
 ## Phase 4 — Sentence processing
 
-- **Status**: NOT_STARTED
+- **Status**: COMPLETED (SentenceSegmenter + SentenceSegmenterTest green)
 - **Objective**: pure segmentation honoring manga reading order.
 - **Tasks**: `SentenceSegmenter.toTtsSentences()`; terminal punct
   `。！？!?‼⁇⁉⁈` with punctuation attached; remainder fragment; blank-region skip;
@@ -93,7 +94,8 @@ Current phase pointer: **Phase 0 COMPLETED → Phase 1 is next (NOT_STARTED)**.
 
 ## Phase 5 — TTS queue & playback control
 
-- **Status**: NOT_STARTED
+- **Status**: COMPLETED (controller loop, TtsPhase state machine, confirm-timeout
+  arbitration, policy reuse; device pass deferred to Phase 8)
 - **Objective**: play/pause/resume/stop/next/prev sentence + automatic progression.
 - **Tasks**: `TtsAdvancePolicyTest` suite; controller loop
   (TEXT→SEGMENT→SPEAK→ADVANCE); state machine
