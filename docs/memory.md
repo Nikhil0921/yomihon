@@ -17,8 +17,11 @@ Repo state:     branch main @ 3fc10ad505 (Phase 7 + Phase-6 fixes COMMITTED ther
                 edit (untouchable) + untracked .opencode/ only.
 Untracked:      .opencode/ (tool config); devcontainer files deleted in commit
 Primary goal:   Production-quality OCR-integrated Read-Aloud TTS
-Current phase:  Phase 8 IN_PROGRESS (unit portion green; device pass BLOCKED)
-Current status: Phases 0–7 COMPLETED. Phase 8 unit portion done this session.
+Current phase:  Phase 8 device pass + Phase 9 measurements BLOCKED on hardware;
+                Phase 9 static audit DONE (2 fixes this session)
+Current status: All locally-runnable work for Phases 0–7 + Phase 8 + Phase 9
+                COMPLETE. Remaining work needs adb device + JP TTS voice +
+                GLENS content/models.
 TTS code:       TtsEngine, TtsAdvancePolicy (+tests), TtsPreferences, SentenceSegmenter
                 (+12 tests) in :domain; AndroidTtsEngine + TtsPlaybackController in :app;
                 ReadAloud settings tab; DI bindings done.
@@ -117,20 +120,46 @@ no adb device attached, ML models absent. Then Phase 9.
   permissions / no new external dependencies" CONFIRMED
 - prd §3.4 scorecard: (1) ✓ suites, (2) ✓ gates green, (6) ✓ verified;
   (3)(4)(5) = on-device script, BLOCKED
+
+[COMPLETED 2026-08-23 — Phase 9 static-audit session, UNCOMMITTED]
+- Phase 9 static portion (bitmap lifecycle + cancellation correctness audit of
+  AndroidTtsEngine + TtsPlaybackController + OCR scan path):
+  - VERIFIED CLEAN: bitmap retention (toOcrImage copies pixels to IntArray
+    upfront — OCR never holds Bitmap; controller recycle guarded by
+    isRecycled; ResolvedOcrPages/OcrPageInput streams closed via use);
+    teardown ordering (failPendingUtterances BEFORE engine.stop/shutdown →
+    no post-teardown callbacks; completeUtterance no-ops on cleared map);
+    explicit CancellationException rethrow in main loop paths; prefetch N+1
+    bounded + cancelled on page change/reset; focus request acquire/abandon paired
+  - FIXED 1: AndroidTtsEngine.initialize() leaked a freshly built TextToSpeech
+    (service connection) when the init coroutine was cancelled during
+    readiness.await() (e.g. swipe-away during Preparing) → now shuts it down
+    on Main before rethrowing CE
+  - FIXED 2: schedulePrefetch used runCatching → swallowed
+    CancellationException (rules.md §7 violation) → explicit try/catch, CE rethrown,
+    other failures logged/no-op'd as before (prefetch stays best-effort)
+- Verified: spotlessCheck + :app:compileDebugKotlin + testDebugUnitTest GREEN
+  (devcontainer JDK17, BUILD SUCCESSFUL 10m54s, EXIT:0)
 ```
 
 ## In progress
 
 ```text
-Feature: Phase 8 — testing
+Feature: Phase 9 — perf/stability hardening (static portion DONE; device
+          measurements deferred, bundled with Phase 8 device pass)
 
-Completed (both sessions):
-- Suite comprehensiveness audit vs prd §3.4(1): PASS, nothing to add
-- spotlessCheck + testDebugUnitTest + :app:assembleDebug: GREEN (§3.4(2))
-- §3.4(6) permission/dependency freeze verified via git diff — CLEAN
+Completed (this session):
+- Bitmap lifecycle audit: CLEAN (no retention across suspension points)
+- Cancellation correctness audit: 2 fixes landed (engine-init leak,
+  prefetch CE swallowing); rest verified clean
 
-Remaining: on-device script prd §3.4(3)–(5) — see Blocked. Nothing else in
-Phase 8 is doable without hardware; do NOT start Phase 9 before device pass.
+Remaining (needs device, same session as Phase 8 device script):
+- memory profile during long sessions; battery after exit (no background CPU)
+- leakcanary run; exit-to-idle <1s audio stop measurement
+- latency masking check (Preparing/LoadingPage + prefetch feel)
+
+Known-issue notes from audit (deliberately NOT fixed, see Known issues #5):
+- start() reset race window (stopped flag flip) — benign spurious event at worst
 ```
 
 ## Blocked
@@ -155,8 +184,9 @@ Remove entries here when work finishes to avoid overlapping agents.)
 ## Recently changed files
 
 ```text
-2026-08-23  docs/memory.md, docs/phase.md      Phase 8 statuses + this session's
-                                               records (only files touched today)
+2026-08-23  app .../data/tts/AndroidTtsEngine.kt          init-cancel leak fix (Phase 9)
+2026-08-23  app .../ui/reader/tts/TtsPlaybackController.kt prefetch CE fix (Phase 9)
+2026-08-23  docs/memory.md, docs/phase.md                 statuses + session records
 2026-08-23  app .../presentation/reader/settings/ReadAloudPage.kt        created (Phase 7, commit 3fc10ad50)
 2026-08-23  app .../presentation/reader/settings/ReaderSettingsDialog.kt 4th tab
 2026-08-23  app .../ui/reader/setting/ReaderSettingsScreenModel.kt       ttsPreferences
@@ -262,6 +292,15 @@ Reason: would diverge from tap-highlight behavior; ordering gap must stay visibl
 
 4. INFO | Docs env | AGENTS.md notes .devcontainer "Java 17" note stale — CI/toolchain
    effectively JDK 21 (Gradle java property 17). Use CI commands from rules.md §11.
+
+5. LOW | TTS | Singleton TtsEngine retains last TtsPlaybackController via
+   onFocusEvent lambda after ReaderViewModel.onCleared until next reader session
+   re-registers (new controller init) — bounded, self-healing retention of a
+   small object graph with dead (cancelled) scope. Clearing it inside
+   engine.shutdown() was REJECTED: ensureInitialized() calls shutdown() on the
+   NoJapaneseVoice path mid-session, which would permanently drop focus-loss
+   handling for that controller. Revisit if leakcanary (Phase 9 device pass)
+   flags more than the controller itself.
 ```
 
 ## Technical debt
@@ -312,10 +351,12 @@ Environment: devcontainer image vsc-yomihon (JDK 17) run via docker on WSL2 host
 
 ```text
 Date:     2026-08-23 (this session)
-Command:  ./gradlew spotlessCheck testDebugUnitTest :app:assembleDebug
-          (docker devcontainer vsc-yomihon-e24e3bd7…, JDK 17, -Xmx4g)
-Result:   BUILD SUCCESSFUL in 14m48s — EXIT:0 (391 tasks; SDK platform 37.0
-          auto-installed into container on first run)
+Command:  ./gradlew spotlessCheck :app:compileDebugKotlin testDebugUnitTest
+          (docker devcontainer vsc-yomihon-e24e3bd7…, JDK 17, -Xmx4g;
+          persistent gradle-home volume yomihon-gradle-home mounted at
+          /home/vscode/.gradle — chown'd to vscode, reuse for faster runs)
+Result:   BUILD SUCCESSFUL in 10m54s — EXIT:0 (330 tasks; first run this setup
+          re-downloaded Gradle dist after a wrapper timeout flake)
 ```
 
 ## Last verified test
@@ -331,30 +372,33 @@ Result:   BUILD SUCCESSFUL (all modules; TTS suites included — see audit above
 ## Agent handoff
 
 ```text
-Last agent:                 ox-alpha (Phase 8 sessions: unit portion + §3.4(6))
+Last agent:                 ox-alpha (Phase 9 static-audit session)
 Date:                       2026-08-23
-Task completed:             Phase 8 unit portion — suite audit vs prd §3.4(1)
-                            (no gaps), spotlessCheck + testDebugUnitTest +
-                            :app:assembleDebug ALL GREEN; stale docs fixed
-                            (phase.md Phase 6/8 statuses, repo hashes);
-                            §3.4(6) permission/deps freeze verified CLEAN.
-Current task:               none (all locally-runnable Phase 8 items done;
-                            device pass blocked on hardware/models)
-Next recommended task:      Phase 8 device pass (prd §3.4(3)–(5)) once a device
-                            with JP TTS voice + GLENS content/models available;
-                            then Phase 9 (perf/stability hardening).
+Task completed:             Phase 9 static portion — bitmap lifecycle +
+                            cancellation audit of TTS/OCR-scan path; 2 fixes
+                            landed (AndroidTtsEngine init-cancel leak,
+                            prefetch runCatching CE swallow); rest verified
+                            clean; gates green. Earlier sessions: Phase 8
+                            unit portion + §3.4(6) freeze check.
+Current task:               none (all non-device work for Phases 8+9 done)
+Next recommended task:      COMBINED Phase 8 device pass + Phase 9 device
+                            measurements (prd §3.4(3)–(5); leakcanary, memory/
+                            battery, exit-to-idle timing) once a device with JP
+                            TTS voice + GLENS content/models is available.
 Files safe to modify:       docs/* ; app reader/tts/settings files ;
                             i18n base strings.xml (snake_case keys only)
-Files currently worked on:  docs/memory.md, docs/phase.md (this change set only)
+Files currently worked on:  app .../data/tts/AndroidTtsEngine.kt,
+                            app .../ui/reader/tts/TtsPlaybackController.kt,
+                            docs/memory.md (this change set, uncommitted)
 Known risks:                ML models absent locally; ReaderActivity dual-
                             composition quirk (#2) when adding overlays; do not
-                            touch user's uncommitted AGENTS.md edit, deleted
-                            devcontainer files, or untracked .opencode/;
-                            build env OOM note above (-Xmx4g always);
+                            touch user's uncommitted AGENTS.md edit or
+                            .opencode/; build env OOM note (-Xmx4g always);
                             Kotlin scoping gotcha: nested classifiers shadow
                             same-named imports inside sealed interfaces;
-                            container is ephemeral — every docker run re-installs
-                            SDK platform (~5 min) before Gradle work starts.
+                            persistent gradle-home volume yomihon-gradle-home
+                            speeds container runs; wrapper download can flake —
+                            just retry.
 ```
 
 ---

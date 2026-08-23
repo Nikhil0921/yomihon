@@ -6,6 +6,7 @@ import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -70,7 +71,13 @@ class AndroidTtsEngine(private val context: Context) : TtsEngine {
             }
         }
 
-        if (!readiness.await()) {
+        val success = try {
+            readiness.await()
+        } catch (e: CancellationException) {
+            withContext(Dispatchers.Main) { engine.shutdown() }
+            throw e
+        }
+        if (!success) {
             withContext(Dispatchers.Main) { engine.shutdown() }
             return@withLock false
         }

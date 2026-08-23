@@ -391,9 +391,21 @@ internal class TtsPlaybackController(
         if (pageIndex >= ctx.totalPages) return
         prefetchJob?.cancel()
         prefetchJob = scope.launch {
-            val cached = runCatching { getCachedPageOcr.await(ctx.chapter.id, pageIndex) }.getOrNull()
+            val cached = try {
+                getCachedPageOcr.await(ctx.chapter.id, pageIndex)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
             if (cached != null) return@launch
-            runCatching { scanOnDemand(ctx, pageIndex) }
+            try {
+                scanOnDemand(ctx, pageIndex)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Prefetch is best-effort; the main loop reports its own failures.
+            }
         }
     }
 

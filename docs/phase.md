@@ -157,7 +157,10 @@ blocked on hardware/models) → then Phase 9**.
 
 ## Phase 9 — Performance/stability hardening
 
-- **Status**: NOT_STARTED
+- **Status**: IN_PROGRESS (2026-08-23: static audit DONE — bitmap lifecycle +
+  cancellation correctness verified, 2 fixes landed [engine init-cancel leak,
+  prefetch CE swallow]; gates green. REMAINING device items bundled with the
+  Phase 8 device pass: memory/battery profiles, leakcanary, exit-to-idle timing)
 - **Objective**: production quality under stress.
 - **Tasks**: bitmap lifecycle audit (no retention across suspension points);
   cancellation correctness (swipe-away, chapter switch mid-scan); memory profile
