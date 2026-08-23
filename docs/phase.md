@@ -5,7 +5,8 @@
 > A phase is COMPLETED only when its verification steps have actually been run
 > and recorded in `docs/memory.md`.
 
-Current phase pointer: **Phases 0–7 COMPLETED → Phase 8 (testing/device pass) is next**.
+Current phase pointer: **Phase 8 IN_PROGRESS (unit portion green; device pass
+blocked on hardware/models) → then Phase 9**.
 
 ---
 
@@ -111,7 +112,8 @@ Current phase pointer: **Phases 0–7 COMPLETED → Phase 8 (testing/device pass
 
 ## Phase 6 — Reader integration
 
-- **Status**: NOT_STARTED
+- **Status**: COMPLETED (code + compile verified 2026-08-23, commit 3fc10ad50;
+  device verification deferred to Phase 8 pass)
 - **Objective**: surface the feature in the reader UI safely.
 - **Tasks**: `ReaderViewModel.State.ttsState` + controller lifecycle wiring
   (lazy start, stop in `onActivityFinish`/`onCleared`); new Events
@@ -140,7 +142,10 @@ Current phase pointer: **Phases 0–7 COMPLETED → Phase 8 (testing/device pass
 
 ## Phase 8 — Testing
 
-- **Status**: NOT_STARTED
+- **Status**: IN_PROGRESS (2026-08-23: suites audited vs prd §3.4(1) — no gaps;
+  full `testDebugUnitTest` + `spotlessCheck` + `:app:assembleDebug` GREEN.
+  REMAINING: on-device script §3.4(3)–(5) — BLOCKED: no adb device attached,
+  ML models absent locally)
 - **Objective**: complete the test story.
 - **Tasks**: ensure segmenter+policy suites comprehensive; run full
   `testDebugUnitTest`; device pass of the prd.md §3.4(3) script (cached path,

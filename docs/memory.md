@@ -11,14 +11,14 @@
 
 ```text
 Project:        Yomihon (v0.4.0, vc25) — Android manga reader + OCR/language tooling
-Repo state:     branch main @ a36c3cc83 (Phases 1–6 committed across 07c64985f,
-                ac1614a5e, a36c3cc83 "checkpoint before WSL recovery"; checkpoint
-                commit contained compile breaks — fixed this session, see below)
-Untracked:      .opencode/ (tool config); devcontainer files deleted in worktree
-                (user env recovery — DO NOT touch/restore)
+Repo state:     branch main @ 3fc10ad505 (Phase 7 + Phase-6 fixes COMMITTED there;
+                includes devcontainer deletions + some .opencode state files —
+                user-committed, do not amend). Working tree: user's AGENTS.md
+                edit (untouchable) + untracked .opencode/ only.
+Untracked:      .opencode/ (tool config); devcontainer files deleted in commit
 Primary goal:   Production-quality OCR-integrated Read-Aloud TTS
-Current phase:  Phase 7 (settings) COMPLETED (code + CI gates green)
-Current status: Phases 0–7 COMPLETED. Next: Phase 8 (testing/device pass).
+Current phase:  Phase 8 IN_PROGRESS (unit portion green; device pass BLOCKED)
+Current status: Phases 0–7 COMPLETED. Phase 8 unit portion done this session.
 TTS code:       TtsEngine, TtsAdvancePolicy (+tests), TtsPreferences, SentenceSegmenter
                 (+12 tests) in :domain; AndroidTtsEngine + TtsPlaybackController in :app;
                 ReadAloud settings tab; DI bindings done.
@@ -28,9 +28,10 @@ TTS code:       TtsEngine, TtsAdvancePolicy (+tests), TtsPreferences, SentenceSe
 ## Current objective
 
 Implement the Read-Aloud TTS feature per root `architect.md` /
-`architect-2.md` scope decisions. Phases 1–7 landed. Next: **Phase 8** —
-testing: full `testDebugUnitTest` (done continuously), device pass of the
-prd.md §3.4(3) script, record results. Follow `docs/phase.md` order exactly.
+`architect-2.md` scope decisions. Phases 1–7 landed (Phase 7 now committed as
+3fc10ad50). **Phase 8 in progress**: unit portion COMPLETE this session
+(suite audit + full green run); device pass of prd.md §3.4(3)–(5) BLOCKED —
+no adb device attached, ML models absent. Then Phase 9.
 
 ## Completed work
 
@@ -94,29 +95,52 @@ prd.md §3.4(3) script, record results. Follow `docs/phase.md` order exactly.
 - Verified: spotlessCheck + :app:compileDebugKotlin + testDebugUnitTest green
 ```
 
+```text
+[COMPLETED 2026-08-23 — commit 3fc10ad50]
+- Phase 6 + Phase 7 + Phase-6 compile fixes COMMITTED by user in one commit
+  (also contains devcontainer deletions and .opencode state files — noted,
+  left as-is). docs/memory.md + phase.md updated inside that commit too.
+
+[COMPLETED 2026-08-23 — this session, UNCOMMITTED (docs only)]
+- Phase 8 unit portion:
+  - Audited SentenceSegmenterTest (12 cases) + TtsAdvancePolicyTest (10 cases)
+    against prd.md §3.4(1) checklist — ALL required branches covered, no gaps.
+  - Full gates green in devcontainer (JDK17): spotlessCheck +
+    testDebugUnitTest + :app:assembleDebug → BUILD SUCCESSFUL 14m48s, EXIT:0
+  - Fixed stale/contradictory docs: repo-state hashes (3fc10ad50), phase.md
+    Phase 6 status NOT_STARTED→COMPLETED, Phase 8 status→IN_PROGRESS
+
+[COMPLETED 2026-08-23 — follow-up session, UNCOMMITTED (docs only)]
+- Phase 8 §3.4(6) verification: `git diff 07c64985f^..HEAD` shows ZERO
+  uses-permission changes in any AndroidManifest.xml, ZERO version-catalog
+  edits, ZERO new dependency statements in build.gradle.kts → "no new
+  permissions / no new external dependencies" CONFIRMED
+- prd §3.4 scorecard: (1) ✓ suites, (2) ✓ gates green, (6) ✓ verified;
+  (3)(4)(5) = on-device script, BLOCKED
+```
+
 ## In progress
 
 ```text
-[COMPLETED]
-Feature: Phase 7 — ReadAloud settings tab
+Feature: Phase 8 — testing
 
-Completed:
-- Read aloud tab in ReaderSettingsDialog (page 3, appended after ColorFilter)
-- Rate/pitch sliders write pref ×100; controller already collects rate/pitch
-  live, auto* prefs read at decision time → live by construction
-- keep-screen-on toggle now live via new ReaderActivity collector
+Completed (both sessions):
+- Suite comprehensiveness audit vs prd §3.4(1): PASS, nothing to add
+- spotlessCheck + testDebugUnitTest + :app:assembleDebug: GREEN (§3.4(2))
+- §3.4(6) permission/dependency freeze verified via git diff — CLEAN
 
-Next:
-- Phase 8: device test pass (prd.md §3.4(3) script) + record in this file;
-  needs ML models or GLENS-scanned chapter locally (Known issue #3)
+Remaining: on-device script prd §3.4(3)–(5) — see Blocked. Nothing else in
+Phase 8 is doable without hardware; do NOT start Phase 9 before device pass.
 ```
 
 ## Blocked
 
 ```text
-None. (Earlier blocker "2 product-fork decisions pending user input" recorded in
-.remember/now.md was RESOLVED — decisions are baked into architect.md/architect-2.md:
-reader-bound playback, mini-bar visualization.)
+Phase 8 device pass: no adb device attached (`adb` not installed on host) AND
+ML model assets absent locally (Known issue #3). Needs BOTH: device with JP
+TTS voice connected (./scripts/adb-wireless pair|connect) and GLENS-scanned
+chapter or downloaded models per CONTRIBUTING.md.
+(Earlier "2 product-fork decisions" blocker RESOLVED — baked into architect*.md.)
 ```
 
 ## Current files being modified
@@ -131,7 +155,9 @@ Remove entries here when work finishes to avoid overlapping agents.)
 ## Recently changed files
 
 ```text
-2026-08-23  app .../presentation/reader/settings/ReadAloudPage.kt        created (Phase 7)
+2026-08-23  docs/memory.md, docs/phase.md      Phase 8 statuses + this session's
+                                               records (only files touched today)
+2026-08-23  app .../presentation/reader/settings/ReadAloudPage.kt        created (Phase 7, commit 3fc10ad50)
 2026-08-23  app .../presentation/reader/settings/ReaderSettingsDialog.kt 4th tab
 2026-08-23  app .../ui/reader/setting/ReaderSettingsScreenModel.kt       ttsPreferences
 2026-08-23  app .../ui/reader/ReaderActivity.kt   ttsKeepScreenOn collector (+ Phase 6 files fixed)
@@ -261,13 +287,13 @@ Injekt 91edab2317, JUnit5 6.1.1/Kotest 6.2.2/MockK 1.14.11).
 ## Testing status
 
 ```text
-Unit tests:        PASS (this session, full testDebugUnitTest)
+Unit tests:        PASS (this session, full testDebugUnitTest, all modules)
 Integration tests: none run (existing androidTest suites are device-gated/@Ignore)
 UI tests:          none exist in repo
-Device tests:      pending — Phase 8 (needs ML models or GLENS-scanned chapter)
+Device tests:      BLOCKED — Phase 8 device pass needs adb device + JP TTS voice
+                   + GLENS-scanned chapter or ML models (none available; see Blocked)
 Lint:              spotlessCheck PASS (this session)
-Build:             :app:compileDebugKotlin PASS (this session; assembleDebug not
-                   re-run this session, compile task covers the changed code)
+Build:             :app:assembleDebug PASS (this session, full run)
 Baseline (pre-TTS expectations): CI order = spotlessCheck → testDebugUnitTest →
                         verifySqlDelightMigration → assembleRelease (see rules.md §11)
 Previous verified build:
@@ -286,8 +312,10 @@ Environment: devcontainer image vsc-yomihon (JDK 17) run via docker on WSL2 host
 
 ```text
 Date:     2026-08-23 (this session)
-Command:  ./gradlew spotlessCheck :app:compileDebugKotlin   (docker devcontainer, JDK 17)
-Result:   BUILD SUCCESSFUL
+Command:  ./gradlew spotlessCheck testDebugUnitTest :app:assembleDebug
+          (docker devcontainer vsc-yomihon-e24e3bd7…, JDK 17, -Xmx4g)
+Result:   BUILD SUCCESSFUL in 14m48s — EXIT:0 (391 tasks; SDK platform 37.0
+          auto-installed into container on first run)
 ```
 
 ## Last verified test
@@ -295,7 +323,7 @@ Result:   BUILD SUCCESSFUL
 ```text
 Date:     2026-08-23 (this session)
 Command:  ./gradlew testDebugUnitTest                    (docker devcontainer, JDK 17)
-Result:   BUILD SUCCESSFUL (all modules)
+Result:   BUILD SUCCESSFUL (all modules; TTS suites included — see audit above)
 ```
 
 ---
@@ -303,27 +331,30 @@ Result:   BUILD SUCCESSFUL (all modules)
 ## Agent handoff
 
 ```text
-Last agent:                 ox-alpha (Phase 7 + Phase-6 break-fix session)
+Last agent:                 ox-alpha (Phase 8 sessions: unit portion + §3.4(6))
 Date:                       2026-08-23
-Task completed:             Phase 7 (ReadAloud settings tab: sliders/checkboxes,
-                            i18n keys, live keep-screen-on collector) · Fixed
-                            Phase-6 compile breaks introduced by WSL-recovery
-                            checkpoint commit a36c3cc83 (Event.TtsError
-                            self-shadowing; db-vs-domain Chapter mismatch).
-Current task:               none (awaiting direction)
-Next recommended task:      Phase 8 (docs/phase.md): device test pass of prd.md
-                            §3.4(3) script — needs ML models downloaded or a
-                            GLENS-scanned chapter on device. Then Phase 9.
+Task completed:             Phase 8 unit portion — suite audit vs prd §3.4(1)
+                            (no gaps), spotlessCheck + testDebugUnitTest +
+                            :app:assembleDebug ALL GREEN; stale docs fixed
+                            (phase.md Phase 6/8 statuses, repo hashes);
+                            §3.4(6) permission/deps freeze verified CLEAN.
+Current task:               none (all locally-runnable Phase 8 items done;
+                            device pass blocked on hardware/models)
+Next recommended task:      Phase 8 device pass (prd §3.4(3)–(5)) once a device
+                            with JP TTS voice + GLENS content/models available;
+                            then Phase 9 (perf/stability hardening).
 Files safe to modify:       docs/* ; app reader/tts/settings files ;
                             i18n base strings.xml (snake_case keys only)
-Files currently worked on:  none
-Known risks:                ML models absent locally (device verification needs
-                            GLENS scan or model download); ReaderActivity dual-
+Files currently worked on:  docs/memory.md, docs/phase.md (this change set only)
+Known risks:                ML models absent locally; ReaderActivity dual-
                             composition quirk (#2) when adding overlays; do not
-                            touch deleted devcontainer files or untracked
-                            AGENTS.md/architect*.md; build env OOM note above;
+                            touch user's uncommitted AGENTS.md edit, deleted
+                            devcontainer files, or untracked .opencode/;
+                            build env OOM note above (-Xmx4g always);
                             Kotlin scoping gotcha: nested classifiers shadow
-                            same-named imports inside sealed interfaces.
+                            same-named imports inside sealed interfaces;
+                            container is ephemeral — every docker run re-installs
+                            SDK platform (~5 min) before Gradle work starts.
 ```
 
 ---
