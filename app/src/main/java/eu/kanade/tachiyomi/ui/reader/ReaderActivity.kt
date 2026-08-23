@@ -71,6 +71,7 @@ import eu.kanade.presentation.reader.ReaderContentOverlay
 import eu.kanade.presentation.reader.ReaderPageActionsDialog
 import eu.kanade.presentation.reader.ReaderPageIndicator
 import eu.kanade.presentation.reader.ReadingModeSelectDialog
+import eu.kanade.presentation.reader.TtsPlaybackBar
 import eu.kanade.presentation.reader.appbars.ReaderAppBars
 import eu.kanade.presentation.reader.components.ChapterNavigatorType
 import eu.kanade.presentation.reader.settings.ReaderSettingsDialog
@@ -95,6 +96,8 @@ import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderSettingsScreenModel
 import eu.kanade.tachiyomi.ui.reader.setting.ReadingMode
+import eu.kanade.tachiyomi.ui.reader.tts.TtsError
+import eu.kanade.tachiyomi.ui.reader.tts.TtsPhase
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderActiveOcrOverlay
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderOcrRegionSelection
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderProgressIndicator
@@ -121,6 +124,7 @@ import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
 import logcat.LogPriority
 import mihon.domain.dictionary.model.DictionaryTerm
+import mihon.domain.tts.service.TtsPreferences
 import tachiyomi.core.common.Constants
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.launchIO
@@ -154,6 +158,7 @@ class ReaderActivity : BaseActivity() {
     private val preferences = Injekt.get<BasePreferences>()
     private val dictionaryPreferences = Injekt.get<DictionaryPreferences>()
     private val ankiDroidPreferences = Injekt.get<AnkiDroidPreferences>()
+    private val ttsPreferences = Injekt.get<TtsPreferences>()
     private val imageSaver = Injekt.get<ImageSaver>()
     private val selectionBitmapCropper = Injekt.get<ReaderSelectionCropper>()
     private val dictionarySearchScreenModel by lazy { DictionarySearchScreenModel() }
@@ -323,6 +328,12 @@ class ReaderActivity : BaseActivity() {
             .onEach(::setChapters)
             .launchIn(lifecycleScope)
 
+        viewModel.state
+            .map { it.ttsState.phase }
+            .distinctUntilChanged()
+            .onEach { updateKeepScreenOn() }
+            .launchIn(lifecycleScope)
+
         viewModel.eventFlow
             .onEach { event ->
                 when (event) {
@@ -362,6 +373,18 @@ class ReaderActivity : BaseActivity() {
                     ReaderViewModel.Event.OcrError -> {
                         clearActiveOcrOverlaySession()
                         toast(MR.strings.error_unknown)
+                    }
+                    is ReaderViewModel.Event.TtsAdvancePage -> {
+                        moveToPageIndex(event.pageIndex)
+                    }
+                    ReaderViewModel.Event.TtsAdvanceChapter -> {
+                        loadNextChapter()
+                    }
+                    is ReaderViewModel.Event.TtsError -> {
+                        toast(event.error.toMessageRes())
+                    }
+                    ReaderViewModel.Event.TtsNoTextFound -> {
+                        toast(MR.strings.no_results_found)
                     }
                 }
             }
@@ -470,6 +493,15 @@ class ReaderActivity : BaseActivity() {
             viewModel.updateHistory()
         }
         super.onPause()
+    }
+
+    /**
+     * Read-aloud pauses when the reader leaves the foreground (home, screen off,
+     * app switch) and stays paused on return.
+     */
+    override fun onStop() {
+        viewModel.pauseReadAloud()
+        super.onStop()
     }
 
     /**
@@ -743,6 +775,7 @@ class ReaderActivity : BaseActivity() {
                     },
                     onClickSettings = viewModel::openSettingsDialog,
                     onClickOcr = ::enterOcrMode,
+                    onClickReadAloud = viewModel::startReadAloud,
                 )
 
                 // OCR selection overlay
@@ -883,6 +916,17 @@ class ReaderActivity : BaseActivity() {
                     visible = state.isProcessingOcr,
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
+
+                // Read-aloud playback pill
+                TtsPlaybackBar(
+                    state = state.ttsState,
+                    onTogglePlayPause = viewModel::toggleReadAloudPlayPause,
+                    onNextSentence = viewModel::nextReadAloudSentence,
+                    onPreviousSentence = viewModel::previousReadAloudSentence,
+                    onStop = viewModel::stopReadAloud,
+                    onRetry = viewModel::retryReadAloud,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
             }
         }
 
@@ -970,6 +1014,7 @@ class ReaderActivity : BaseActivity() {
             },
             onClickSettings = viewModel::openSettingsDialog,
             onClickOcr = ::enterOcrMode,
+            onClickReadAloud = viewModel::startReadAloud,
         )
     }
 
@@ -1511,6 +1556,30 @@ class ReaderActivity : BaseActivity() {
     }
 
     /**
+     * Keeps the screen on when the reader preference says so, or while
+     * read-aloud playback is active with its own keep-screen-on preference.
+     */
+    private fun updateKeepScreenOn() {
+        val enabled = readerPreferences.keepScreenOn.get() ||
+            (
+                ttsPreferences.ttsKeepScreenOn().get() &&
+                    viewModel.state.value.ttsState.phase == TtsPhase.Playing
+                )
+        if (enabled) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    private fun TtsError.toMessageRes(): StringResource = when (this) {
+        TtsError.NoJapaneseVoice -> MR.strings.tts_error_no_japanese_voice
+        TtsError.EngineError -> MR.strings.tts_error_engine
+        TtsError.OcrError -> MR.strings.tts_error_ocr
+        TtsError.NoTextFound -> MR.strings.no_results_found
+    }
+
+    /**
      * Updates viewer inset depending on fullscreen reader preferences.
      */
     private fun updateViewerInset(
@@ -1595,7 +1664,7 @@ class ReaderActivity : BaseActivity() {
                 .launchIn(lifecycleScope)
 
             readerPreferences.keepScreenOn.changes()
-                .onEach(::setKeepScreenOn)
+                .onEach { updateKeepScreenOn() }
                 .launchIn(lifecycleScope)
 
             readerPreferences.customBrightness.changes()
@@ -1648,17 +1717,6 @@ class ReaderActivity : BaseActivity() {
                 val data = outputStream.toByteArray()
                 SubsamplingScaleImageView.setDisplayProfile(data)
                 TachiyomiImageDecoder.displayProfile = data
-            }
-        }
-
-        /**
-         * Sets the keep screen on mode according to [enabled].
-         */
-        private fun setKeepScreenOn(enabled: Boolean) {
-            if (enabled) {
-                window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            } else {
-                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             }
         }
 

@@ -1247,6 +1247,21 @@
     <string name="ocr_memory_error">Not Enough Memory to Run OCR</string>
     <string name="ocr_initialization_error">OCR Initialization Failed</string>
 
+    <!-- Read aloud (TTS) -->
+    <string name="action_read_aloud">Read aloud</string>
+    <string name="tts_action_play">Play</string>
+    <string name="tts_action_pause">Pause</string>
+    <string name="tts_action_stop">Stop</string>
+    <string name="tts_action_next_sentence">Next sentence</string>
+    <string name="tts_action_previous_sentence">Previous sentence</string>
+    <string name="tts_preparing">Preparing read aloud…</string>
+    <string name="tts_loading_page">Loading page text…</string>
+    <string name="tts_paused">Paused</string>
+    <string name="tts_finished">Finished</string>
+    <string name="tts_error_no_japanese_voice">No Japanese text-to-speech voice installed. Install one in system settings.</string>
+    <string name="tts_error_engine">Text-to-speech engine failed</string>
+    <string name="tts_error_ocr">Couldn\'t get page text for reading aloud</string>
+
     <!-- Monetary support -->
     <string name="supportUsScreen.perks">Patrons get access to exclusive channels, with more perks to come.</string>
     <string name="supportUsScreen.donationPlatform.patreon">Patreon (preferred)</string>

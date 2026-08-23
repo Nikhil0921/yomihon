@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DocumentScanner
+import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -28,6 +29,7 @@ fun ReaderBottomBar(
     onClickCropBorder: () -> Unit,
     onClickSettings: () -> Unit,
     onClickOcr: () -> Unit,
+    onClickReadAloud: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -61,6 +63,13 @@ fun ReaderBottomBar(
             Icon(
                 imageVector = Icons.Outlined.DocumentScanner,
                 contentDescription = stringResource(MR.strings.action_ocr),
+            )
+        }
+
+        IconButton(onClick = onClickReadAloud) {
+            Icon(
+                imageVector = Icons.Outlined.RecordVoiceOver,
+                contentDescription = stringResource(MR.strings.action_read_aloud),
             )
         }
 

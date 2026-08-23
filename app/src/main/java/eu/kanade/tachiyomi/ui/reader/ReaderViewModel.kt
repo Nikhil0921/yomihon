@@ -20,6 +20,7 @@ import eu.kanade.tachiyomi.data.database.models.toDomainChapter
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.download.DownloadProvider
 import eu.kanade.tachiyomi.data.download.model.Download
+import eu.kanade.tachiyomi.data.ocr.OcrPageSourceResolver
 import eu.kanade.tachiyomi.data.saver.Image
 import eu.kanade.tachiyomi.data.saver.ImageSaver
 import eu.kanade.tachiyomi.data.saver.Location
@@ -34,6 +35,12 @@ import eu.kanade.tachiyomi.ui.reader.model.ViewerChapters
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.setting.ReadingMode
+import eu.kanade.tachiyomi.ui.reader.tts.TtsChapterContext
+import eu.kanade.tachiyomi.ui.reader.tts.TtsError
+import eu.kanade.tachiyomi.ui.reader.tts.TtsEvent
+import eu.kanade.tachiyomi.ui.reader.tts.TtsPhase
+import eu.kanade.tachiyomi.ui.reader.tts.TtsPlaybackController
+import eu.kanade.tachiyomi.ui.reader.tts.TtsPlaybackState
 import eu.kanade.tachiyomi.ui.reader.viewer.Viewer
 import eu.kanade.tachiyomi.util.chapter.filterDownloaded
 import eu.kanade.tachiyomi.util.chapter.removeDuplicates
@@ -48,6 +55,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
@@ -55,13 +63,19 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import logcat.LogPriority
 import mihon.domain.ocr.exception.OcrException
+import mihon.domain.ocr.interactor.GetCachedPageOcr
 import mihon.domain.ocr.interactor.OcrProcessor
+import mihon.domain.ocr.interactor.ScanPageOcr
+import mihon.domain.ocr.interactor.WithOcrScanSession
 import mihon.domain.ocr.model.flattenOcrTextForQuery
 import mihon.domain.ocr.repository.OcrRepository
 import mihon.domain.panel.repository.PanelDetectionRepository
+import mihon.domain.tts.engine.TtsEngine
+import mihon.domain.tts.service.TtsPreferences
 import tachiyomi.core.common.preference.toggle
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.launchNonCancellable
@@ -155,6 +169,51 @@ class ReaderViewModel @JvmOverloads constructor(
     private var chapterToDownload: Download? = null
 
     private val ocrProcessor: OcrProcessor by injectLazy()
+
+    // Read-aloud (TTS) collaborators; created only when the user starts playback.
+    private val ttsEngine: TtsEngine by injectLazy()
+    private val ttsPreferences: TtsPreferences by injectLazy()
+    private val getCachedPageOcr: GetCachedPageOcr by injectLazy()
+    private val scanPageOcr: ScanPageOcr by injectLazy()
+    private val withOcrScanSession: WithOcrScanSession by injectLazy()
+    private val pageSourceResolver: OcrPageSourceResolver by injectLazy()
+
+    private var ttsControllerInstance: TtsPlaybackController? = null
+    private val ttsController: TtsPlaybackController
+        get() = ttsControllerInstance ?: createTtsController().also { ttsControllerInstance = it }
+
+    private fun createTtsController(): TtsPlaybackController {
+        val controller = TtsPlaybackController(
+            scope = viewModelScope,
+            engine = ttsEngine,
+            preferences = ttsPreferences,
+            getCachedPageOcr = getCachedPageOcr,
+            scanPageOcr = scanPageOcr,
+            withOcrScanSession = withOcrScanSession,
+            pageSourceResolver = pageSourceResolver,
+        )
+        viewModelScope.launch {
+            controller.state.collect { ttsState ->
+                mutableState.update { it.copy(ttsState = ttsState) }
+            }
+        }
+        viewModelScope.launch {
+            controller.events.collect { event ->
+                when (event) {
+                    is TtsEvent.AdvancePage -> eventChannel.send(Event.TtsAdvancePage(event.pageIndex))
+                    TtsEvent.AdvanceChapter -> eventChannel.send(Event.TtsAdvanceChapter)
+                    is TtsEvent.Failed -> {
+                        if (event.error == TtsError.NoTextFound) {
+                            eventChannel.send(Event.TtsNoTextFound)
+                        } else {
+                            eventChannel.send(Event.TtsError(event.error))
+                        }
+                    }
+                }
+            }
+        }
+        return controller
+    }
 
     private val unfilteredChapterList by lazy {
         val manga = manga!!
@@ -254,9 +313,21 @@ class ReaderViewModel @JvmOverloads constructor(
                 chapterId = currentChapter.chapter.id!!
             }
             .launchIn(viewModelScope)
+
+        // Rebind read-aloud playback to whatever chapter becomes active while it runs
+        // (auto chapter advance and user navigation through chapter transitions).
+        state.map { it.viewerChapters?.currChapter?.chapter?.id }
+            .distinctUntilChanged()
+            .drop(1)
+            .onEach { onTtsChapterChanged() }
+            .launchIn(viewModelScope)
     }
 
     override fun onCleared() {
+        ttsControllerInstance?.let { controller ->
+            controller.stop()
+            ttsEngine.shutdown()
+        }
         val currentChapters = state.value.viewerChapters
         if (currentChapters != null) {
             currentChapters.unref()
@@ -275,7 +346,69 @@ class ReaderViewModel @JvmOverloads constructor(
      * trigger deletion of the downloaded chapters.
      */
     fun onActivityFinish() {
+        ttsControllerInstance?.stop()
         deletePendingChapters()
+    }
+
+    /**
+     * Starts read-aloud playback for the current chapter at the visible page.
+     * No-op when playback is already running or the page isn't ready.
+     */
+    fun startReadAloud() {
+        val phase = state.value.ttsState.phase
+        if (phase != TtsPhase.Idle && phase != TtsPhase.Finished && phase != TtsPhase.Error) return
+        startReadAloudAt((state.value.currentPage - 1).coerceAtLeast(0))
+    }
+
+    private fun startReadAloudAt(pageIndex: Int) {
+        val manga = manga ?: return
+        val chapter = getCurrentChapter() ?: return
+        val pages = chapter.pages ?: return
+
+        ttsController.start(
+            TtsChapterContext(
+                manga = manga,
+                chapter = chapter.chapter,
+                totalPages = pages.size,
+                hasNextChapter = state.value.viewerChapters?.nextChapter != null,
+            ),
+            pageIndex,
+        )
+    }
+
+    /** Restarts playback after [TtsPhase.Error]; keeps the page the error occurred on. */
+    fun retryReadAloud() {
+        if (state.value.ttsState.phase != TtsPhase.Error) return
+        startReadAloudAt(state.value.ttsState.pageIndex.coerceAtLeast(0))
+    }
+
+    fun toggleReadAloudPlayPause() {
+        ttsController.togglePlayPause()
+    }
+
+    /** Pauses playback if active; safe no-op otherwise. Used from Activity.onStop. */
+    fun pauseReadAloud() {
+        ttsControllerInstance?.pause()
+    }
+
+    fun stopReadAloud() {
+        ttsController.stop()
+    }
+
+    fun nextReadAloudSentence() {
+        ttsController.nextSentence()
+    }
+
+    fun previousReadAloudSentence() {
+        ttsController.previousSentence()
+    }
+
+    private fun onTtsChapterChanged() {
+        val controller = ttsControllerInstance ?: return
+        when (controller.state.value.phase) {
+            TtsPhase.Idle, TtsPhase.Finished, TtsPhase.Error -> Unit
+            else -> startReadAloudAt(0)
+        }
     }
 
     /**
@@ -472,6 +605,8 @@ class ReaderViewModel @JvmOverloads constructor(
         if (selectedChapter != getCurrentChapter()) {
             logcat { "Setting ${selectedChapter.chapter.url} as active" }
             loadNewChapter(selectedChapter)
+        } else {
+            ttsControllerInstance?.onPageSelected(page.index)
         }
 
         val inDownloadRange = page.number.toDouble() / pages.size > 0.25
@@ -1060,6 +1195,7 @@ class ReaderViewModel @JvmOverloads constructor(
         val menuVisible: Boolean = false,
         val ocrSelectionMode: Boolean = false,
         val isProcessingOcr: Boolean = false,
+        val ttsState: TtsPlaybackState = TtsPlaybackState(),
         @IntRange(from = -100, to = 100) val brightnessOverlayValue: Int = 0,
     ) {
         val currentChapter: ReaderChapter?
@@ -1100,5 +1236,10 @@ class ReaderViewModel @JvmOverloads constructor(
         data object OcrMemoryError : Event
         data object OcrInitializationError : Event
         data object OcrError : Event
+
+        data class TtsAdvancePage(val pageIndex: Int) : Event
+        data object TtsAdvanceChapter : Event
+        data class TtsError(val error: TtsError) : Event
+        data object TtsNoTextFound : Event
     }
 }

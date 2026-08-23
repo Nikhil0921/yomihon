@@ -53,6 +53,7 @@ data class TtsPlaybackState(
     val phase: TtsPhase = TtsPhase.Idle,
     val pageIndex: Int = -1,
     val sentenceIndex: Int = -1,
+    val sentenceCount: Int = 0,
     val sentenceText: String = "",
     val error: TtsError? = null,
 )
@@ -249,6 +250,7 @@ internal class TtsPlaybackController(
                         phase = TtsPhase.Playing,
                         pageIndex = pageIndex,
                         sentenceIndex = sentenceIndex,
+                        sentenceCount = sentences.size,
                         sentenceText = sentence.text,
                     )
                 }
@@ -423,7 +425,11 @@ internal class TtsPlaybackController(
             }
         } else {
             mutableState.update {
-                it.copy(sentenceIndex = newIndex, sentenceText = queue.getOrNull(newIndex)?.text.orEmpty())
+                it.copy(
+                    sentenceIndex = newIndex,
+                    sentenceCount = queue.size,
+                    sentenceText = queue.getOrNull(newIndex)?.text.orEmpty(),
+                )
             }
         }
     }
