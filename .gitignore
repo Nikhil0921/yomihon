@@ -35,3 +35,6 @@ data/src/main/assets/panel_detector/model.tflite
 *.dll
 *.lib
 *.pch
+
+# Java heap dumps
+*.hprof
