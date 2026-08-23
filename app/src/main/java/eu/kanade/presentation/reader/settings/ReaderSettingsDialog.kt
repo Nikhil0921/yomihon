@@ -29,6 +29,7 @@ fun ReaderSettingsDialog(
         stringResource(MR.strings.pref_category_reading_mode),
         stringResource(MR.strings.pref_category_general),
         stringResource(MR.strings.custom_filter),
+        stringResource(MR.strings.action_read_aloud),
     )
     val pagerState = rememberPagerState { tabTitles.size }
 
@@ -63,6 +64,7 @@ fun ReaderSettingsDialog(
                     0 -> ReadingModePage(screenModel)
                     1 -> GeneralPage(screenModel)
                     2 -> ColorFilterPage(screenModel)
+                    3 -> ReadAloudPage(screenModel)
                 }
             }
         }

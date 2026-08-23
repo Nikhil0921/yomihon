@@ -368,7 +368,7 @@ class ReaderViewModel @JvmOverloads constructor(
         ttsController.start(
             TtsChapterContext(
                 manga = manga,
-                chapter = chapter.chapter,
+                chapter = chapter.chapter.toDomainChapter()!!,
                 totalPages = pages.size,
                 hasNextChapter = state.value.viewerChapters?.nextChapter != null,
             ),
@@ -1239,7 +1239,7 @@ class ReaderViewModel @JvmOverloads constructor(
 
         data class TtsAdvancePage(val pageIndex: Int) : Event
         data object TtsAdvanceChapter : Event
-        data class TtsError(val error: TtsError) : Event
+        data class TtsError(val error: eu.kanade.tachiyomi.ui.reader.tts.TtsError) : Event
         data object TtsNoTextFound : Event
     }
 }

@@ -5,7 +5,7 @@
 > A phase is COMPLETED only when its verification steps have actually been run
 > and recorded in `docs/memory.md`.
 
-Current phase pointer: **Phase 0–5 COMPLETED → Phase 6 (reader integration) is next**.
+Current phase pointer: **Phases 0–7 COMPLETED → Phase 8 (testing/device pass) is next**.
 
 ---
 
@@ -127,7 +127,7 @@ Current phase pointer: **Phase 0–5 COMPLETED → Phase 6 (reader integration) 
 
 ## Phase 7 — Settings
 
-- **Status**: NOT_STARTED
+- **Status**: COMPLETED (2026-08-23; device verification deferred to Phase 8 pass)
 - **Objective**: user control over speech behavior.
 - **Tasks**: "Read aloud" tab in `ReaderSettingsDialog` using existing
   `CheckboxItem`/`SliderItem` specs; rate/pitch sliders, auto page turn,

@@ -1261,6 +1261,11 @@
     <string name="tts_error_no_japanese_voice">No Japanese text-to-speech voice installed. Install one in system settings.</string>
     <string name="tts_error_engine">Text-to-speech engine failed</string>
     <string name="tts_error_ocr">Couldn\'t get page text for reading aloud</string>
+    <string name="pref_tts_speech_rate">Speech rate</string>
+    <string name="pref_tts_pitch">Pitch</string>
+    <string name="pref_tts_auto_page_turn">Turn pages automatically</string>
+    <string name="pref_tts_auto_next_chapter">Continue to next chapter</string>
+    <string name="pref_tts_keep_screen_on">Keep screen on while reading aloud</string>
 
     <!-- Monetary support -->
     <string name="supportUsScreen.perks">Patrons get access to exclusive channels, with more perks to come.</string>

@@ -1667,6 +1667,10 @@ class ReaderActivity : BaseActivity() {
                 .onEach { updateKeepScreenOn() }
                 .launchIn(lifecycleScope)
 
+            ttsPreferences.ttsKeepScreenOn().changes()
+                .onEach { updateKeepScreenOn() }
+                .launchIn(lifecycleScope)
+
             readerPreferences.customBrightness.changes()
                 .onEach(::setCustomBrightness)
                 .launchIn(lifecycleScope)

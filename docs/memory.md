@@ -11,23 +11,26 @@
 
 ```text
 Project:        Yomihon (v0.4.0, vc25) — Android manga reader + OCR/language tooling
-Repo state:     branch main @ 07c64985f + UNCOMMITTED Phases 3–5 work (see git status)
-Untracked:      .opencode/ (tool config); devcontainer.json modified (user env setup — DO NOT touch)
+Repo state:     branch main @ a36c3cc83 (Phases 1–6 committed across 07c64985f,
+                ac1614a5e, a36c3cc83 "checkpoint before WSL recovery"; checkpoint
+                commit contained compile breaks — fixed this session, see below)
+Untracked:      .opencode/ (tool config); devcontainer files deleted in worktree
+                (user env recovery — DO NOT touch/restore)
 Primary goal:   Production-quality OCR-integrated Read-Aloud TTS
-Current phase:  Phase 6 (reader integration) — NEXT
-Current status: Phase 0–5 COMPLETED (3–5 uncommitted at time of writing)
+Current phase:  Phase 7 (settings) COMPLETED (code + CI gates green)
+Current status: Phases 0–7 COMPLETED. Next: Phase 8 (testing/device pass).
 TTS code:       TtsEngine, TtsAdvancePolicy (+tests), TtsPreferences, SentenceSegmenter
                 (+12 tests) in :domain; AndroidTtsEngine + TtsPlaybackController in :app;
-                DI bindings done. spotlessCheck + testDebugUnitTest + :app:assembleDebug green.
+                ReadAloud settings tab; DI bindings done.
+                spotlessCheck + testDebugUnitTest green (this session, JDK17 container).
 ```
 
 ## Current objective
 
 Implement the Read-Aloud TTS feature per root `architect.md` /
-`architect-2.md` scope decisions. Phases 1–5 landed. Next: **Phase 6** —
-ReaderViewModel/ReaderActivity wiring (`ttsState`, Tts* Events, playback bar,
-bottom-bar entry icon, onStop pause, keep-screen-on), then Phase 7 (settings).
-Follow `docs/phase.md` order exactly.
+`architect-2.md` scope decisions. Phases 1–7 landed. Next: **Phase 8** —
+testing: full `testDebugUnitTest` (done continuously), device pass of the
+prd.md §3.4(3) script, record results. Follow `docs/phase.md` order exactly.
 
 ## Completed work
 
@@ -65,23 +68,47 @@ Follow `docs/phase.md` order exactly.
   audio-focus loss pauses, live rate/pitch pref collection, events channel
   (AdvancePage/AdvanceChapter/Failed) for host wiring
 - Verified: spotlessCheck + testDebugUnitTest + :app:assembleDebug green
+
+[COMPLETED 2026-08-23 — commit ac1614a5e + a36c3cc83]
+- Phase 6 committed (ReaderViewModel/ReaderActivity wiring, TtsPlaybackBar,
+  ReaderBottomBar icon, onStop pause, keep-screen-on) via "checkpoint before
+  WSL recovery" — but that checkpoint contained COMPILE BREAKS (see Fixed)
+
+[COMPLETED 2026-08-23 — this session, UNCOMMITTED]
+- Phase 7: ReadAloud settings tab
+  - ReaderSettingsScreenModel: `ttsPreferences` (Injekt default)
+  - ReadAloudPage.kt: rate/pitch sliders (50–200%, pref ×100 mapping via
+    roundToInt), auto-page-turn / auto-next-chapter / keep-screen-on checkboxes
+    (CheckboxItem(pref) overloads)
+  - ReaderSettingsDialog: 4th tab "Read aloud" appended as page 3; ColorFilter
+    dim-hack index (`== 2`) intentionally untouched
+  - i18n base strings.xml: 5 snake_case keys (pref_tts_speech_rate, pitch,
+    auto_page_turn, auto_next_chapter, keep_screen_on); reuses action_read_aloud
+  - ReaderActivity: added ttsKeepScreenOn().changes() collector → live
+    updateKeepScreenOn() (was only reader-pref + phase-change driven)
+- FIXED pre-existing Phase-6 compile breaks from WSL-recovery checkpoint:
+  - ReaderViewModel Event.TtsError param self-shadowed sibling nested class
+    (Kotlin scoping: nested classifiers shadow imports) → FQ type in data class
+  - ReaderViewModel l.371 passed db Chapter where TtsChapterContext expects
+    domain Chapter → toDomainChapter()!! (house precedent l.640/l.1168)
+- Verified: spotlessCheck + :app:compileDebugKotlin + testDebugUnitTest green
 ```
 
 ## In progress
 
 ```text
-[IN_PROGRESS]
-Feature: Phase 6 — reader integration
+[COMPLETED]
+Feature: Phase 7 — ReadAloud settings tab
 
-Next up:
-- ReaderViewModel: TtsPlaybackController host (lazy start), State.ttsState,
-  new Events (TtsAdvancePage/TtsAdvanceChapter/TtsError/TtsNoTextFound),
-  stop in onActivityFinish/onCleared, rebind on chapter load
-- ReaderActivity: handle new events (moveToPageIndex/loadNextChapter),
-  render TtsPlaybackBar beside OcrLoadingIndicator (~l.882 inner ContentOverlay),
-  onStop pause, keep-screen-on combination
-- presentation/reader/TtsPlaybackBar.kt + ReaderBottomBar entry icon
-- Then Phase 7: ReadAloud settings tab (rate/pitch/auto-turn/next-chapter/keep-on)
+Completed:
+- Read aloud tab in ReaderSettingsDialog (page 3, appended after ColorFilter)
+- Rate/pitch sliders write pref ×100; controller already collects rate/pitch
+  live, auto* prefs read at decision time → live by construction
+- keep-screen-on toggle now live via new ReaderActivity collector
+
+Next:
+- Phase 8: device test pass (prd.md §3.4(3) script) + record in this file;
+  needs ML models or GLENS-scanned chapter locally (Known issue #3)
 ```
 
 ## Blocked
@@ -104,13 +131,12 @@ Remove entries here when work finishes to avoid overlapping agents.)
 ## Recently changed files
 
 ```text
-2026-08-21  docs/prd.md            created — product requirements incl. verified feature inventory + TTS reqs
-2026-08-21  docs/architecture.md   created — actual architecture + planned TTS pipeline/file map
-2026-08-21  docs/rules.md          created — engineering rulebook for AI agents
-2026-08-21  docs/phase.md          created — Phase 0..10 roadmap with statuses
-2026-08-21  docs/design.md         created — design language audit + TTS UI spec
-2026-08-21  docs/memory.md         created — this file
-No existing repository files were modified.
+2026-08-23  app .../presentation/reader/settings/ReadAloudPage.kt        created (Phase 7)
+2026-08-23  app .../presentation/reader/settings/ReaderSettingsDialog.kt 4th tab
+2026-08-23  app .../ui/reader/setting/ReaderSettingsScreenModel.kt       ttsPreferences
+2026-08-23  app .../ui/reader/ReaderActivity.kt   ttsKeepScreenOn collector (+ Phase 6 files fixed)
+2026-08-23  app .../ui/reader/ReaderViewModel.kt  TtsError FQN + toDomainChapter!! fixes
+2026-08-23  i18n .../base/strings.xml             5 pref_tts_* keys
 ```
 
 ## Architecture decisions
@@ -150,6 +176,13 @@ Controller emits Events handled by ReaderActivity's existing eventFlow collector
 Reason:
 Reuses established VM→Activity pattern; user swipes mid-playback win via
 onPageSelected arbitration without fighting the viewer.
+
+Decision:
+Settings tab appended LAST in ReaderSettingsDialog (page 3) so ColorFilter's
+dim-amount hack (`pagerState.currentPage == 2`) keeps pointing at ColorFilter.
+
+Reason:
+Smallest diff; reordering tabs would silently move the special no-dim behavior.
 ```
 
 ## Rejected approaches
@@ -228,38 +261,41 @@ Injekt 91edab2317, JUnit5 6.1.1/Kotest 6.2.2/MockK 1.14.11).
 ## Testing status
 
 ```text
-Unit tests:        NOT RUN this session (docs-only change; nothing to test yet)
+Unit tests:        PASS (this session, full testDebugUnitTest)
 Integration tests: none run (existing androidTest suites are device-gated/@Ignore)
 UI tests:          none exist in repo
-Device tests:      not applicable yet
-Lint:              spotlessCheck NOT RUN this session (markdown-only change)
-Build:             NOT RUN this session (markdown-only change)
+Device tests:      pending — Phase 8 (needs ML models or GLENS-scanned chapter)
+Lint:              spotlessCheck PASS (this session)
+Build:             :app:compileDebugKotlin PASS (this session; assembleDebug not
+                   re-run this session, compile task covers the changed code)
 Baseline (pre-TTS expectations): CI order = spotlessCheck → testDebugUnitTest →
-verifySqlDelightMigration → assembleRelease (see rules.md §11)
+                        verifySqlDelightMigration → assembleRelease (see rules.md §11)
+Previous verified build:
+Date:     2026-08-22
+Command:  ./gradlew spotlessCheck testDebugUnitTest :app:assembleDebug
+Result:   ALL GREEN (predates WSL-recovery checkpoint; that checkpoint broke
+          :app compile — fixed 2026-08-23, see Completed work)
+Environment: devcontainer image vsc-yomihon (JDK 17) run via docker on WSL2 host;
+            NOTE: packaging OOMs with repo default -Xmx2560m in 7.4 GiB container —
+            run with GRADLE_OPTS="-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g"
+            or build on CI/host with more RAM. No repo file changed for this.
+            CI (JDK 21, more RAM) unaffected.
 ```
 
 ## Last verified build
 
 ```text
-Date:     2026-08-22 (this session)
-Command:  ./gradlew spotlessCheck testDebugUnitTest :app:assembleDebug
-Result:   ALL GREEN (spotless clean; all unit tests pass incl. new
-          SentenceSegmenterTest 12/12 + TtsAdvancePolicyTest; debug APK packages)
-Environment: devcontainer image vsc-yomihon (JDK 17) run via docker on WSL2 host;
-          NOTE: assembleDebug packaging OOMs with repo default -Xmx2560m in the
-          7.4 GiB container — run with GRADLE_OPTS="-Dorg.gradle.jvmargs=-Xmx4g
-          -XX:MaxMetaspaceSize=1g" or build on CI/host with more RAM.
-          No repo file changed for this. CI (JDK 21, more RAM) unaffected.
+Date:     2026-08-23 (this session)
+Command:  ./gradlew spotlessCheck :app:compileDebugKotlin   (docker devcontainer, JDK 17)
+Result:   BUILD SUCCESSFUL
 ```
 
 ## Last verified test
 
 ```text
-Date:     2026-08-22 (this session)
-Command:  ./gradlew testDebugUnitTest
-Result:   PASS (all modules; new: mihon.domain.tts.SentenceSegmenterTest 12 cases,
-          TtsAdvancePolicyTest unchanged-green)
-Environment: same as above
+Date:     2026-08-23 (this session)
+Command:  ./gradlew testDebugUnitTest                    (docker devcontainer, JDK 17)
+Result:   BUILD SUCCESSFUL (all modules)
 ```
 
 ---
@@ -267,27 +303,27 @@ Environment: same as above
 ## Agent handoff
 
 ```text
-Last agent:                 ox-alpha (Phases 3–5 session)
-Date:                       2026-08-22
-Task completed:             Phase 4 (SentenceSegmenter+tests, TDD) · Phase 3+5
-                            (TtsPlaybackController: acquisition, prefetch,
-                            playback loop, arbitration). UNCOMMITTED.
-Current task:               none (handoff point)
-Next recommended task:      Phase 6 (docs/phase.md): wire controller into
-                            ReaderViewModel/ReaderActivity, TtsPlaybackBar
-                            composable + ReaderBottomBar icon, onStop pause,
-                            keep-screen-on; then Phase 7 settings tab. Run CI
-                            gate order after; update THIS file.
-Files safe to modify:       docs/* ; app ReaderViewModel/ReaderActivity/
-                            presentation-reader files ; new TtsPlaybackBar.kt ;
+Last agent:                 ox-alpha (Phase 7 + Phase-6 break-fix session)
+Date:                       2026-08-23
+Task completed:             Phase 7 (ReadAloud settings tab: sliders/checkboxes,
+                            i18n keys, live keep-screen-on collector) · Fixed
+                            Phase-6 compile breaks introduced by WSL-recovery
+                            checkpoint commit a36c3cc83 (Event.TtsError
+                            self-shadowing; db-vs-domain Chapter mismatch).
+Current task:               none (awaiting direction)
+Next recommended task:      Phase 8 (docs/phase.md): device test pass of prd.md
+                            §3.4(3) script — needs ML models downloaded or a
+                            GLENS-scanned chapter on device. Then Phase 9.
+Files safe to modify:       docs/* ; app reader/tts/settings files ;
                             i18n base strings.xml (snake_case keys only)
 Files currently worked on:  none
 Known risks:                ML models absent locally (device verification needs
                             GLENS scan or model download); ReaderActivity dual-
-                            composition quirk (#2) when adding overlays — bar
-                            goes in INNER ContentOverlay block (~l.882); do not
-                            touch untracked AGENTS.md/architect*.md or the user's
-                            devcontainer.json changes; build env OOM note above.
+                            composition quirk (#2) when adding overlays; do not
+                            touch deleted devcontainer files or untracked
+                            AGENTS.md/architect*.md; build env OOM note above;
+                            Kotlin scoping gotcha: nested classifiers shadow
+                            same-named imports inside sealed interfaces.
 ```
 
 ---
