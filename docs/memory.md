@@ -140,6 +140,15 @@ no adb device attached, ML models absent. Then Phase 9.
     other failures logged/no-op'd as before (prefetch stays best-effort)
 - Verified: spotlessCheck + :app:compileDebugKotlin + testDebugUnitTest GREEN
   (devcontainer JDK17, BUILD SUCCESSFUL 10m54s, EXIT:0)
+
+[COMPLETED 2026-08-23 — model-setup session, UNCOMMITTED (gitignored assets only)]
+- Downloaded all 6 ML model assets via the exact CI step
+  (.github/workflows/build.yml), every file sha256-verified OK. Clears the
+  models half of the Phase 8/9 device-pass blocker (Known issue #3).
+- :app:assembleDebug re-run WITH models present → BUILD SUCCESSFUL 3m46s,
+  EXIT:0; verified all 6 assets packaged into the APK (unzip -l). Staged
+  installable artifacts at app/build/outputs/apk/debug/ (split per ABI;
+  use app-arm64-v8a-debug.apk on a modern phone) → device pass is turnkey.
 ```
 
 ## In progress
@@ -165,10 +174,14 @@ Known-issue notes from audit (deliberately NOT fixed, see Known issues #5):
 ## Blocked
 
 ```text
-Phase 8 device pass: no adb device attached (`adb` not installed on host) AND
-ML model assets absent locally (Known issue #3). Needs BOTH: device with JP
-TTS voice connected (./scripts/adb-wireless pair|connect) and GLENS-scanned
-chapter or downloaded models per CONTRIBUTING.md.
+Phase 8 device pass + Phase 9 measurements: ONLY remaining blocker is hardware —
+no adb on host and no attached/emulated device (models are now downloaded
+locally, Known issue #3 resolved). User must either:
+  a) attach/pair an Android phone with a Japanese TTS voice
+     (`./scripts/adb-wireless pair|connect`), or
+  b) provide GLENS-scanned content on that device.
+/dev/kvm exists on host, but host lacks Android SDK; standing decision: do NOT
+build a headless-emulator harness for the prd script — it is interactive/manual.
 (Earlier "2 product-fork decisions" blocker RESOLVED — baked into architect*.md.)
 ```
 
@@ -285,10 +298,13 @@ Reason: would diverge from tap-highlight behavior; ordering gap must stay visibl
    Impact: TTS bar/dialog additions must go to the correct block (inner
    ContentOverlay, beside OcrLoadingIndicator ~l.882). Do not refactor casually.
 
-3. INFO | Build env | ML model assets are gitignored & absent from fresh clones
-   (app assets ocr/, ocr_fast/, data panel_detector/model.tflite). Local OCR +
-   panel features silently degrade; CI downloads pinned artifacts. TTS cached-
-   path testing needs a GLENS-scanned chapter or downloaded models first.
+3. RESOLVED-locally | Build env | ML model assets were gitignored & absent;
+   NOW DOWNLOADED into working tree via the exact CI step
+   (.github/workflows/build.yml "Download ML models", all sha256 verified):
+   app/src/main/assets/ocr/{encoder,decoder}.tflite+embeddings.bin,
+   app/src/main/assets/ocr_fast/{encoder,decoder}.tflite,
+   data/src/main/assets/panel_detector/model.tflite. Still absent on fresh
+   clones/CI-only; re-run that step if assets are wiped.
 
 4. INFO | Docs env | AGENTS.md notes .devcontainer "Java 17" note stale — CI/toolchain
    effectively JDK 21 (Gradle java property 17). Use CI commands from rules.md §11.
@@ -351,12 +367,13 @@ Environment: devcontainer image vsc-yomihon (JDK 17) run via docker on WSL2 host
 
 ```text
 Date:     2026-08-23 (this session)
+Command:  ./gradlew :app:assembleDebug
+          (docker devcontainer, JDK 17, -Xmx4g, gradle-home volume mounted)
+Result:   BUILD SUCCESSFUL in 3m46s — EXIT:0; all 6 ML assets verified inside
+          APK (app/build/outputs/apk/debug/app-arm64-v8a-debug.apk et al.)
+Previous full-gate run (same day):
 Command:  ./gradlew spotlessCheck :app:compileDebugKotlin testDebugUnitTest
-          (docker devcontainer vsc-yomihon-e24e3bd7…, JDK 17, -Xmx4g;
-          persistent gradle-home volume yomihon-gradle-home mounted at
-          /home/vscode/.gradle — chown'd to vscode, reuse for faster runs)
-Result:   BUILD SUCCESSFUL in 10m54s — EXIT:0 (330 tasks; first run this setup
-          re-downloaded Gradle dist after a wrapper timeout flake)
+Result:   BUILD SUCCESSFUL in 10m54s — EXIT:0
 ```
 
 ## Last verified test
@@ -380,11 +397,17 @@ Task completed:             Phase 9 static portion — bitmap lifecycle +
                             prefetch runCatching CE swallow); rest verified
                             clean; gates green. Earlier sessions: Phase 8
                             unit portion + §3.4(6) freeze check.
-Current task:               none (all non-device work for Phases 8+9 done)
+Current task:               none (all non-device work for Phases 8+9 done;
+                            ML models now downloaded locally — device is the
+                            only missing piece)
 Next recommended task:      COMBINED Phase 8 device pass + Phase 9 device
                             measurements (prd §3.4(3)–(5); leakcanary, memory/
-                            battery, exit-to-idle timing) once a device with JP
-                            TTS voice + GLENS content/models is available.
+                            battery, exit-to-idle timing) once user attaches or
+                            pairs a device with JP TTS voice + GLENS content.
+                            USER ACTION NEEDED: `./scripts/adb-wireless pair`
+                            then `connect`, or plug in via USB; install staged
+                            app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
+                            (models already packaged).
 Files safe to modify:       docs/* ; app reader/tts/settings files ;
                             i18n base strings.xml (snake_case keys only)
 Files currently worked on:  app .../data/tts/AndroidTtsEngine.kt,
