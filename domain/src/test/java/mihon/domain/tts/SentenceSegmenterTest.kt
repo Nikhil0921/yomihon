@@ -50,9 +50,31 @@ class SentenceSegmenterTest {
     }
 
     @Test
-    fun `ascii dots are not terminal`() {
+    fun `ascii dot runs are not terminal`() {
         segment(region(0, "えっと...そうだね。")) shouldContainExactly listOf(
             TtsSentence("えっと...そうだね。", 0, region(0, "").boundingBox, OcrTextOrientation.Vertical),
+        )
+    }
+
+    @Test
+    fun `english periods before whitespace are terminal`() {
+        segment(region(0, "Hello world. This is fine.")) shouldContainExactly listOf(
+            TtsSentence("Hello world.", 0, region(0, "").boundingBox, OcrTextOrientation.Vertical),
+            TtsSentence("This is fine.", 0, region(0, "").boundingBox, OcrTextOrientation.Vertical),
+        )
+    }
+
+    @Test
+    fun `english ellipsis stays glued to its sentence`() {
+        segment(region(0, "I thought so... but no.")) shouldContainExactly listOf(
+            TtsSentence("I thought so... but no.", 0, region(0, "").boundingBox, OcrTextOrientation.Vertical),
+        )
+    }
+
+    @Test
+    fun `decimals never split on the dot`() {
+        segment(region(0, "It costs 3.14 units.")) shouldContainExactly listOf(
+            TtsSentence("It costs 3.14 units.", 0, region(0, "").boundingBox, OcrTextOrientation.Vertical),
         )
     }
 

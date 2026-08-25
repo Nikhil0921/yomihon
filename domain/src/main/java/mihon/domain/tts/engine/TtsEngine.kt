@@ -14,8 +14,6 @@ interface TtsEngine {
      */
     suspend fun initialize(): Boolean
 
-    val japaneseAvailable: Boolean
-
     /**
      * Speaks [text] and suspends until the utterance completes, fails or [stop] is
      * called. Returns false when the utterance did not complete successfully.

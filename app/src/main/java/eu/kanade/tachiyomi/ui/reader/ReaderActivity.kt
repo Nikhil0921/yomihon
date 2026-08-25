@@ -1166,8 +1166,13 @@ class ReaderActivity : BaseActivity() {
      */
     private fun loadNextChapter() {
         lifecycleScope.launch {
+            val currentChapterId = viewModel.state.value.currentChapter?.chapter?.id
             viewModel.loadNextChapter()
-            moveToPageIndex(0)
+            // Only reposition when the chapter actually changed; a failed load must not
+            // yank the old chapter back to its first page.
+            if (viewModel.state.value.currentChapter?.chapter?.id != currentChapterId) {
+                moveToPageIndex(0)
+            }
         }
     }
 
@@ -1573,7 +1578,6 @@ class ReaderActivity : BaseActivity() {
     }
 
     private fun TtsError.toMessageRes(): StringResource = when (this) {
-        TtsError.NoJapaneseVoice -> MR.strings.tts_error_no_japanese_voice
         TtsError.EngineError -> MR.strings.tts_error_engine
         TtsError.OcrError -> MR.strings.tts_error_ocr
         TtsError.NoTextFound -> MR.strings.no_results_found

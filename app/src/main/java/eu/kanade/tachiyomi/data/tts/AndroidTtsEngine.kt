@@ -14,7 +14,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import mihon.domain.tts.engine.TtsEngine
 import mihon.domain.tts.engine.TtsFocusEvent
-import java.util.Locale
 import java.util.concurrent.atomic.AtomicReference
 
 class AndroidTtsEngine(private val context: Context) : TtsEngine {
@@ -32,9 +31,6 @@ class AndroidTtsEngine(private val context: Context) : TtsEngine {
     private var pitch: Float = 1f
 
     override var onFocusEvent: ((TtsFocusEvent) -> Unit)? = null
-
-    override val japaneseAvailable: Boolean
-        get() = tts.get()?.let { it.isLanguageAvailable(Locale.JAPAN) >= TextToSpeech.LANG_AVAILABLE } == true
 
     override suspend fun initialize(): Boolean = mutex.withLock {
         if (tts.get() != null) return@withLock true

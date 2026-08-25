@@ -5,8 +5,10 @@
 > A phase is COMPLETED only when its verification steps have actually been run
 > and recorded in `docs/memory.md`.
 
-Current phase pointer: **Phase 8 IN_PROGRESS (unit portion green; device pass
-blocked on hardware/models) → then Phase 9**.
+Current phase pointer: **Phase 8 device pass IN_PROGRESS on real hardware
+(English-content build 0.4.0-8232 installed) → then Phase 9 measurements**.
+PRODUCT PIVOT 2026-08-25: English is the primary v1 Read-Aloud language;
+Japanese TTS moved to Phase 10.
 
 ---
 
@@ -51,7 +53,9 @@ blocked on hardware/models) → then Phase 9**.
 
 ## Phase 2 — Android TTS engine
 
-- **Status**: COMPLETED (commit 07c64985f; device check pending — bundled with Phase 8 device pass)
+- **Status**: COMPLETED (commit 07c64985f; 2026-08-25: Japanese preflight
+  REMOVED per product pivot — engine speaks system-default voice; device check
+  bundled with Phase 8 device pass)
 - **Objective**: working system-engine implementation behind the abstraction.
 - **Tasks**: `app/.../data/tts/AndroidTtsEngine.kt`; main-thread construction;
   `CompletableDeferred` bridging of `OnInitListener`/`UtteranceProgressListener`;
@@ -81,7 +85,9 @@ blocked on hardware/models) → then Phase 9**.
 
 ## Phase 4 — Sentence processing
 
-- **Status**: COMPLETED (SentenceSegmenter + SentenceSegmenterTest green)
+- **Status**: COMPLETED (SentenceSegmenterTest green; 2026-08-25 extended to
+  English rules: ASCII '.' terminal before whitespace/EOL, dot-runs glued,
+  decimals safe; 15 cases)
 - **Objective**: pure segmentation honoring manga reading order.
 - **Tasks**: `SentenceSegmenter.toTtsSentences()`; terminal punct
   `。！？!?‼⁇⁉⁈` with punctuation attached; remainder fragment; blank-region skip;
@@ -142,30 +148,32 @@ blocked on hardware/models) → then Phase 9**.
 
 ## Phase 8 — Testing
 
-- **Status**: IN_PROGRESS (2026-08-23: suites audited vs prd §3.4(1) — no gaps;
-  full `testDebugUnitTest` + `spotlessCheck` + `:app:assembleDebug` GREEN.
-  REMAINING: on-device script §3.4(3)–(5) — BLOCKED: no adb device attached,
-  ML models absent locally)
+- **Status**: IN_PROGRESS (2026-08-25: stabilization change set landed — Glens
+  strip tiling + EN ordering, JP gate removal, segmenter EN rules, progression
+  fixes; spotlessCheck + testDebugUnitTest + :app:assembleDebug GREEN; build
+  installed on SM_M066B. REMAINING: on-device script §3.4(3)–(5) with the user
+  driving — English content. The "missing-JP-voice" branch of the old script is
+  OBSOLETE after the pivot.)
 - **Objective**: complete the test story.
 - **Tasks**: ensure segmenter+policy suites comprehensive; run full
   `testDebugUnitTest`; device pass of the prd.md §3.4(3) script (cached path,
-  uncached path, webtoon, arbitration, end-of-content, missing-JP-voice error,
+  uncached path, webtoon strip incl. tiling, arbitration, end-of-content,
   rate/pitch); record results in memory.md.
-- **Dependencies**: Phases 1–7.
+- **Dependencies**: Phases 1–7 + 2026-08-25 stabilization fixes.
 - **Completion criteria**: all suites green + device checklist recorded.
 - **Tests required**: as listed.
 
 ## Phase 9 — Performance/stability hardening
 
-- **Status**: IN_PROGRESS (2026-08-23: static audit DONE — bitmap lifecycle +
-  cancellation correctness verified, 2 fixes landed [engine init-cancel leak,
-  prefetch CE swallow]; gates green. REMAINING device items bundled with the
-  Phase 8 device pass: memory/battery profiles, leakcanary, exit-to-idle timing)
+- **Status**: IN_PROGRESS (static audit DONE 2026-08-23 [2 fixes]; reader-
+  stabilization pass DONE 2026-08-25 [OCR/TTS/progression root-cause fixes,
+  honest error states]. REMAINING device items bundled with the Phase 8 device
+  pass: memory/battery profiles, leakcanary, exit-to-idle timing)
 - **Objective**: production quality under stress.
 - **Tasks**: bitmap lifecycle audit (no retention across suspension points);
   cancellation correctness (swipe-away, chapter switch mid-scan); memory profile
   during long sessions; battery check after exit (no background CPU);
-  legacy-model latency masked by Preparing/LoadingPage states + prefetch.
+  latency masked by Preparing/LoadingPage states + prefetch.
 - **Dependencies**: Phase 8.
 - **Completion criteria**: no leaks in leakcanary runs; exit-to-idle < ~1 s audio
   stop; documented measurements in memory.md.
@@ -174,9 +182,12 @@ blocked on hardware/models) → then Phase 9**.
 ## Phase 10 — Future engines (backlog)
 
 - **Status**: NOT_STARTED (explicitly out of v1)
-- **Candidates**: cloud TTS provider(s); local neural TTS; explicit voice picker;
-  background playback via FGS+MediaSession; on-image bbox highlight; audio caching
-  for high-latency engines; porting Glens ordering into local Legacy/Fast scans.
+- **Candidates**: Japanese/multi-language TTS voice selection (revisit the
+  language-preflight removed on 2026-08-25 as an explicit opt-in, not a gate);
+  cloud TTS provider(s); local neural TTS; explicit voice picker;
+  background playback via FGS+MediaSession; on-image bbox highlight; audio
+  caching for high-latency engines; porting Glens ordering into local Legacy/Fast
+  scans; cross-tile text merge for seam bubbles (Known issue #6).
 - **Rule**: each requires a PRD update + architecture review BEFORE coding
   (rules.md §10). None may regress v1 behavior.
 

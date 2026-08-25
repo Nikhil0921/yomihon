@@ -1258,7 +1258,6 @@
     <string name="tts_loading_page">Loading page text…</string>
     <string name="tts_paused">Paused</string>
     <string name="tts_finished">Finished</string>
-    <string name="tts_error_no_japanese_voice">No Japanese text-to-speech voice installed. Install one in system settings.</string>
     <string name="tts_error_engine">Text-to-speech engine failed</string>
     <string name="tts_error_ocr">Couldn\'t get page text for reading aloud</string>
     <string name="pref_tts_speech_rate">Speech rate</string>

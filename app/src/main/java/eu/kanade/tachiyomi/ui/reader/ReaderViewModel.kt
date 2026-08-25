@@ -191,6 +191,7 @@ class ReaderViewModel @JvmOverloads constructor(
             scanPageOcr = scanPageOcr,
             withOcrScanSession = withOcrScanSession,
             pageSourceResolver = pageSourceResolver,
+            provideContext = ::buildTtsChapterContext,
         )
         viewModelScope.launch {
             controller.state.collect { ttsState ->
@@ -361,18 +362,20 @@ class ReaderViewModel @JvmOverloads constructor(
     }
 
     private fun startReadAloudAt(pageIndex: Int) {
-        val manga = manga ?: return
-        val chapter = getCurrentChapter() ?: return
-        val pages = chapter.pages ?: return
+        val context = buildTtsChapterContext() ?: return
+        ttsController.start(context, pageIndex)
+    }
 
-        ttsController.start(
-            TtsChapterContext(
-                manga = manga,
-                chapter = chapter.chapter.toDomainChapter()!!,
-                totalPages = pages.size,
-                hasNextChapter = state.value.viewerChapters?.nextChapter != null,
-            ),
-            pageIndex,
+    /** Builds playback context for the currently active chapter, or null while it isn't ready. */
+    private fun buildTtsChapterContext(): TtsChapterContext? {
+        val manga = manga ?: return null
+        val chapter = getCurrentChapter() ?: return null
+        val pages = chapter.pages ?: return null
+        return TtsChapterContext(
+            manga = manga,
+            chapter = chapter.chapter.toDomainChapter()!!,
+            totalPages = pages.size,
+            hasNextChapter = state.value.viewerChapters?.nextChapter != null,
         )
     }
 

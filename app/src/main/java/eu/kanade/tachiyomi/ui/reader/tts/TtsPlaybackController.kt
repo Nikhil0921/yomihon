@@ -43,7 +43,6 @@ enum class TtsPhase {
 }
 
 enum class TtsError {
-    NoJapaneseVoice,
     EngineError,
     OcrError,
     NoTextFound,
@@ -86,6 +85,12 @@ internal class TtsPlaybackController(
     private val scanPageOcr: ScanPageOcr,
     private val withOcrScanSession: WithOcrScanSession,
     private val pageSourceResolver: OcrPageSourceResolver,
+
+    /**
+     * Supplies a context for the CURRENTLY ACTIVE chapter. Re-queried on every queue
+     * rebuild so chapter switches and user navigation never play against stale state.
+     */
+    private val provideContext: () -> TtsChapterContext?,
 ) {
 
     private val mutableState = MutableStateFlow(TtsPlaybackState())
@@ -178,28 +183,48 @@ internal class TtsPlaybackController(
     fun onPageSelected(pageIndex: Int) {
         val pending = pendingAdvance
         if (pending != null) {
+            logcat(LogPriority.DEBUG) { "TTS advance confirmed page=$pageIndex" }
             pending.complete(pageIndex)
             return
         }
         val playing = mutableState.value.phase == TtsPhase.Playing ||
-            mutableState.value.phase == TtsPhase.LoadingPage
+            mutableState.value.phase == TtsPhase.LoadingPage ||
+            mutableState.value.phase == TtsPhase.Preparing
         if (playing && !stopped && pageIndex != mutableState.value.pageIndex) {
+            logcat(LogPriority.DEBUG) { "TTS user navigation to page=$pageIndex" }
             rebuildQueueForUserNavigation(pageIndex)
         }
     }
 
-    private suspend fun awaitAdvanceConfirmation(target: Int): Int? {
+    /**
+     * Asks the host to show [target] and waits for confirmation.
+     * Returns true when playback may continue with [target] as the active page.
+     */
+    private suspend fun awaitAdvanceConfirmation(target: Int): Boolean {
         val deferred = CompletableDeferred<Int>()
         pendingAdvance = deferred
+        logcat(LogPriority.DEBUG) { "TTS page advance request target=$target" }
         try {
             eventChannel.send(TtsEvent.AdvancePage(target))
             val shown = withTimeoutOrNull(ADVANCE_CONFIRM_TIMEOUT_MS) { deferred.await() }
-            if (shown != null && shown != target) {
-                // User went somewhere else while the advance was in flight;
-                // onPageSelected already rebuilt the queue for that page.
-                return null
+            when {
+                shown == target -> {
+                    mutableState.update { it.copy(pageIndex = shown, phase = TtsPhase.LoadingPage) }
+                    return true
+                }
+                shown != null -> {
+                    // Viewer settled somewhere else (user navigated mid-advance);
+                    // reconcile playback with the page actually shown.
+                    rebuildQueueForUserNavigation(shown)
+                    return false
+                }
+                else -> {
+                    logcat(LogPriority.WARN) { "TTS page advance to $target timed out" }
+                    paused = true
+                    mutableState.update { it.copy(phase = TtsPhase.Paused, sentenceText = "") }
+                    return false
+                }
             }
-            return shown
         } finally {
             pendingAdvance = null
         }
@@ -208,8 +233,18 @@ internal class TtsPlaybackController(
     private fun rebuildQueueForUserNavigation(pageIndex: Int) {
         playbackJob?.cancel()
         prefetchJob?.cancel()
+        prefetchJob = null
         engine.stop()
         paused = false
+        val ctx = provideContext()
+        if (ctx == null) {
+            // Chapter not ready yet; surface an honest paused state until the
+            // viewer reports a page and triggers another rebuild.
+            paused = true
+            mutableState.update { it.copy(pageIndex = pageIndex, phase = TtsPhase.Paused, sentenceText = "") }
+            return
+        }
+        context = ctx
         mutableState.update { it.copy(pageIndex = pageIndex, phase = TtsPhase.LoadingPage) }
         playbackJob = scope.launch {
             if (engine.initialize()) runPlayback(pageIndex) else fail(TtsError.EngineError)
@@ -239,6 +274,7 @@ internal class TtsPlaybackController(
             if (sentenceIndex >= sentences.size) sentenceIndex = 0
             schedulePrefetch(ctx, pageIndex + 1)
 
+            var utteranceRetries = 0
             while (sentenceIndex < sentences.size) {
                 if (stopped) return finishIdle()
                 if (!awaitWhilePaused()) return finishIdle()
@@ -263,10 +299,30 @@ internal class TtsPlaybackController(
                     return fail(TtsError.EngineError)
                 }
                 if (!spoke) {
-                    // Interrupted by pause(), stop(), or job replacement.
                     if (stopped) return finishIdle()
-                    if (!awaitWhilePaused()) return finishIdle()
+                    if (paused) {
+                        // resume() relaunches playback from resumeIndex; this job must
+                        // not keep advancing or both jobs would race on the engine.
+                        if (!awaitWhilePaused()) return finishIdle()
+                        return
+                    }
+                    // Genuine utterance failure (engine rejected/erred): per house rule,
+                    // retry once, then pause instead of silently skipping the sentence.
+                    if (utteranceRetries == 0) {
+                        utteranceRetries++
+                        logcat(LogPriority.WARN) {
+                            "TTS sentence ${utteranceId(pageIndex, sentenceIndex)} failed; retrying once"
+                        }
+                        continue
+                    }
+                    logcat(LogPriority.ERROR) {
+                        "TTS sentence ${utteranceId(pageIndex, sentenceIndex)} failed twice; pausing"
+                    }
+                    paused = true
+                    mutableState.update { it.copy(phase = TtsPhase.Paused) }
+                    return
                 }
+                utteranceRetries = 0
                 sentenceIndex++
             }
 
@@ -298,17 +354,10 @@ internal class TtsPlaybackController(
         ) {
             TtsAdvanceAction.NextPage -> {
                 mutableState.update { it.copy(phase = TtsPhase.LoadingPage) }
-                val confirmed = awaitAdvanceConfirmation(pageIndex + 1) ?: run {
-                    if (pendingAdvance == null && !stopped) {
-                        paused = true
-                        mutableState.update { it.copy(phase = TtsPhase.Paused, sentenceText = "") }
-                    }
-                    return false
-                }
-                mutableState.update { it.copy(pageIndex = confirmed, phase = TtsPhase.LoadingPage) }
-                return true
+                return awaitAdvanceConfirmation(pageIndex + 1)
             }
             TtsAdvanceAction.NextChapter -> {
+                logcat(LogPriority.DEBUG) { "TTS chapter advance request" }
                 mutableState.update { it.copy(phase = TtsPhase.Preparing, sentenceText = "") }
                 engine.stop()
                 engine.abandonFocus()
@@ -336,11 +385,6 @@ internal class TtsPlaybackController(
             fail(TtsError.EngineError)
             return false
         }
-        if (!engine.japaneseAvailable) {
-            engine.shutdown()
-            fail(TtsError.NoJapaneseVoice)
-            return false
-        }
         engine.acquireFocus()
         return true
     }
@@ -357,12 +401,20 @@ internal class TtsPlaybackController(
             logcat(LogPriority.ERROR, e) { "TTS cached OCR read failed" }
             null
         }
-        val result = cached ?: scanOnDemand(ctx, pageIndex)
-        result?.regions.orEmpty().toTtsSentences()
+        logcat(LogPriority.DEBUG) {
+            "TTS OCR ${if (cached != null) "cache hit" else "cache miss"} chapter=${ctx.chapter.id} page=$pageIndex"
+        }
+        val result = cached ?: scanOnDemand(ctx, pageIndex) ?: return@withIOContext null
+        val sentences = result.regions.toTtsSentences()
+        logcat(LogPriority.DEBUG) {
+            "TTS page=$pageIndex segmented sentences=${sentences.size} regions=${result.regions.size}"
+        }
+        sentences
     }
 
     /** Cached-miss path: resolve the bitmap through the shared pipeline, scan, recycle. */
     private suspend fun scanOnDemand(ctx: TtsChapterContext, pageIndex: Int) = try {
+        logcat(LogPriority.DEBUG) { "TTS on-demand scan start chapter=${ctx.chapter.id} page=$pageIndex" }
         withOcrScanSession.await {
             val pages = pageSourceResolver.resolve(ctx.manga, ctx.chapter)
             pages.use { resolved ->
@@ -391,6 +443,7 @@ internal class TtsPlaybackController(
         if (pageIndex >= ctx.totalPages) return
         prefetchJob?.cancel()
         prefetchJob = scope.launch {
+            logcat(LogPriority.DEBUG) { "TTS prefetch start page=$pageIndex" }
             val cached = try {
                 getCachedPageOcr.await(ctx.chapter.id, pageIndex)
             } catch (e: CancellationException) {
@@ -398,10 +451,15 @@ internal class TtsPlaybackController(
             } catch (_: Exception) {
                 null
             }
-            if (cached != null) return@launch
+            if (cached != null) {
+                logcat(LogPriority.DEBUG) { "TTS prefetch cache hit page=$pageIndex" }
+                return@launch
+            }
             try {
                 scanOnDemand(ctx, pageIndex)
+                logcat(LogPriority.DEBUG) { "TTS prefetch complete page=$pageIndex" }
             } catch (e: CancellationException) {
+                logcat(LogPriority.DEBUG) { "TTS prefetch cancelled page=$pageIndex" }
                 throw e
             } catch (_: Exception) {
                 // Prefetch is best-effort; the main loop reports its own failures.

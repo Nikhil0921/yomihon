@@ -11,30 +11,33 @@
 
 ```text
 Project:        Yomihon (v0.4.0, vc25) — Android manga reader + OCR/language tooling
-Repo state:     branch main @ 3fc10ad505 (Phase 7 + Phase-6 fixes COMMITTED there;
-                includes devcontainer deletions + some .opencode state files —
-                user-committed, do not amend). Working tree: user's AGENTS.md
-                edit (untouchable) + untracked .opencode/ only.
-Untracked:      .opencode/ (tool config); devcontainer files deleted in commit
-Primary goal:   Production-quality OCR-integrated Read-Aloud TTS
-Current phase:  Phase 8 device pass + Phase 9 measurements BLOCKED on hardware;
-                Phase 9 static audit DONE (2 fixes this session)
-Current status: All locally-runnable work for Phases 0–7 + Phase 8 + Phase 9
-                COMPLETE. Remaining work needs adb device + JP TTS voice +
-                GLENS content/models.
-TTS code:       TtsEngine, TtsAdvancePolicy (+tests), TtsPreferences, SentenceSegmenter
-                (+12 tests) in :domain; AndroidTtsEngine + TtsPlaybackController in :app;
-                ReadAloud settings tab; DI bindings done.
-                spotlessCheck + testDebugUnitTest green (this session, JDK17 container).
+Repo state:     branch main @ 91dc9e7e7 + UNCOMMITTED Phase-8/9 stabilization
+                change set (11 files — see Recently changed). Do not amend user
+                commits; .opencode/ stays untouched.
+Untracked:      .opencode/ (tool config)
+Primary goal:   Reliable Read-Aloud: English OCR → English system TTS →
+                correct progression (PRODUCT PIVOT 2026-08-25: English is the
+                primary v1 language; Japanese TTS moved to Phase 10. The old
+                Japanese-voice gate was REMOVED.)
+Current phase:  Phase 8 device pass IN_PROGRESS on real hardware (SM_M066B,
+                Android 16, arm64, wireless adb working); Phase 9 static DONE +
+                reader-stabilization fixes landed this session.
+Current status: All code for Phases 0–7 + Phase 8 unit + Phase 9 static +
+                stabilization P0s COMPLETE and GREEN (spotlessCheck,
+                testDebugUnitTest, :app:assembleDebug). Device script of
+                prd.md §3.4(3)–(5) is the ONLY remaining item.
+TTS code:       Same layout as before; segmenter now 15 tests incl. English
+                period rules; controller takes provideContext() lambda;
+                NoJapaneseVoice error no longer exists.
 ```
 
 ## Current objective
 
-Implement the Read-Aloud TTS feature per root `architect.md` /
-`architect-2.md` scope decisions. Phases 1–7 landed (Phase 7 now committed as
-3fc10ad50). **Phase 8 in progress**: unit portion COMPLETE this session
-(suite audit + full green run); device pass of prd.md §3.4(3)–(5) BLOCKED —
-no adb device attached, ML models absent. Then Phase 9.
+Stabilize the read-aloud pipeline end-to-end for ENGLISH content per the
+2026-08-25 product decision: OCR must find actual dialogue (incl. long
+webtoon strips), text must be spoken completely without silent skips, and
+page/chapter progression must advance exactly once with user navigation
+authoritative. Device verification of prd.md §3.4(3)–(5) pending.
 
 ## Completed work
 
@@ -151,38 +154,122 @@ no adb device attached, ML models absent. Then Phase 9.
   use app-arm64-v8a-debug.apk on a modern phone) → device pass is turnkey.
 ```
 
+```text
+[COMPLETED 2026-08-24 — device bring-up session]
+- Host adb + wireless device SM_M066B (Android 16, arm64) connected; staged
+  APK verified byte-identical to installed build (vc25).
+- DEVICE LOG EVIDENCE of two real bugs:
+  a) GoogleTTSServiceImpl synthesized locale eng-IND then TextToSpeech.ERROR —
+     engine never called setLanguage and preflight gated on Japanese only.
+  b) Samsung SMT has NO Japanese pack (en/hi only) → old gate would hard-block
+     all playback for English content.
+- Signature-mismatch incident: fresh container generated a NEW debug keystore
+  (~/.android not persisted) → INSTALL_FAILED_UPDATE_INCOMPATIBLE. With user
+  approval: uninstalled app.yomihon.dev, reinstalled fresh build. Fix: created
+  persistent docker volume yomihon-android-home mounted at /home/vscode/.android
+  so debug signing is stable from now on. User must restore the .tachibk backup
+  after any such reinstall (latest: app.yomihon.dev_2026-08-24_23-44.tachibk).
+- Gradle poison found+fixed: yomihon-gradle-home volume held transform-cache
+  entries with stale absolute /work/... paths → DexingNoClasspathTransform
+  failed ("file ... located outside the root directory"). Volume deleted and
+  recreated; one cold rebuild (~19m). Keep mounting both volumes.
+
+[COMPLETED 2026-08-25 — reader stabilization session (PRODUCT PIVOT), UNCOMMITTED]
+User directive: English OCR → English system TTS → reliable progression is the
+v1 goal; Japanese TTS explicitly de-prioritized (Phase 10). Diagnostic-first,
+then fixes:
+
+P0 OCR correctness (data/.../ocr/GlensOcrEngine.kt):
+- ROOT CAUSE of skipped bubbles on long strips: prepareImage downscaled ANY
+  image to ≤1500px on the LONG side (800×8000 webtoon → 150×1500, text
+  unreadable for Lens). FIX: recognizePage now tiles tall strips
+  (isTallStrip = h>w*3 && h>1500; tile height = min(w*1.8,1500) floor 1000;
+  20% overlap; boxes remapped to full-image coords; seam duplicates dropped by
+  IoU ≥0.45; order reassigned sequentially top→bottom). Single-page path
+  unchanged. DEBUG log reports region count + tiled flag.
+- ROOT CAUSE of English misordering: nonJpLines were appended AFTER the JP
+  pipeline unsorted. FIX: pages with zero Japanese text skip the JP/ruby
+  pipeline entirely and go straight through mergeIntoBubbles positional sort
+  (horizontal = top-down). JP pages keep existing behavior.
+
+P0 TTS correctness:
+- Removed Japanese-only gating: TtsEngine.japaneseAvailable deleted from
+  interface+impl; controller ensureInitialized no longer fails without a JP
+  voice; engine no longer pins Locale.JAPAN. Speech uses the system-default
+  voice (English devices speak English).
+- TtsError.NoJapaneseVoice removed (+ UI branches + i18n key
+  tts_error_no_japanese_voice deleted from base strings.xml).
+- ROOT CAUSE of silent sentence skips: runPlayback treated ANY speak()=false
+  as an interruption and still did sentenceIndex++ → engine-rejected utterances
+  vanished. FIX per rules.md §7: retry once, then honest Paused (logged).
+- Pause/resume race fixed: when pause interrupted an utterance, the loop now
+  returns instead of advancing (resume() relaunches from resumeIndex; before,
+  old and new jobs could race QUEUE_FLUSH on the engine).
+
+P0 progression:
+- awaitAdvanceConfirmation restructured (returns Boolean): mismatch between
+  requested vs shown page now RECONCILES via rebuildQueueForUserNavigation
+  (was: dead-end Paused); timeout → explicit logged Paused.
+- Controller takes provideContext: () -> TtsChapterContext? (ReaderViewModel
+  supplies buildTtsChapterContext() reading LIVE state). Every queue rebuild
+  re-resolves chapter context → no more stale-chapter playback after auto or
+  manual chapter switches; hasNextChapter no longer stale.
+- onPageSelected treats Preparing as active so late first-page callbacks heal
+  chapter transitions (fixes "playback silently dies during chapter load").
+- ReaderActivity.loadNextChapter(): moveToPageIndex(0) now ONLY runs when the
+  chapter id actually changed (loadAdjacent swallows errors; previously a
+  failed load yanked the OLD chapter back to page 0 = content skip).
+
+Segmenter English support (:domain SentenceSegmenter.kt):
+- ASCII '.' now terminal when a single dot precedes whitespace/end-of-region;
+  dot-runs ("...") stay glued; decimals ("3.14") never split; slices trimmed.
+- SentenceSegmenterTest updated + extended to 15 cases (EN period split,
+  ellipsis glue, decimals).
+
+UI:
+- TtsPlaybackBar padding aligned to design.md §5 (24dp/12dp); error retry now
+  always offered (no JP-voice special case).
+
+Diagnostics logging added (DEBUG): OCR cache hit/miss, on-demand scan start,
+segmented sentence/region counts, page advance request/confirm/timeout, user
+navigation, prefetch start/hit/complete/cancelled, sentence retry/fail-pause.
+
+Verified this session: spotlessCheck GREEN; :domain:testDebugUnitTest GREEN
+(15 segmenter cases); FULL testDebugUnitTest + :app:assembleDebug GREEN
+(BUILD SUCCESSFUL in 19m8s, fresh caches). New build installed on device as
+versionName 0.4.0-8232; logcat capture running. DEVICE SCRIPT NOT YET RUN.
+```
+
 ## In progress
 
 ```text
-Feature: Phase 9 — perf/stability hardening (static portion DONE; device
-          measurements deferred, bundled with Phase 8 device pass)
+Feature: Phase 8 device pass — English-content verification of the stabilized
+         build (0.4.0-8232) on SM_M066B.
 
-Completed (this session):
-- Bitmap lifecycle audit: CLEAN (no retention across suspension points)
-- Cancellation correctness audit: 2 fixes landed (engine-init leak,
-  prefetch CE swallowing); rest verified clean
+Done: all code + gates (see 2026-08-25 entry).
 
-Remaining (needs device, same session as Phase 8 device script):
-- memory profile during long sessions; battery after exit (no background CPU)
-- leakcanary run; exit-to-idle <1s audio stop measurement
-- latency masking check (Preparing/LoadingPage + prefetch feel)
+Remaining on device:
+- prd §3.4(3): play GLENS-scanned chapter, uncached page scan, webtoon strip
+  (tiling), play/pause/resume, prev/next sentence, swipe arbitration,
+  auto page turn ×1, chapter transition, end-of-content stop, rate/pitch live.
+  NOTE: "missing-Japanese-voice error" branch is OBSOLETE (English primary).
+- prd §3.4(4) lifecycle matrix: onStop pause, rotation continues, clean exit,
+  audio-focus transient loss.
+- prd §3.4(5): exit-to-idle <1s; no background CPU after exit.
+- Phase 9 measurements: memory profile, leakcanary, battery.
 
-Known-issue notes from audit (deliberately NOT fixed, see Known issues #5):
-- start() reset race window (stopped flag flip) — benign spurious event at worst
+User must restore backup after the reinstall:
+Settings → Backup/restore → app.yomihon.dev_2026-08-24_23-44.tachibk
 ```
 
 ## Blocked
 
 ```text
-Phase 8 device pass + Phase 9 measurements: ONLY remaining blocker is hardware —
-no adb on host and no attached/emulated device (models are now downloaded
-locally, Known issue #3 resolved). User must either:
-  a) attach/pair an Android phone with a Japanese TTS voice
-     (`./scripts/adb-wireless pair|connect`), or
-  b) provide GLENS-scanned content on that device.
-/dev/kvm exists on host, but host lacks Android SDK; standing decision: do NOT
-build a headless-emulator harness for the prd script — it is interactive/manual.
-(Earlier "2 product-fork decisions" blocker RESOLVED — baked into architect*.md.)
+Nothing hard-blocked. Device pass needs the USER driving the phone screen:
+SM_M066B connected via wireless adb (port rotates when Wireless debugging is
+toggled → reconnect with fresh IP:port or USB). English TTS voice = device
+default (Google TTS en-IN present). GLENS/network reachable on device.
+Standing decision unchanged: prd script stays manual/interactive.
 ```
 
 ## Current files being modified
@@ -197,15 +284,17 @@ Remove entries here when work finishes to avoid overlapping agents.)
 ## Recently changed files
 
 ```text
-2026-08-23  app .../data/tts/AndroidTtsEngine.kt          init-cancel leak fix (Phase 9)
-2026-08-23  app .../ui/reader/tts/TtsPlaybackController.kt prefetch CE fix (Phase 9)
-2026-08-23  docs/memory.md, docs/phase.md                 statuses + session records
-2026-08-23  app .../presentation/reader/settings/ReadAloudPage.kt        created (Phase 7, commit 3fc10ad50)
-2026-08-23  app .../presentation/reader/settings/ReaderSettingsDialog.kt 4th tab
-2026-08-23  app .../ui/reader/setting/ReaderSettingsScreenModel.kt       ttsPreferences
-2026-08-23  app .../ui/reader/ReaderActivity.kt   ttsKeepScreenOn collector (+ Phase 6 files fixed)
-2026-08-23  app .../ui/reader/ReaderViewModel.kt  TtsError FQN + toDomainChapter!! fixes
-2026-08-23  i18n .../base/strings.xml             5 pref_tts_* keys
+2026-08-25  data .../data/ocr/GlensOcrEngine.kt            strip tiling + EN ordering (P0)
+2026-08-25  domain .../domain/tts/engine/TtsEngine.kt      japaneseAvailable removed
+2026-08-25  app .../data/tts/AndroidTtsEngine.kt           JP gate/locale removed
+2026-08-25  app .../ui/reader/tts/TtsPlaybackController.kt progression+retry+logging
+2026-08-25  app .../ui/reader/ReaderViewModel.kt           buildTtsChapterContext provider
+2026-08-25  app .../ui/reader/ReaderActivity.kt            loadNextChapter guard + error branch
+2026-08-25  app .../presentation/reader/TtsPlaybackBar.kt  padding + retry-always
+2026-08-25  domain .../domain/tts/SentenceSegmenter.kt     English '.' rules + trim
+2026-08-25  domain/src/test/.../SentenceSegmenterTest.kt   15 cases
+2026-08-25  i18n .../base/strings.xml                      tts_error_no_japanese_voice removed
+2026-08-24  docs/memory.md, docs/phase.md                  session records
 ```
 
 ## Architecture decisions
@@ -247,6 +336,34 @@ Reuses established VM→Activity pattern; user swipes mid-playback win via
 onPageSelected arbitration without fighting the viewer.
 
 Decision:
+English is the primary v1 Read-Aloud language (product pivot 2026-08-25).
+No language preflight, no setLanguage pinning — the system-default TTS voice
+is used. Japanese/voice-picker work belongs to Phase 10.
+
+Reason:
+Device had no JP voice; the old gate hard-blocked all playback and the
+eng-IND synthesis log proved wrong-language output. English content was the
+user's actual usage.
+
+Decision:
+Tall webtoon strips are tiled before the Glens request (engine-level fix),
+not compensated in TTS.
+
+Reason:
+Root cause was image downscale destroying text; per-task spec forbids masking
+OCR gaps in TTS. Tiling keeps MAX_IMAGE_DIMENSION per tile and preserves the
+single-request path for normal pages.
+
+Decision:
+Controller re-resolves chapter context via provideContext() on every queue
+rebuild instead of caching it at start().
+
+Reason:
+Auto chapter advance + user navigation both need fresh totalPages/
+hasNextChapter/chapter id; stale context caused silent death and wrong-chapter
+scans.
+
+Decision:
 Settings tab appended LAST in ReaderSettingsDialog (page 3) so ColorFilter's
 dim-amount hack (`pagerState.currentPage == 2`) keeps pointing at ColorFilter.
 
@@ -276,9 +393,19 @@ Reason: system-TTS latency is tens of ms; OCR cache already covers text;
 revisit only with high-latency cloud engines.
 
 Rejected:
-Re-sorting OcrRegions inside the segmenter to "fix" local-engine ordering.
-Reason: would diverge from tap-highlight behavior; ordering gap must stay visible
-(see Known issues).
+Japanese-voice availability gate + Locale.JAPAN pinning in the TTS engine.
+Reason: blocked all playback on JP-less devices and produced wrong-language
+synthesis; replaced by system-default voice (product pivot 2026-08-25).
+
+Rejected:
+Retrying utterances more than once or adding delays to mask speak() failures.
+Reason: rules.md §7 fixes failure at the cause (retry once → honest Paused);
+delays hide bugs.
+
+Rejected:
+Sorting regions inside SentenceSegmenter to fix webtoon order.
+Reason: ordering belongs to the OCR engine (now fixed there via tiling +
+positional merge); segmenter must mirror tap-highlight behavior.
 ```
 
 ## Known issues
@@ -314,9 +441,22 @@ Reason: would diverge from tap-highlight behavior; ordering gap must stay visibl
    re-registers (new controller init) — bounded, self-healing retention of a
    small object graph with dead (cancelled) scope. Clearing it inside
    engine.shutdown() was REJECTED: ensureInitialized() calls shutdown() on the
-   NoJapaneseVoice path mid-session, which would permanently drop focus-loss
+   engine-init-failure path mid-session, which would permanently drop focus-loss
    handling for that controller. Revisit if leakcanary (Phase 9 device pass)
    flags more than the controller itself.
+
+6. MEDIUM | OCR tiling (NEW 2026-08-25) | Glens strip tiling dedupes seam
+   repeats by IoU ≥0.45; a bubble straddling a seam can still yield two
+   complementary fragments if Lens returns differing boxes in the overlap.
+   Ceiling accepted for v1; upgrade path = cross-tile text merge before region
+   creation. Watch `tiled=true` pages during device pass.
+
+7. LOW | Build env (2026-08-24) | Docker debug keystore now persisted via
+   volume yomihon-android-home (~/.android). If that volume is ever deleted,
+   signatures change → INSTALL_FAILED_UPDATE_INCOMPATIBLE again; recovery =
+   uninstall + reinstall + restore .tachibk backup (data loss). Also: gradle
+   transform cache once held stale /work paths — if DexingNoClasspathTransform
+   fails with "outside the root directory", delete yomihon-gradle-home volume.
 ```
 
 ## Technical debt
@@ -342,46 +482,46 @@ Injekt 91edab2317, JUnit5 6.1.1/Kotest 6.2.2/MockK 1.14.11).
 ## Testing status
 
 ```text
-Unit tests:        PASS (this session, full testDebugUnitTest, all modules)
+Unit tests:        PASS (2026-08-25, full testDebugUnitTest, all modules;
+                   SentenceSegmenterTest now 15 cases)
 Integration tests: none run (existing androidTest suites are device-gated/@Ignore)
 UI tests:          none exist in repo
-Device tests:      BLOCKED — Phase 8 device pass needs adb device + JP TTS voice
-                   + GLENS-scanned chapter or ML models (none available; see Blocked)
-Lint:              spotlessCheck PASS (this session)
-Build:             :app:assembleDebug PASS (this session, full run)
+Device tests:      PENDING — build 0.4.0-8232 installed on SM_M066B; prd
+                   §3.4(3)–(5) script to be executed (English content)
+Lint:              spotlessCheck PASS (2026-08-25)
+Build:             :app:assembleDebug PASS (2026-08-25, full run 19m8s cold)
 Baseline (pre-TTS expectations): CI order = spotlessCheck → testDebugUnitTest →
                         verifySqlDelightMigration → assembleRelease (see rules.md §11)
 Previous verified build:
-Date:     2026-08-22
+Date:     2026-08-23
 Command:  ./gradlew spotlessCheck testDebugUnitTest :app:assembleDebug
-Result:   ALL GREEN (predates WSL-recovery checkpoint; that checkpoint broke
-          :app compile — fixed 2026-08-23, see Completed work)
-Environment: devcontainer image vsc-yomihon (JDK 17) run via docker on WSL2 host;
-            NOTE: packaging OOMs with repo default -Xmx2560m in 7.4 GiB container —
-            run with GRADLE_OPTS="-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g"
-            or build on CI/host with more RAM. No repo file changed for this.
+Result:   ALL GREEN (predates stabilization change set)
+Environment: devcontainer image vsc-yomihon (JDK 17) run via docker on host;
+            ALWAYS pass -Xmx4g (repo-default 2560m OOMs in the 7.4 GiB container).
+            Mount BOTH persistent volumes:
+              -v yomihon-gradle-home:/home/vscode/.gradle
+              -v yomihon-android-home:/home/vscode/.android   (stable debug key)
             CI (JDK 21, more RAM) unaffected.
 ```
 
 ## Last verified build
 
 ```text
-Date:     2026-08-23 (this session)
-Command:  ./gradlew :app:assembleDebug
-          (docker devcontainer, JDK 17, -Xmx4g, gradle-home volume mounted)
-Result:   BUILD SUCCESSFUL in 3m46s — EXIT:0; all 6 ML assets verified inside
-          APK (app/build/outputs/apk/debug/app-arm64-v8a-debug.apk et al.)
-Previous full-gate run (same day):
-Command:  ./gradlew spotlessCheck :app:compileDebugKotlin testDebugUnitTest
-Result:   BUILD SUCCESSFUL in 10m54s — EXIT:0
+Date:     2026-08-25 (this session)
+Command:  ./gradlew testDebugUnitTest :app:assembleDebug
+          (docker devcontainer, JDK 17, -Xmx4g, both volumes mounted;
+          gradle-home volume recreated fresh after cache poisoning)
+Result:   BUILD SUCCESSFUL in 19m8s — EXIT:0. APK installed to device
+          (adb install Success), versionName 0.4.0-8232.
+Earlier same session: spotlessCheck + :domain:testDebugUnitTest GREEN.
 ```
 
 ## Last verified test
 
 ```text
-Date:     2026-08-23 (this session)
+Date:     2026-08-25 (this session)
 Command:  ./gradlew testDebugUnitTest                    (docker devcontainer, JDK 17)
-Result:   BUILD SUCCESSFUL (all modules; TTS suites included — see audit above)
+Result:   BUILD SUCCESSFUL (all modules; segmenter 15 cases incl. EN rules)
 ```
 
 ---
@@ -389,39 +529,31 @@ Result:   BUILD SUCCESSFUL (all modules; TTS suites included — see audit above
 ## Agent handoff
 
 ```text
-Last agent:                 ox-alpha (Phase 9 static-audit session)
-Date:                       2026-08-23
-Task completed:             Phase 9 static portion — bitmap lifecycle +
-                            cancellation audit of TTS/OCR-scan path; 2 fixes
-                            landed (AndroidTtsEngine init-cancel leak,
-                            prefetch runCatching CE swallow); rest verified
-                            clean; gates green. Earlier sessions: Phase 8
-                            unit portion + §3.4(6) freeze check.
-Current task:               none (all non-device work for Phases 8+9 done;
-                            ML models now downloaded locally — device is the
-                            only missing piece)
-Next recommended task:      COMBINED Phase 8 device pass + Phase 9 device
-                            measurements (prd §3.4(3)–(5); leakcanary, memory/
-                            battery, exit-to-idle timing) once user attaches or
-                            pairs a device with JP TTS voice + GLENS content.
-                            USER ACTION NEEDED: `./scripts/adb-wireless pair`
-                            then `connect`, or plug in via USB; install staged
-                            app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
-                            (models already packaged).
+Last agent:                 ox-alpha (reader-stabilization session, product pivot)
+Date:                       2026-08-25
+Task completed:             English-primary pivot implemented: Glens strip
+                            tiling + EN ordering (P0), JP gate/locale removal
+                            (P0), segmenter EN period rules + tests (P0),
+                            progression fixes — reconcile-on-mismatch,
+                            retry-once-then-Pause, fresh-context provider,
+                            chapter-load guard (P0); debug logging; bar polish.
+                            Gates green; build 0.4.0-8232 installed on device.
+Current task:               Phase 8 device pass on SM_M066B (English content).
+Next recommended task:      Run prd §3.4(3)–(5) script with user driving the
+                            phone (restore .tachibk backup first!), then Phase 9
+                            measurements (memory/battery/leakcanary/exit-to-idle).
+                            Then commit the stabilization change set.
 Files safe to modify:       docs/* ; app reader/tts/settings files ;
                             i18n base strings.xml (snake_case keys only)
-Files currently worked on:  app .../data/tts/AndroidTtsEngine.kt,
-                            app .../ui/reader/tts/TtsPlaybackController.kt,
-                            docs/memory.md (this change set, uncommitted)
-Known risks:                ML models absent locally; ReaderActivity dual-
-                            composition quirk (#2) when adding overlays; do not
-                            touch user's uncommitted AGENTS.md edit or
-                            .opencode/; build env OOM note (-Xmx4g always);
-                            Kotlin scoping gotcha: nested classifiers shadow
-                            same-named imports inside sealed interfaces;
-                            persistent gradle-home volume yomihon-gradle-home
-                            speeds container runs; wrapper download can flake —
-                            just retry.
+Files currently worked on:  the 11-file uncommitted change set listed in
+                            Recently changed files (all compile-green)
+Known risks:                device pass may surface OCR-quality follow-ups
+                            (tiling seam duplicates, Known issue #6);
+                            ReaderActivity dual-composition quirk (#2) when
+                            touching overlays; do not touch user's AGENTS.md or
+                            .opencode/; always -Xmx4g + both docker volumes;
+                            adb wireless port rotates — reconnect via fresh
+                            IP:port.
 ```
 
 ---

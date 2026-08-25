@@ -57,7 +57,7 @@ fun TtsPlaybackBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surfaceContainer)
-                .padding(horizontal = 12.dp, vertical = 4.dp),
+                .padding(horizontal = 24.dp, vertical = 12.dp),
         ) {
             when (state.phase) {
                 TtsPhase.Preparing, TtsPhase.LoadingPage -> {
@@ -182,7 +182,6 @@ private fun ErrorContent(
     onRetry: () -> Unit,
     onStop: () -> Unit,
 ) {
-    val retryable = state.error != TtsError.NoJapaneseVoice
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -199,13 +198,11 @@ private fun ErrorContent(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )
-        if (retryable) {
-            IconButton(onClick = onRetry) {
-                Icon(
-                    imageVector = Icons.Outlined.Refresh,
-                    contentDescription = stringResource(MR.strings.action_retry),
-                )
-            }
+        IconButton(onClick = onRetry) {
+            Icon(
+                imageVector = Icons.Outlined.Refresh,
+                contentDescription = stringResource(MR.strings.action_retry),
+            )
         }
         IconButton(onClick = onStop) {
             Icon(
@@ -219,7 +216,6 @@ private fun ErrorContent(
 @Composable
 private fun errorMessage(error: TtsError?): String = stringResource(
     when (error) {
-        TtsError.NoJapaneseVoice -> MR.strings.tts_error_no_japanese_voice
         TtsError.EngineError -> MR.strings.tts_error_engine
         TtsError.OcrError, null -> MR.strings.tts_error_ocr
         TtsError.NoTextFound -> MR.strings.no_results_found

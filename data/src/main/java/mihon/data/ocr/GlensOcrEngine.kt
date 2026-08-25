@@ -27,10 +27,7 @@ internal class GlensOcrEngine : OcrEngine {
 
         val startTime = System.nanoTime()
         try {
-            val preparedImage = prepareImage(image)
-            val payload = buildRequestPayload(preparedImage)
-            val responseBytes = executeRequest(payload)
-            val extractedText = parseResponsePage(responseBytes).text
+            val extractedText = recognizePage(image).text
 
             val totalTime = (System.nanoTime() - startTime) / 1_000_000
             logcat(LogPriority.INFO) { "OCR(glens) Runtime: recognizeText total time: $totalTime ms" }
@@ -46,18 +43,99 @@ internal class GlensOcrEngine : OcrEngine {
 
         val startTime = System.nanoTime()
         try {
-            val preparedImage = prepareImage(image)
-            val payload = buildRequestPayload(preparedImage)
-            val responseBytes = executeRequest(payload)
-            val pageResult = parseResponsePage(responseBytes)
+            val regions = if (isTallStrip(image)) recognizeTiled(image) else recognizeSingle(image)
+            val ordered = dedupeOverlapping(regions).mapIndexed { index, region ->
+                region.copy(order = index)
+            }
+            logcat(LogPriority.DEBUG) {
+                "OCR(glens) page result: ${ordered.size} regions, tiled=${isTallStrip(image)}"
+            }
 
             val totalTime = (System.nanoTime() - startTime) / 1_000_000
             logcat(LogPriority.INFO) { "OCR(glens) Runtime: recognizePage total time: $totalTime ms" }
-            pageResult
+            GlensPageResult(
+                text = ordered.joinToString(separator = " ") { it.text }.trim(),
+                regions = ordered,
+            )
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e) { "OCR (glens) page recognition failed" }
             throw e
         }
+    }
+
+    /**
+     * Tall strips (webtoon panels) must be tiled before upload: the single-request path
+     * downscales by [MAX_IMAGE_DIMENSION] on the long side, which renders strip text
+     * unreadable for Lens and drops most bubbles.
+     */
+    private fun isTallStrip(image: Bitmap): Boolean =
+        image.height > image.width * STRIP_ASPECT_RATIO && image.height > MAX_IMAGE_DIMENSION
+
+    private suspend fun recognizeSingle(image: Bitmap): List<OcrRegion> {
+        val preparedImage = prepareImage(image)
+        val payload = buildRequestPayload(preparedImage)
+        val responseBytes = executeRequest(payload)
+        return parseResponsePage(responseBytes).regions.map { it.copy(order = 0) }
+    }
+
+    /** Recognizes a tall strip in overlapping top-to-bottom tiles; boxes are remapped to the full image. */
+    private suspend fun recognizeTiled(image: Bitmap): List<OcrRegion> {
+        val tileHeight = minOf((image.width * TILE_ASPECT_RATIO).toInt(), MAX_IMAGE_DIMENSION)
+            .coerceAtLeast(MIN_TILE_HEIGHT)
+        val step = tileHeight - (tileHeight * TILE_OVERLAP_RATIO).toInt()
+
+        val collected = mutableListOf<OcrRegion>()
+        var tileTop = 0
+        while (tileTop < image.height) {
+            val tileBottom = minOf(tileTop + tileHeight, image.height)
+            val tile = Bitmap.createBitmap(image, 0, tileTop, image.width, tileBottom - tileTop)
+            try {
+                val preparedImage = prepareImage(tile)
+                val payload = buildRequestPayload(preparedImage)
+                val responseBytes = executeRequest(payload)
+                parseResponsePage(responseBytes).regions.forEach { region ->
+                    // Region box is normalized to the tile; rescale into full-image coordinates.
+                    val absoluteTop = tileTop + region.boundingBox.top * (tileBottom - tileTop)
+                    val absoluteBottom = tileTop + region.boundingBox.bottom * (tileBottom - tileTop)
+                    collected += region.copy(
+                        order = 0,
+                        boundingBox = OcrBoundingBox(
+                            left = region.boundingBox.left,
+                            top = (absoluteTop / image.height).coerceIn(0f, 1f),
+                            right = region.boundingBox.right,
+                            bottom = (absoluteBottom / image.height).coerceIn(0f, 1f),
+                        ),
+                    )
+                }
+            } finally {
+                if (!tile.isRecycled) tile.recycle()
+            }
+            if (tileBottom >= image.height) break
+            tileTop += step
+        }
+        return collected
+    }
+
+    /** Drops seam duplicates from overlapping tiles (same physical text seen twice). */
+    private fun dedupeOverlapping(regions: List<OcrRegion>): List<OcrRegion> {
+        val sorted = regions.sortedBy { it.boundingBox.top }
+        val kept = mutableListOf<OcrRegion>()
+        for (region in sorted) {
+            val duplicate = kept.any { existing ->
+                intersectionOverUnion(existing.boundingBox, region.boundingBox) >=
+                    DUPLICATE_IOU_THRESHOLD
+            }
+            if (!duplicate) kept.add(region)
+        }
+        return kept
+    }
+
+    private fun intersectionOverUnion(a: OcrBoundingBox, b: OcrBoundingBox): Float {
+        val intersectWidth = minOf(a.right, b.right) - maxOf(a.left, b.left)
+        val intersectHeight = minOf(a.bottom, b.bottom) - maxOf(a.top, b.top)
+        if (intersectWidth <= 0f || intersectHeight <= 0f) return 0f
+        val intersection = intersectWidth * intersectHeight
+        return intersection / (a.width * a.height + b.width * b.height - intersection)
     }
 
     override fun close() = Unit
@@ -183,20 +261,27 @@ internal class GlensOcrEngine : OcrEngine {
             }
         }
 
-        // Full-page furigana filter (across all text-layout blocks)
-        val verticalLines = allLines.filter { it.isVertical && it.hasJpText }
-        val horizontalLines = allLines.filter { !it.isVertical && it.hasJpText }
-        val nonJpLines = allLines.filter { !it.hasJpText }
+        // Full-page furigana filter (across all text-layout blocks). Pages without any
+        // Japanese text (e.g. English manhwa) skip the JP-specific pipeline entirely and
+        // go through the positional bubble merge, which orders horizontal lines top-down.
+        val hasJapaneseContent = allLines.any { it.hasJpText }
+        val filteredLines = if (!hasJapaneseContent) {
+            allLines
+        } else {
+            val verticalLines = allLines.filter { it.isVertical && it.hasJpText }
+            val horizontalLines = allLines.filter { !it.isVertical && it.hasJpText }
+            val nonJpLines = allLines.filter { !it.hasJpText }
 
-        val filteredVertical = filterRuby(
-            verticalLines.sortedByDescending { it.centerX + it.width / 2f },
-            isVertical = true,
-        )
-        val filteredHorizontal = filterRuby(
-            horizontalLines.sortedBy { it.centerY },
-            isVertical = false,
-        )
-        val filteredLines = filteredVertical + filteredHorizontal + nonJpLines
+            val filteredVertical = filterRuby(
+                verticalLines.sortedByDescending { it.centerX + it.width / 2f },
+                isVertical = true,
+            )
+            val filteredHorizontal = filterRuby(
+                horizontalLines.sortedBy { it.centerY },
+                isVertical = false,
+            )
+            filteredVertical + filteredHorizontal + nonJpLines
+        }
 
         val bubbles = mergeIntoBubbles(filteredLines)
         val regions = bubbles
@@ -756,6 +841,11 @@ internal class GlensOcrEngine : OcrEngine {
         private const val DEFAULT_CLIENT_LANGUAGE = "ja"
         private const val DEFAULT_CLIENT_REGION = "Asia/Tokyo"
         private const val MAX_IMAGE_DIMENSION = 1500
+        private const val STRIP_ASPECT_RATIO = 3f
+        private const val TILE_ASPECT_RATIO = 1.8f
+        private const val MIN_TILE_HEIGHT = 1000
+        private const val TILE_OVERLAP_RATIO = 0.2f
+        private const val DUPLICATE_IOU_THRESHOLD = 0.45f
 
         private const val CONNECT_TIMEOUT_MS = 10_000
         private const val READ_TIMEOUT_MS = 60_000
