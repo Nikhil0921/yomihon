@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Rect
 import com.google.ai.edge.litert.Environment
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -77,6 +78,16 @@ class OcrRepositoryImpl(
         GLENS,
         OWOCR,
     }
+
+    private data class ScanKey(val chapterId: Long, val pageIndex: Int)
+
+    /**
+     * In-flight page scans keyed by (chapter, page). Concurrent identical requests
+     * (playback acquire racing its own prefetch, navigation rebuilds, chapter scanner)
+     * join the running scan instead of issuing a duplicate network pass.
+     */
+    private val inFlightScans = mutableMapOf<ScanKey, CompletableDeferred<OcrPageResult>>()
+    private val inFlightMutex = Mutex()
 
     private fun selectedEngineType(): EngineType {
         return when (ocrModelPref.get()) {
@@ -209,41 +220,79 @@ class OcrRepositoryImpl(
         pageIndex: Int,
         image: OcrImage,
     ): OcrPageResult {
+        getCachedPage(chapterId, pageIndex)?.let { cached ->
+            logcat(LogPriority.DEBUG) { "OCR scan cache hit chapter=$chapterId page=$pageIndex" }
+            return cached
+        }
+
         return withActiveOperation {
-            val result = image.useBitmap { bitmap ->
-                when (val selectedModel = ocrModelPref.get()) {
-                    OcrModel.GLENS -> scanWithGlens(
-                        chapterId = chapterId,
-                        pageIndex = pageIndex,
-                        image = bitmap,
-                        modelKey = selectedModel,
-                    )
-                    OcrModel.LEGACY -> scanLocalOrFallback(
-                        chapterId = chapterId,
-                        pageIndex = pageIndex,
-                        image = bitmap,
-                        modelKey = selectedModel,
-                        type = EngineType.LEGACY,
-                    )
-                    OcrModel.FAST -> scanLocalOrFallback(
-                        chapterId = chapterId,
-                        pageIndex = pageIndex,
-                        image = bitmap,
-                        modelKey = selectedModel,
-                        type = EngineType.FAST,
-                    )
-                    OcrModel.OWOCR -> scanOwOcrOrFallback(
-                        chapterId = chapterId,
-                        pageIndex = pageIndex,
-                        image = bitmap,
-                        modelKey = selectedModel,
-                    )
+            val key = ScanKey(chapterId, pageIndex)
+            var owner = false
+            val deferred = inFlightMutex.withLock {
+                val existing = inFlightScans[key]
+                if (existing != null) {
+                    logcat(LogPriority.DEBUG) {
+                        "OCR scan joining in-flight scan chapter=$chapterId page=$pageIndex"
+                    }
+                    existing
+                } else {
+                    owner = true
+                    CompletableDeferred<OcrPageResult>().also { inFlightScans[key] = it }
                 }
             }
 
-            cacheStore.upsert(result)
-            result
+            try {
+                if (owner) {
+                    val result = dispatchScan(chapterId, pageIndex, image)
+                    deferred.complete(result)
+                    result
+                } else {
+                    deferred.await()
+                }
+            } catch (error: Throwable) {
+                deferred.completeExceptionally(error)
+                throw error
+            } finally {
+                if (owner) {
+                    inFlightMutex.withLock {
+                        if (inFlightScans[key] === deferred) inFlightScans.remove(key)
+                    }
+                }
+            }
         }
+    }
+
+    private suspend fun dispatchScan(
+        chapterId: Long,
+        pageIndex: Int,
+        image: OcrImage,
+    ): OcrPageResult = when (val selectedModel = ocrModelPref.get()) {
+        OcrModel.GLENS -> scanWithGlens(
+            chapterId = chapterId,
+            pageIndex = pageIndex,
+            image = image,
+            modelKey = selectedModel,
+        )
+        OcrModel.LEGACY -> scanLocalOrFallback(
+            chapterId = chapterId,
+            pageIndex = pageIndex,
+            image = image,
+            modelKey = selectedModel,
+            type = EngineType.LEGACY,
+        )
+        OcrModel.FAST -> scanLocalOrFallback(
+            chapterId = chapterId,
+            pageIndex = pageIndex,
+            image = image,
+            modelKey = selectedModel,
+            type = EngineType.FAST,
+        )
+        OcrModel.OWOCR -> scanOwOcrOrFallback(
+            chapterId = chapterId,
+            pageIndex = pageIndex,
+            image = image,
+            modelKey = selectedModel,
+        )
     }
 
     override suspend fun getCachedPage(
@@ -292,7 +341,7 @@ class OcrRepositoryImpl(
     private suspend fun scanLocalOrFallback(
         chapterId: Long,
         pageIndex: Int,
-        image: Bitmap,
+        image: OcrImage,
         modelKey: OcrModel,
         type: EngineType,
     ): OcrPageResult {
@@ -323,17 +372,30 @@ class OcrRepositoryImpl(
     private suspend fun scanWithGlens(
         chapterId: Long,
         pageIndex: Int,
-        image: Bitmap,
+        image: OcrImage,
         modelKey: OcrModel,
     ): OcrPageResult {
-        val result = try {
+        return try {
             submitTask(PrioritizedTaskQueue.Priority.NORMAL) {
-                engineLocks.withTextEngineLock(EngineType.GLENS) {
-                    val engine = glensEngine ?: GlensOcrEngine().also {
-                        glensEngine = it
+                // Bitmap lifecycle and caching live inside the task: callers may abandon the
+                // await on navigation, but a queued task runs to completion, recycles its own
+                // bitmap, and leaves the result cached for whoever asks next.
+                image.useBitmap { bitmap ->
+                    val regions = engineLocks.withTextEngineLock(EngineType.GLENS) {
+                        val engine = glensEngine ?: GlensOcrEngine().also {
+                            glensEngine = it
+                        }
+                        engine.recognizePage(bitmap).regions
                     }
-                    engine.recognizePage(image)
-                }
+                    OcrPageResult(
+                        chapterId = chapterId,
+                        pageIndex = pageIndex,
+                        ocrModel = modelKey,
+                        imageWidth = bitmap.width,
+                        imageHeight = bitmap.height,
+                        regions = regions,
+                    )
+                }.also { cacheStore.upsert(it) }
             }
         } catch (error: Throwable) {
             if (error is CancellationException) throw error
@@ -342,30 +404,32 @@ class OcrRepositoryImpl(
             }
             throw error
         }
-        return OcrPageResult(
-            chapterId = chapterId,
-            pageIndex = pageIndex,
-            ocrModel = modelKey,
-            imageWidth = image.width,
-            imageHeight = image.height,
-            regions = result.regions,
-        )
     }
 
     private suspend fun scanWithOwOcr(
         chapterId: Long,
         pageIndex: Int,
-        image: Bitmap,
+        image: OcrImage,
         modelKey: OcrModel,
     ): OcrPageResult {
-        val result = try {
+        return try {
             submitTask(PrioritizedTaskQueue.Priority.NORMAL) {
-                engineLocks.withTextEngineLock(EngineType.OWOCR) {
-                    val engine = owOcrEngine ?: OwOcrEngine(context).also {
-                        owOcrEngine = it
+                image.useBitmap { bitmap ->
+                    val regions = engineLocks.withTextEngineLock(EngineType.OWOCR) {
+                        val engine = owOcrEngine ?: OwOcrEngine(context).also {
+                            owOcrEngine = it
+                        }
+                        engine.recognizePage(bitmap)
                     }
-                    engine.recognizePage(image)
-                }
+                    OcrPageResult(
+                        chapterId = chapterId,
+                        pageIndex = pageIndex,
+                        ocrModel = modelKey,
+                        imageWidth = bitmap.width,
+                        imageHeight = bitmap.height,
+                        regions = regions,
+                    )
+                }.also { cacheStore.upsert(it) }
             }
         } catch (error: Throwable) {
             if (error is CancellationException) throw error
@@ -374,20 +438,12 @@ class OcrRepositoryImpl(
             }
             throw error
         }
-        return OcrPageResult(
-            chapterId = chapterId,
-            pageIndex = pageIndex,
-            ocrModel = modelKey,
-            imageWidth = image.width,
-            imageHeight = image.height,
-            regions = result,
-        )
     }
 
     private suspend fun scanOwOcrOrFallback(
         chapterId: Long,
         pageIndex: Int,
-        image: Bitmap,
+        image: OcrImage,
         modelKey: OcrModel,
     ): OcrPageResult {
         return try {
@@ -417,49 +473,47 @@ class OcrRepositoryImpl(
     private suspend fun scanLocally(
         chapterId: Long,
         pageIndex: Int,
-        image: Bitmap,
+        image: OcrImage,
         modelKey: OcrModel,
         type: EngineType,
     ): OcrPageResult {
-        val boxes = submitTask(PrioritizedTaskQueue.Priority.NORMAL) {
-            engineLocks.withDetectionLock {
-                val engine = detectionEngine()
-                engine.detectTextRegions(image)
+        return submitTask(PrioritizedTaskQueue.Priority.NORMAL) {
+            image.useBitmap { bitmap ->
+                val boxes = engineLocks.withDetectionLock {
+                    detectionEngine().detectTextRegions(bitmap)
+                }.filter(OcrBoundingBox::isValid)
+
+                val regions = boxes.mapIndexedNotNull { index, box ->
+                    val crop = cropBitmap(bitmap, box) ?: return@mapIndexedNotNull null
+                    try {
+                        val text = recognizeWithEngine(type, crop).trim()
+                        if (text.isBlank()) {
+                            null
+                        } else {
+                            OcrRegion(
+                                order = index,
+                                text = text,
+                                boundingBox = box,
+                                textOrientation = OcrTextOrientation.Horizontal,
+                            )
+                        }
+                    } finally {
+                        if (!crop.isRecycled) {
+                            crop.recycle()
+                        }
+                    }
+                }
+
+                OcrPageResult(
+                    chapterId = chapterId,
+                    pageIndex = pageIndex,
+                    ocrModel = modelKey,
+                    imageWidth = bitmap.width,
+                    imageHeight = bitmap.height,
+                    regions = regions,
+                )
             }
         }
-            .filter(OcrBoundingBox::isValid)
-
-        val regions = boxes.mapIndexedNotNull { index, box ->
-            val crop = cropBitmap(image, box) ?: return@mapIndexedNotNull null
-            try {
-                val text = submitTask(PrioritizedTaskQueue.Priority.NORMAL) {
-                    recognizeWithEngine(type, crop)
-                }.trim()
-                if (text.isBlank()) {
-                    null
-                } else {
-                    OcrRegion(
-                        order = index,
-                        text = text,
-                        boundingBox = box,
-                        textOrientation = OcrTextOrientation.Horizontal,
-                    )
-                }
-            } finally {
-                if (!crop.isRecycled) {
-                    crop.recycle()
-                }
-            }
-        }
-
-        return OcrPageResult(
-            chapterId = chapterId,
-            pageIndex = pageIndex,
-            ocrModel = modelKey,
-            imageWidth = image.width,
-            imageHeight = image.height,
-            regions = regions,
-        )
     }
 
     private fun cropBitmap(

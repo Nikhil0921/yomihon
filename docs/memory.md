@@ -11,24 +11,22 @@
 
 ```text
 Project:        Yomihon (v0.4.0, vc25) — Android manga reader + OCR/language tooling
-Repo state:     branch main @ 91dc9e7e7 + UNCOMMITTED Phase-8/9 stabilization
-                change set (11 files — see Recently changed). Do not amend user
-                commits; .opencode/ stays untouched.
-Untracked:      .opencode/ (tool config)
+Repo state:     branch main @ a071feedf7 + UNCOMMITTED Phase 9 perf change set
+                (4 files — see Recently changed). Do not amend user commits;
+                .opencode/ stays untouched.
+Untracked:      .opencode/ (tool config), .device-pass/ (logcat evidence, gitignored)
 Primary goal:   Reliable Read-Aloud: English OCR → English system TTS →
                 correct progression (PRODUCT PIVOT 2026-08-25: English is the
-                primary v1 language; Japanese TTS moved to Phase 10. The old
-                Japanese-voice gate was REMOVED.)
-Current phase:  Phase 8 device pass IN_PROGRESS on real hardware (SM_M066B,
-                Android 16, arm64, wireless adb working); Phase 9 static DONE +
-                reader-stabilization fixes landed this session.
-Current status: All code for Phases 0–7 + Phase 8 unit + Phase 9 static +
-                stabilization P0s COMPLETE and GREEN (spotlessCheck,
-                testDebugUnitTest, :app:assembleDebug). Device script of
-                prd.md §3.4(3)–(5) is the ONLY remaining item.
-TTS code:       Same layout as before; segmenter now 15 tests incl. English
-                period rules; controller takes provideContext() lambda;
-                NoJapaneseVoice error no longer exists.
+                primary v1 language; Japanese TTS moved to Phase 10.)
+Current phase:  Phase 8 device pass IN_PROGRESS — steps 1–6 of prd §3.4(3)–(5)
+                executed (results below); steps 7–15 remain. Phase 9 perf pass #1
+                (preload latency + duplicate scans + recycle crash) IMPLEMENTED,
+                gates green, build 0.4.0-8233 installed on device, awaiting
+                startup-latency re-measure.
+Current status: Stabilization change set COMMITTED by user as a071feedf.
+                New uncommitted change set = Phase 9 perf fixes (tile parallelism,
+                single-flight scan dedup, task-owned bitmap lifecycle, metrics).
+TTS code:       Unchanged this pass except controller timing instrumentation.
 ```
 
 ## Current objective
@@ -240,26 +238,88 @@ Verified this session: spotlessCheck GREEN; :domain:testDebugUnitTest GREEN
 versionName 0.4.0-8232; logcat capture running. DEVICE SCRIPT NOT YET RUN.
 ```
 
+```text
+[COMPLETED 2026-08-25 → 2026-08-26 — Phase 8 device pass session + Phase 9 perf pass #1]
+
+User committed the stabilization change set as a071feedf (incl. docs).
+
+DEVICE SCRIPT RESULTS so far (evidence in .device-pass/logcat-step*.log):
+- Step 1 cached GLENS chapter: PASS WITH ISSUE — playback/auto-advance/prefetch
+  hits work; but 16 duplicate scan starts (p4×4, p8×5), bitmap recycle crash ×2
+  (GlensOcrEngine.kt:91, IllegalArgumentException recycled source), false
+  "sentence failed twice; pausing" ×3 during rapid rebuild churn.
+- Step 2 uncached page: PASS (user-observed; log evidence lost — capture was
+  pinned to a dead PID and ring buffer wrapped; procedure fixed: full unfiltered
+  capture to disk, no --pid pinning, no logcat -c).
+- Step 3 webtoon strips: PASS WITH ISSUE — tiled=true everywhere, healthy
+  regions, zero speak failures; duplicates again (p18×3 with exact cancel→rescan
+  correlation), recycle crash ×2 MORE timestamp-exact with nav-cancel of
+  in-flight scans; scan durations 10–25 s/strip.
+- Step 4 pause/resume: PASS WITH ISSUE (indirect) — clean stop/start cycles,
+  no false fails; NEW ISSUE: advance-confirm timeouts systematic on webtoon
+  (targets 14,16,17×3, then ch947 target=1,2 both) = 10 s stall + Paused each;
+  suspect findLastEndVisibleItemPosition mismatch on short pages.
+- Step 5 prev/next sentence: PASS WITH ISSUE — mostly works; intermittent stall
+  matching advance-timeout signature (heals via manual scroll + resume).
+  NOTE: sentence-skip has ZERO instrumentation (gap logged for Phase 9).
+- Step 6 deliberate swipe arbitration: PASS — user nav wins cleanly.
+- Steps 7–15 PENDING (rate/pitch live, chapter transition, end-of-content,
+  home, rotation, exit, audio-focus, exit-idle timing).
+
+ROOT-CAUSE INVESTIGATIONS (explore agents, verified against source):
+- Webtoon auto-scroll sync: FEASIBLE without architecture change. bbox is
+  normalized 0..1 vs full image (OcrModels.kt); WebtoonViewer.moveToPage uses
+  scrollToPositionWithOffset(pos, 0) — offset hook exists; in-page scroll does
+  NOT fire onPageSelected (won't trip arbitration). Plan: TtsEvent.ScrollToRegion
+  emitted before engine.speak → VM → Activity → Viewer.scrollToRegion(fraction).
+  NOT yet implemented.
+- Duplicate scans: OcrRepositoryImpl.scanPage had NO cache re-check and NO
+  single-flight; every call = full Lens pass, upsert only at end.
+
+PHASE 9 PERF PASS #1 IMPLEMENTED (UNCOMMITTED, 4 files):
+1. GlensOcrEngine.recognizeTiled: tiles now run TILE_CONCURRENCY=3 at a time
+   (Semaphore + async/awaitAll, order preserved by index). Was strictly serial:
+   6–8 sequential Lens RTTs = 10–31 s/page. Expected ~3× faster pages.
+2. OcrRepositoryImpl.scanPage: single-flight map (chapterId,pageIndex)→Deferred
+   + cache pre-check; concurrent identical requests join the running scan.
+3. Bitmap lifecycle + upsert moved INSIDE queue task (scanWithGlens/
+   scanWithOwOcr/scanLocally take OcrImage now): abandoned-on-cancel scans run
+   to completion, recycle their own bitmap, and CACHE the result instead of
+   crashing recognizeTiled (fixes the recycle-crash class) or wasting work.
+4. Instrumentation: OCR queue depth log (PrioritizedTaskQueue.submit),
+   "OCR scan joining in-flight" / "cache hit" logs, controller per-page
+   acquireMs + "TTS startup open->first page ready in Xms" (SystemClock).
+Verified: :data/:app compileDebugKotlin GREEN; spotlessApply applied;
+spotlessCheck + full testDebugUnitTest GREEN; :app:assembleDebug GREEN
+(first attempt failed packaging, immediate rerun BUILD SUCCESSFUL 2m27s);
+arm64 APK built 20:01 UTC awaiting install (device dropped off wireless).
+
+Phase 10 backlog updated in phase.md: Advanced TTS / Voice Calibration system
+(engines, voices, picker, quality comparison, locale voices, voice-specific
+rate/pitch tuning, engine settings, neural/local+cloud, latency comparison,
+audio caching, per-engine config) — explicit future requirement, v1 untouched.
+```
+
 ## In progress
 
 ```text
-Feature: Phase 8 device pass — English-content verification of the stabilized
-         build (0.4.0-8232) on SM_M066B.
+Feature: Phase 8 device pass (steps 7–15 remaining) + Phase 9 perf pass #1
+         device verification on SM_M066B.
 
-Done: all code + gates (see 2026-08-25 entry).
+Done: steps 1–6 recorded; Phase 9 perf change set implemented + all local
+      gates green (see 2026-08-25→26 entry).
 
-Remaining on device:
-- prd §3.4(3): play GLENS-scanned chapter, uncached page scan, webtoon strip
-  (tiling), play/pause/resume, prev/next sentence, swipe arbitration,
-  auto page turn ×1, chapter transition, end-of-content stop, rate/pitch live.
-  NOTE: "missing-Japanese-voice error" branch is OBSOLETE (English primary).
-- prd §3.4(4) lifecycle matrix: onStop pause, rotation continues, clean exit,
-  audio-focus transient loss.
-- prd §3.4(5): exit-to-idle <1s; no background CPU after exit.
-- Phase 9 measurements: memory profile, leakcanary, battery.
-
-User must restore backup after the reinstall:
-Settings → Backup/restore → app.yomihon.dev_2026-08-24_23-44.tachibk
+Remaining:
+- Re-measure uncached-chapter startup with new instrumentation (build
+  0.4.0-8233 installed, capture live): "TTS startup open->first page ready
+  in Xms", acquireMs per page, queue depth, "joining in-flight scan" (should
+  replace duplicate scan starts), zero recycled-source crashes on nav-cancel.
+- Script steps 7–15: rate/pitch live, chapter transition, end-of-content,
+  home-during-playback, rotation, exit reader, audio-focus transient,
+  exit-idle <1s / no background CPU.
+- Then: advance-confirm timeout root cause (WebtoonViewer confirm mismatch),
+  webtoon scroll-sync implementation decision, mini-player z-order fix,
+  Phase 9 memory/battery/leakcanary measurements.
 ```
 
 ## Blocked
@@ -284,17 +344,14 @@ Remove entries here when work finishes to avoid overlapping agents.)
 ## Recently changed files
 
 ```text
-2026-08-25  data .../data/ocr/GlensOcrEngine.kt            strip tiling + EN ordering (P0)
-2026-08-25  domain .../domain/tts/engine/TtsEngine.kt      japaneseAvailable removed
-2026-08-25  app .../data/tts/AndroidTtsEngine.kt           JP gate/locale removed
-2026-08-25  app .../ui/reader/tts/TtsPlaybackController.kt progression+retry+logging
-2026-08-25  app .../ui/reader/ReaderViewModel.kt           buildTtsChapterContext provider
-2026-08-25  app .../ui/reader/ReaderActivity.kt            loadNextChapter guard + error branch
-2026-08-25  app .../presentation/reader/TtsPlaybackBar.kt  padding + retry-always
-2026-08-25  domain .../domain/tts/SentenceSegmenter.kt     English '.' rules + trim
-2026-08-25  domain/src/test/.../SentenceSegmenterTest.kt   15 cases
-2026-08-25  i18n .../base/strings.xml                      tts_error_no_japanese_voice removed
-2026-08-24  docs/memory.md, docs/phase.md                  session records
+2026-08-26  data .../data/ocr/GlensOcrEngine.kt        parallel tiles (TILE_CONCURRENCY=3)
+2026-08-26  data .../data/ocr/OcrRepositoryImpl.kt     single-flight + task-owned bitmap/upsert
+2026-08-26  data .../data/ocr/PrioritizedTaskQueue.kt  queue-depth debug log
+2026-08-26  app .../ui/reader/tts/TtsPlaybackController.kt  acquireMs + startup latency logs
+2026-08-25  docs/phase.md                              Phase 10 voice-calibration backlog
+2026-08-25  (committed a071feedf) GlensOcrEngine tiling, EN ordering, JP-gate removal,
+            segmenter EN rules, progression fixes, TtsPlaybackBar, i18n — see commit
+2026-08-24  docs/memory.md, docs/phase.md              session records
 ```
 
 ## Architecture decisions
@@ -445,11 +502,13 @@ positional merge); segmenter must mirror tap-highlight behavior.
    handling for that controller. Revisit if leakcanary (Phase 9 device pass)
    flags more than the controller itself.
 
-6. MEDIUM | OCR tiling (NEW 2026-08-25) | Glens strip tiling dedupes seam
+6. MEDIUM | OCR tiling | Glens strip tiling dedupes seam
    repeats by IoU ≥0.45; a bubble straddling a seam can still yield two
    complementary fragments if Lens returns differing boxes in the overlap.
    Ceiling accepted for v1; upgrade path = cross-tile text merge before region
-   creation. Watch `tiled=true` pages during device pass.
+   creation. Watch `tiled=true` pages during device pass. NOTE: tiles now run
+   3-concurrent — seam behavior unchanged, but watch for new Lens rate-limit
+   responses (HTTP 429/5xx) under parallelism; reduce TILE_CONCURRENCY if seen.
 
 7. LOW | Build env (2026-08-24) | Docker debug keystore now persisted via
    volume yomihon-android-home (~/.android). If that volume is ever deleted,
@@ -457,6 +516,25 @@ positional merge); segmenter must mirror tap-highlight behavior.
    uninstall + reinstall + restore .tachibk backup (data loss). Also: gradle
    transform cache once held stale /work paths — if DexingNoClasspathTransform
    fails with "outside the root directory", delete yomihon-gradle-home volume.
+
+8. MEDIUM | Reader TTS (NEW 2026-08-26) | Advance-confirm timeouts on webtoon:
+   `page advance to N timed out` fired systematically (ch732 p17 ×3, ch947
+   p1+p2). Suspect WebtoonViewer confirmation via findLastEndVisibleItemPosition
+   returns ≠ target on short pages (next item already visible) → guaranteed
+   10 s stall → Paused. NOT yet fixed. Evidence: logcat-step3-full.log
+   lines ~99730–132013.
+
+9. LOW | Instrumentation gaps (NEW 2026-08-26) | Controller has no debug logs
+   for pause/resume or nextSentence/previousSentence actions — step 4/5 results
+   were only partially verifiable from logs. Add action-level logging when
+   touching the controller next.
+
+10. RESOLVED | OCR duplicate scans + recycle crash (2026-08-26) | Root causes
+    were: no single-flight in OcrRepositoryImpl.scanPage; bitmap recycled by
+    caller's useBitmap-finally while the repo-owned task still used it;
+    upsert skipped when caller abandoned await. Fixed by single-flight map +
+    moving bitmap lifecycle/upsert inside the queue task (Phase 9 perf pass #1).
+    Device re-verification pending.
 ```
 
 ## Technical debt
@@ -482,23 +560,19 @@ Injekt 91edab2317, JUnit5 6.1.1/Kotest 6.2.2/MockK 1.14.11).
 ## Testing status
 
 ```text
-Unit tests:        PASS (2026-08-25, full testDebugUnitTest, all modules;
-                   SentenceSegmenterTest now 15 cases)
+Unit tests:        PASS (2026-08-26, full testDebugUnitTest, all modules;
+                   includes Phase 9 perf change set)
 Integration tests: none run (existing androidTest suites are device-gated/@Ignore)
 UI tests:          none exist in repo
-Device tests:      PENDING — build 0.4.0-8232 installed on SM_M066B; prd
-                   §3.4(3)–(5) script to be executed (English content)
-Lint:              spotlessCheck PASS (2026-08-25)
-Build:             :app:assembleDebug PASS (2026-08-25, full run 19m8s cold)
+Device tests:      PARTIAL — Phase 8 script steps 1–6 executed (results in
+                   Completed work); steps 7–15 + perf re-measure pending on
+                   build 2026-08-26 20:01 UTC APK
+Lint:              spotlessCheck PASS (2026-08-26)
+Build:             :app:assembleDebug PASS (2026-08-26 20:01 UTC)
 Baseline (pre-TTS expectations): CI order = spotlessCheck → testDebugUnitTest →
                         verifySqlDelightMigration → assembleRelease (see rules.md §11)
-Previous verified build:
-Date:     2026-08-23
-Command:  ./gradlew spotlessCheck testDebugUnitTest :app:assembleDebug
-Result:   ALL GREEN (predates stabilization change set)
-Environment: devcontainer image vsc-yomihon (JDK 17) run via docker on host;
-            ALWAYS pass -Xmx4g (repo-default 2560m OOMs in the 7.4 GiB container).
-            Mount BOTH persistent volumes:
+Environment: devcontainer image vsc-yomihon-e24e3bd7… (JDK 17) via docker on host;
+            ALWAYS pass -Xmx4g; mount BOTH volumes:
               -v yomihon-gradle-home:/home/vscode/.gradle
               -v yomihon-android-home:/home/vscode/.android   (stable debug key)
             CI (JDK 21, more RAM) unaffected.
@@ -507,21 +581,22 @@ Environment: devcontainer image vsc-yomihon (JDK 17) run via docker on host;
 ## Last verified build
 
 ```text
-Date:     2026-08-25 (this session)
-Command:  ./gradlew testDebugUnitTest :app:assembleDebug
-          (docker devcontainer, JDK 17, -Xmx4g, both volumes mounted;
-          gradle-home volume recreated fresh after cache poisoning)
-Result:   BUILD SUCCESSFUL in 19m8s — EXIT:0. APK installed to device
-          (adb install Success), versionName 0.4.0-8232.
-Earlier same session: spotlessCheck + :domain:testDebugUnitTest GREEN.
+Date:     2026-08-26 20:01 UTC
+Command:  ./gradlew spotlessApply :data:compileDebugKotlin :app:compileDebugKotlin
+          then spotlessCheck testDebugUnitTest, then :app:assembleDebug
+          (docker devcontainer JDK17, -Xmx4g, both volumes)
+Result:   ALL GREEN. assembleDebug first attempt failed packaging; immediate
+          rerun BUILD SUCCESSFUL in 2m27s. arm64 APK INSTALLED on SM_M066B as
+          versionName 0.4.0-8233 (adb install Success, 2026-08-26 ~01:40
+          device time). Logcat capture live → .device-pass/logcat-perf-retest.log.
 ```
 
 ## Last verified test
 
 ```text
-Date:     2026-08-25 (this session)
-Command:  ./gradlew testDebugUnitTest                    (docker devcontainer, JDK 17)
-Result:   BUILD SUCCESSFUL (all modules; segmenter 15 cases incl. EN rules)
+Date:     2026-08-26
+Command:  ./gradlew spotlessCheck testDebugUnitTest    (docker devcontainer, JDK 17)
+Result:   BUILD SUCCESSFUL in 2m40s (all modules)
 ```
 
 ---
@@ -529,31 +604,31 @@ Result:   BUILD SUCCESSFUL (all modules; segmenter 15 cases incl. EN rules)
 ## Agent handoff
 
 ```text
-Last agent:                 ox-alpha (reader-stabilization session, product pivot)
-Date:                       2026-08-25
-Task completed:             English-primary pivot implemented: Glens strip
-                            tiling + EN ordering (P0), JP gate/locale removal
-                            (P0), segmenter EN period rules + tests (P0),
-                            progression fixes — reconcile-on-mismatch,
-                            retry-once-then-Pause, fresh-context provider,
-                            chapter-load guard (P0); debug logging; bar polish.
-                            Gates green; build 0.4.0-8232 installed on device.
-Current task:               Phase 8 device pass on SM_M066B (English content).
-Next recommended task:      Run prd §3.4(3)–(5) script with user driving the
-                            phone (restore .tachibk backup first!), then Phase 9
-                            measurements (memory/battery/leakcanary/exit-to-idle).
-                            Then commit the stabilization change set.
+Last agent:                 ox-alpha (Phase 8 device pass + Phase 9 perf pass #1)
+Date:                       2026-08-26
+Task completed:             Device script steps 1–6 recorded with logcat evidence;
+                            duplicate-scan + recycle-crash + latency root causes
+                            proven; Phase 9 perf change set implemented (parallel
+                            tiles, single-flight, task-owned bitmap+upsert,
+                            instrumentation); all local gates green; arm64 APK
+                            staged. Phase 10 voice-calibration backlog added.
+Current task:               Re-measure startup latency on uncached chapter
+                            (build 0.4.0-8233 installed, capture live) + run
+                            script steps 7–15.
+Next recommended task:      Advance-confirm timeout fix (Known issue #8), then
+                            webtoon scroll-sync decision, mini-player z-order,
+                            Phase 9 measurements; then commit change set.
 Files safe to modify:       docs/* ; app reader/tts/settings files ;
-                            i18n base strings.xml (snake_case keys only)
-Files currently worked on:  the 11-file uncommitted change set listed in
-                            Recently changed files (all compile-green)
-Known risks:                device pass may surface OCR-quality follow-ups
-                            (tiling seam duplicates, Known issue #6);
-                            ReaderActivity dual-composition quirk (#2) when
-                            touching overlays; do not touch user's AGENTS.md or
-                            .opencode/; always -Xmx4g + both docker volumes;
+                            data OCR files ; i18n base strings.xml (snake_case only)
+Files currently worked on:  4-file uncommitted Phase 9 perf set (see Recently
+                            changed) — all compile-green, gates green
+Known risks:                TILE_CONCURRENCY=3 may trip Lens rate limits — watch
+                            HTTP 429/5xx in logs, drop constant if seen;
+                            advance-confirm timeouts (#8) unfixed and will still
+                            stall webtoon auto-advance during steps 7–15;
                             adb wireless port rotates — reconnect via fresh
-                            IP:port.
+                            IP:port; capture procedure: full unfiltered logcat to
+                            .device-pass/*.log, never --pid pinning, never -c.
 ```
 
 ---

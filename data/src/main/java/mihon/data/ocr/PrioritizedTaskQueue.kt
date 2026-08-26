@@ -6,6 +6,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
 
 internal class PrioritizedTaskQueue(
     private val scope: CoroutineScope,
@@ -43,6 +45,9 @@ internal class PrioritizedTaskQueue(
             when (priority) {
                 Priority.HIGH -> highPriorityTasks.addLast(task)
                 Priority.NORMAL -> normalPriorityTasks.addLast(task)
+            }
+            logcat(LogPriority.DEBUG) {
+                "OCR queue depth high=${highPriorityTasks.size} normal=${normalPriorityTasks.size}"
             }
             if (workerJob?.isActive != true) {
                 workerJob = scope.launch { processQueue() }

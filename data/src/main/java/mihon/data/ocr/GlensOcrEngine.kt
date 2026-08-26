@@ -3,6 +3,11 @@ package mihon.data.ocr
 import android.graphics.Bitmap
 import androidx.core.graphics.scale
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import logcat.LogPriority
 import mihon.domain.ocr.model.OcrBoundingBox
@@ -78,42 +83,64 @@ internal class GlensOcrEngine : OcrEngine {
         return parseResponsePage(responseBytes).regions.map { it.copy(order = 0) }
     }
 
-    /** Recognizes a tall strip in overlapping top-to-bottom tiles; boxes are remapped to the full image. */
-    private suspend fun recognizeTiled(image: Bitmap): List<OcrRegion> {
+    /**
+     * Recognizes a tall strip in overlapping top-to-bottom tiles; boxes are remapped to the
+     * full image. Tiles are uploaded [TILE_CONCURRENCY] at a time: each tile is an independent
+     * Lens round trip, and serializing them dominated uncached-page latency on long strips.
+     */
+    private suspend fun recognizeTiled(image: Bitmap): List<OcrRegion> = coroutineScope {
         val tileHeight = minOf((image.width * TILE_ASPECT_RATIO).toInt(), MAX_IMAGE_DIMENSION)
             .coerceAtLeast(MIN_TILE_HEIGHT)
         val step = tileHeight - (tileHeight * TILE_OVERLAP_RATIO).toInt()
 
-        val collected = mutableListOf<OcrRegion>()
-        var tileTop = 0
-        while (tileTop < image.height) {
-            val tileBottom = minOf(tileTop + tileHeight, image.height)
-            val tile = Bitmap.createBitmap(image, 0, tileTop, image.width, tileBottom - tileTop)
-            try {
-                val preparedImage = prepareImage(tile)
-                val payload = buildRequestPayload(preparedImage)
-                val responseBytes = executeRequest(payload)
-                parseResponsePage(responseBytes).regions.forEach { region ->
-                    // Region box is normalized to the tile; rescale into full-image coordinates.
-                    val absoluteTop = tileTop + region.boundingBox.top * (tileBottom - tileTop)
-                    val absoluteBottom = tileTop + region.boundingBox.bottom * (tileBottom - tileTop)
-                    collected += region.copy(
-                        order = 0,
-                        boundingBox = OcrBoundingBox(
-                            left = region.boundingBox.left,
-                            top = (absoluteTop / image.height).coerceIn(0f, 1f),
-                            right = region.boundingBox.right,
-                            bottom = (absoluteBottom / image.height).coerceIn(0f, 1f),
-                        ),
-                    )
-                }
-            } finally {
-                if (!tile.isRecycled) tile.recycle()
+        val tileTops = buildList {
+            var tileTop = 0
+            while (true) {
+                add(tileTop)
+                if (tileTop + tileHeight >= image.height) break
+                tileTop += step
             }
-            if (tileBottom >= image.height) break
-            tileTop += step
         }
-        return collected
+
+        val gate = Semaphore(TILE_CONCURRENCY)
+        tileTops.map { tileTop ->
+            async {
+                gate.withPermit {
+                    val tileBottom = minOf(tileTop + tileHeight, image.height)
+                    val tile = Bitmap.createBitmap(image, 0, tileTop, image.width, tileBottom - tileTop)
+                    try {
+                        recognizeTile(tile, tileTop, tileBottom, image.height)
+                    } finally {
+                        if (!tile.isRecycled) tile.recycle()
+                    }
+                }
+            }
+        }.awaitAll().flatten()
+    }
+
+    private suspend fun recognizeTile(
+        tile: Bitmap,
+        tileTop: Int,
+        tileBottom: Int,
+        imageHeight: Int,
+    ): List<OcrRegion> {
+        val preparedImage = prepareImage(tile)
+        val payload = buildRequestPayload(preparedImage)
+        val responseBytes = executeRequest(payload)
+        return parseResponsePage(responseBytes).regions.map { region ->
+            // Region box is normalized to the tile; rescale into full-image coordinates.
+            val absoluteTop = tileTop + region.boundingBox.top * (tileBottom - tileTop)
+            val absoluteBottom = tileTop + region.boundingBox.bottom * (tileBottom - tileTop)
+            region.copy(
+                order = 0,
+                boundingBox = OcrBoundingBox(
+                    left = region.boundingBox.left,
+                    top = (absoluteTop / imageHeight).coerceIn(0f, 1f),
+                    right = region.boundingBox.right,
+                    bottom = (absoluteBottom / imageHeight).coerceIn(0f, 1f),
+                ),
+            )
+        }
     }
 
     /** Drops seam duplicates from overlapping tiles (same physical text seen twice). */
@@ -845,6 +872,7 @@ internal class GlensOcrEngine : OcrEngine {
         private const val TILE_ASPECT_RATIO = 1.8f
         private const val MIN_TILE_HEIGHT = 1000
         private const val TILE_OVERLAP_RATIO = 0.2f
+        private const val TILE_CONCURRENCY = 3
         private const val DUPLICATE_IOU_THRESHOLD = 0.45f
 
         private const val CONNECT_TIMEOUT_MS = 10_000

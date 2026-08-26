@@ -5,8 +5,9 @@
 > A phase is COMPLETED only when its verification steps have actually been run
 > and recorded in `docs/memory.md`.
 
-Current phase pointer: **Phase 8 device pass IN_PROGRESS on real hardware
-(English-content build 0.4.0-8232 installed) → then Phase 9 measurements**.
+Current phase pointer: **Phase 8 device pass IN_PROGRESS (steps 1–6 done,
+7–15 remain) + Phase 9 perf pass #1 awaiting device re-measure — build
+0.4.0-8233 installed on SM_M066B → then Phase 9 remaining items**.
 PRODUCT PIVOT 2026-08-25: English is the primary v1 Read-Aloud language;
 Japanese TTS moved to Phase 10.
 
@@ -150,10 +151,12 @@ Japanese TTS moved to Phase 10.
 
 - **Status**: IN_PROGRESS (2026-08-25: stabilization change set landed — Glens
   strip tiling + EN ordering, JP gate removal, segmenter EN rules, progression
-  fixes; spotlessCheck + testDebugUnitTest + :app:assembleDebug GREEN; build
-  installed on SM_M066B. REMAINING: on-device script §3.4(3)–(5) with the user
-  driving — English content. The "missing-JP-voice" branch of the old script is
-  OBSOLETE after the pivot.)
+  fixes; spotlessCheck + testDebugUnitTest + :app:assembleDebug GREEN.
+  2026-08-26: device script steps 1–6 executed (3 PASS / 3 PASS-WITH-ISSUE,
+  evidence in .device-pass/); Phase 9 perf pass #1 landed (parallel tiles,
+  scan single-flight, task-owned bitmap+upsert) — build 0.4.0-8233 installed.
+  REMAINING: startup-latency re-measure, script steps 7–15. The
+  "missing-JP-voice" branch of the old script is OBSOLETE after the pivot.)
 - **Objective**: complete the test story.
 - **Tasks**: ensure segmenter+policy suites comprehensive; run full
   `testDebugUnitTest`; device pass of the prd.md §3.4(3) script (cached path,
@@ -165,10 +168,12 @@ Japanese TTS moved to Phase 10.
 
 ## Phase 9 — Performance/stability hardening
 
-- **Status**: IN_PROGRESS (static audit DONE 2026-08-23 [2 fixes]; reader-
-  stabilization pass DONE 2026-08-25 [OCR/TTS/progression root-cause fixes,
-  honest error states]. REMAINING device items bundled with the Phase 8 device
-  pass: memory/battery profiles, leakcanary, exit-to-idle timing)
+- **Status**: IN_PROGRESS (static audit DONE 2026-08-23; reader-stabilization
+  pass DONE 2026-08-25; perf pass #1 DONE 2026-08-26 [tile parallelism ×3,
+  scan single-flight, task-owned bitmap+upsert — kills duplicate scans and
+  recycle crashes, ~3× faster pages expected] — gates green, device
+  re-measure pending. REMAINING: advance-confirm timeout fix (webtoon),
+  memory/battery/leakcanary profiles, exit-to-idle timing)
 - **Objective**: production quality under stress.
 - **Tasks**: bitmap lifecycle audit (no retention across suspension points);
   cancellation correctness (swipe-away, chapter switch mid-scan); memory profile
@@ -188,6 +193,17 @@ Japanese TTS moved to Phase 10.
   background playback via FGS+MediaSession; on-image bbox highlight; audio
   caching for high-latency engines; porting Glens ordering into local Legacy/Fast
   scans; cross-tile text merge for seam bubbles (Known issue #6).
+- **Advanced TTS / Voice Calibration system** (explicit requirement added
+  2026-08-25): dedicated Read-Aloud configuration beyond the current basic
+  rate/pitch controls. Must investigate and calibrate: multiple TTS engines;
+  multiple voice models; voice selection/picker; voice quality comparison;
+  language/locale-specific voices; voice-specific rate tuning; voice-specific
+  pitch tuning; engine-specific settings; neural/local TTS models where
+  appropriate; cloud TTS providers where appropriate; higher-quality narration
+  voices; latency comparison between engines; audio caching for high-latency
+  engines; per-engine/per-voice configuration where technically appropriate.
+  Revisit ONLY after Phase 8/9 device verification + performance work complete.
+  v1 scope unchanged — do not pull any of this forward.
 - **Rule**: each requires a PRD update + architecture review BEFORE coding
   (rules.md §10). None may regress v1 behavior.
 

@@ -38,3 +38,4 @@ data/src/main/assets/panel_detector/model.tflite
 
 # Java heap dumps
 *.hprof
+.device-pass/

@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.ui.reader.tts
 
+import android.os.SystemClock
 import eu.kanade.tachiyomi.data.ocr.OcrPageSourceResolver
 import eu.kanade.tachiyomi.util.ocr.toOcrImage
 import kotlinx.coroutines.CancellationException
@@ -120,6 +121,9 @@ internal class TtsPlaybackController(
 
     private var prefetchJob: Job? = null
 
+    /** ElapsedRealtime marker set in [start]; first successful acquire logs startup latency. */
+    private var sessionStartedAtElapsed = 0L
+
     init {
         engine.onFocusEvent = { event ->
             when (event) {
@@ -136,6 +140,7 @@ internal class TtsPlaybackController(
         this.context = context
         stopped = false
         paused = false
+        sessionStartedAtElapsed = SystemClock.elapsedRealtime()
         mutableState.value = TtsPlaybackState(phase = TtsPhase.Preparing, pageIndex = startPageIndex)
         playbackJob = scope.launch { runPlayback(startPageIndex) }
     }
@@ -393,6 +398,7 @@ internal class TtsPlaybackController(
     private suspend fun acquireSentences(pageIndex: Int): List<TtsSentence>? = withIOContext {
         mutableState.update { it.copy(phase = TtsPhase.LoadingPage) }
         val ctx = context ?: return@withIOContext emptyList()
+        val acquireStartedAt = SystemClock.elapsedRealtime()
         val cached = try {
             getCachedPageOcr.await(ctx.chapter.id, pageIndex)
         } catch (e: CancellationException) {
@@ -406,8 +412,16 @@ internal class TtsPlaybackController(
         }
         val result = cached ?: scanOnDemand(ctx, pageIndex) ?: return@withIOContext null
         val sentences = result.regions.toTtsSentences()
+        val acquireMs = SystemClock.elapsedRealtime() - acquireStartedAt
         logcat(LogPriority.DEBUG) {
-            "TTS page=$pageIndex segmented sentences=${sentences.size} regions=${result.regions.size}"
+            "TTS page=$pageIndex segmented sentences=${sentences.size} regions=${result.regions.size} " +
+                "acquireMs=$acquireMs"
+        }
+        if (sessionStartedAtElapsed != 0L) {
+            logcat(LogPriority.INFO) {
+                "TTS startup open->first page ready in ${SystemClock.elapsedRealtime() - sessionStartedAtElapsed}ms"
+            }
+            sessionStartedAtElapsed = 0L
         }
         sentences
     }
