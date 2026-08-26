@@ -62,6 +62,7 @@ sealed interface TtsEvent {
     data class AdvancePage(val pageIndex: Int) : TtsEvent
     data object AdvanceChapter : TtsEvent
     data class Failed(val error: TtsError) : TtsEvent
+    data class ScrollToRegion(val pageIndex: Int, val bbox: mihon.domain.ocr.model.OcrBoundingBox) : TtsEvent
 }
 
 /** Everything the controller needs to play one chapter; supplied by ReaderViewModel. */
@@ -192,12 +193,20 @@ internal class TtsPlaybackController(
             pending.complete(pageIndex)
             return
         }
-        val playing = mutableState.value.phase == TtsPhase.Playing ||
-            mutableState.value.phase == TtsPhase.LoadingPage ||
-            mutableState.value.phase == TtsPhase.Preparing
-        if (playing && !stopped && pageIndex != mutableState.value.pageIndex) {
-            logcat(LogPriority.DEBUG) { "TTS user navigation to page=$pageIndex" }
-            rebuildQueueForUserNavigation(pageIndex)
+        val state = mutableState.value
+        val isActivePlayback = state.phase == TtsPhase.Playing ||
+            state.phase == TtsPhase.LoadingPage ||
+            state.phase == TtsPhase.Preparing
+        // Also handle navigation during pause so resume picks up the correct page.
+        val isPaused = state.phase == TtsPhase.Paused
+        if ((isActivePlayback || isPaused) && !stopped && pageIndex != state.pageIndex) {
+            logcat(LogPriority.DEBUG) { "TTS user navigation to page=$pageIndex (phase=${state.phase})" }
+            if (isActivePlayback) {
+                rebuildQueueForUserNavigation(pageIndex)
+            } else {
+                // Paused: just update the page index so resume continues from the right place.
+                mutableState.update { it.copy(pageIndex = pageIndex) }
+            }
         }
     }
 
@@ -296,6 +305,8 @@ internal class TtsPlaybackController(
                     )
                 }
                 val spoke = try {
+                    // Auto-scroll to the sentence's region before speaking (webtoon sync)
+                    eventChannel.send(TtsEvent.ScrollToRegion(pageIndex, sentence.boundingBox))
                     engine.speak(utteranceId(pageIndex, sentenceIndex), sentence.text)
                 } catch (e: CancellationException) {
                     throw e

@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.data.ocr.OcrPageInput
 import eu.kanade.tachiyomi.data.ocr.openCroppedBitmap
 import eu.kanade.tachiyomi.ui.reader.model.ReaderPage
 import eu.kanade.tachiyomi.ui.reader.model.ViewerChapters
+import mihon.domain.ocr.model.OcrBoundingBox
 
 interface ReaderSelectionBitmapSource {
     fun selectionPageInput(): OcrPageInput?
@@ -75,4 +76,10 @@ interface Viewer {
     fun setActiveOcrOverlay(overlay: ReaderActiveOcrOverlay?): Boolean = overlay == null
 
     fun resolveSelectionCaptures(region: ReaderSelectionRegion): List<ReaderSelectionCapture> = emptyList()
+
+    /**
+     * Scrolls the viewer to the given region within [pageIndex]. Default implementation is a no-op;
+     * implemented by WebtoonViewer for webtoon/long-strip auto-scroll sync.
+     */
+    fun scrollToRegion(pageIndex: Int, bbox: OcrBoundingBox) = Unit
 }

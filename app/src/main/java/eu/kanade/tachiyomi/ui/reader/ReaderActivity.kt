@@ -380,6 +380,9 @@ class ReaderActivity : BaseActivity() {
                     ReaderViewModel.Event.TtsAdvanceChapter -> {
                         loadNextChapter()
                     }
+                    is ReaderViewModel.Event.TtsScrollToRegion -> {
+                        scrollToRegion(event.pageIndex, event.bbox)
+                    }
                     is ReaderViewModel.Event.TtsError -> {
                         toast(event.error.toMessageRes())
                     }
@@ -1158,6 +1161,15 @@ class ReaderActivity : BaseActivity() {
         val currentChapter = viewModel.state.value.currentChapter ?: return
         val page = currentChapter.pages?.getOrNull(index) ?: return
         viewer.moveToPage(page)
+    }
+
+    /**
+     * Scrolls the viewer to the given region within [pageIndex]. The bbox is normalized
+     * (0..1) relative to the full page image.
+     */
+    private fun scrollToRegion(pageIndex: Int, bbox: mihon.domain.ocr.model.OcrBoundingBox) {
+        val viewer = viewModel.state.value.viewer ?: return
+        viewer.scrollToRegion(pageIndex, bbox)
     }
 
     /**

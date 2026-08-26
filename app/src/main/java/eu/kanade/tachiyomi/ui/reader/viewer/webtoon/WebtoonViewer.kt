@@ -28,6 +28,7 @@ import eu.kanade.tachiyomi.ui.reader.viewer.Viewer
 import eu.kanade.tachiyomi.ui.reader.viewer.ViewerNavigation.NavigationRegion
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
+import mihon.domain.ocr.model.OcrBoundingBox
 import tachiyomi.core.common.util.system.logcat
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -362,8 +363,39 @@ class WebtoonViewer(val activity: ReaderActivity, val isContinuous: Boolean = tr
         }
     }
 
+    /**
+     * Scrolls to the given region within the page at [pageIndex]. The bbox is normalized
+     * (0..1) relative to the full page image. Only implemented for webtoon/long-strip mode.
+     */
+    override fun scrollToRegion(pageIndex: Int, bbox: OcrBoundingBox) {
+        val pages = adapter.currentChapter?.pages ?: return
+        if (pageIndex < 0 || pageIndex >= pages.size) return
+        val page = pages[pageIndex]
+        val position = adapter.items.indexOf(page)
+        if (position == -1) return
+
+        // Compute target vertical offset within the item view.
+        // bbox.top is normalized 0..1 relative to full page image height.
+        // We need to convert to a pixel offset for scrollToPositionWithOffset.
+        // The item view height may differ from image height due to scaling.
+        // Use the layoutManager to find the view at position and compute offset.
+        val view = layoutManager.findViewByPosition(position)
+            ?: return
+        val itemHeight = view.height
+        if (itemHeight <= 0) return
+
+        // bbox.top is 0..1 from top of image. Positive offset in scrollToPositionWithOffset
+        // means scroll DOWN (content moves up), so we negate.
+        val targetOffset = -((bbox.top * itemHeight).toInt())
+        layoutManager.scrollToPositionWithOffset(position, targetOffset)
+    }
+
     fun onScrolled(pos: Int? = null) {
-        val position = pos ?: layoutManager.findLastEndVisibleItemPosition()
+        // Use findFirstVisibleItemPosition for stable "current page" detection.
+        // findLastEndVisibleItemPosition returns the item at the BOTTOM of the view,
+        // which for webtoon (vertical stack) is often the NEXT page when a short
+        // page is followed by another. This caused advance-confirm timeouts.
+        val position = pos ?: layoutManager.findFirstVisibleItemPosition()
         val item = adapter.items.getOrNull(position)
         val allowPreload = checkAllowPreload(item as? ReaderPage)
         if (item != null && currentPage != item) {

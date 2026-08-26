@@ -6,8 +6,8 @@
 > and recorded in `docs/memory.md`.
 
 Current phase pointer: **Phase 8 device pass IN_PROGRESS (steps 1–6 done,
-7–15 remain) + Phase 9 perf pass #1 awaiting device re-measure — build
-0.4.0-8233 installed on SM_M066B → then Phase 9 remaining items**.
+7–15 remain) + Phase 9 perf pass #1 + #2 IMPLEMENTED — build 0.4.0-8234
+installed on SM_M066B, awaiting script completion**.
 PRODUCT PIVOT 2026-08-25: English is the primary v1 Read-Aloud language;
 Japanese TTS moved to Phase 10.
 
@@ -155,7 +155,10 @@ Japanese TTS moved to Phase 10.
   2026-08-26: device script steps 1–6 executed (3 PASS / 3 PASS-WITH-ISSUE,
   evidence in .device-pass/); Phase 9 perf pass #1 landed (parallel tiles,
   scan single-flight, task-owned bitmap+upsert) — build 0.4.0-8233 installed.
-  REMAINING: startup-latency re-measure, script steps 7–15. The
+  2026-08-27: Phase 9 perf pass #2 landed — webtoon advance-confirm fix
+  (findFirstVisibleItemPosition), region-level auto-scroll (ScrollToRegion
+  event), pause/resume page-awareness — build 0.4.0-8234 installed. All gates
+  green. REMAINING: script steps 7–15 on new build. The
   "missing-JP-voice" branch of the old script is OBSOLETE after the pivot.)
 - **Objective**: complete the test story.
 - **Tasks**: ensure segmenter+policy suites comprehensive; run full
@@ -171,9 +174,12 @@ Japanese TTS moved to Phase 10.
 - **Status**: IN_PROGRESS (static audit DONE 2026-08-23; reader-stabilization
   pass DONE 2026-08-25; perf pass #1 DONE 2026-08-26 [tile parallelism ×3,
   scan single-flight, task-owned bitmap+upsert — kills duplicate scans and
-  recycle crashes, ~3× faster pages expected] — gates green, device
-  re-measure pending. REMAINING: advance-confirm timeout fix (webtoon),
-  memory/battery/leakcanary profiles, exit-to-idle timing)
+  recycle crashes, ~3× faster pages expected]; perf pass #2 DONE 2026-08-27
+  [webtoon confirm fix: findFirstVisibleItemPosition, region-level auto-scroll
+  via TtsEvent.ScrollToRegion, pause/resume page-awareness] — all gates green,
+  build 0.4.0-8234 installed. REMAINING: device re-measure on new build,
+  mini-player z-order fix, memory/battery/leakcanary profiles, exit-to-idle
+  timing)
 - **Objective**: production quality under stress.
 - **Tasks**: bitmap lifecycle audit (no retention across suspension points);
   cancellation correctness (swipe-away, chapter switch mid-scan); memory profile

@@ -210,6 +210,9 @@ class ReaderViewModel @JvmOverloads constructor(
                             eventChannel.send(Event.TtsError(event.error))
                         }
                     }
+                    is TtsEvent.ScrollToRegion -> eventChannel.send(
+                        Event.TtsScrollToRegion(event.pageIndex, event.bbox),
+                    )
                 }
             }
         }
@@ -1244,5 +1247,6 @@ class ReaderViewModel @JvmOverloads constructor(
         data object TtsAdvanceChapter : Event
         data class TtsError(val error: eu.kanade.tachiyomi.ui.reader.tts.TtsError) : Event
         data object TtsNoTextFound : Event
+        data class TtsScrollToRegion(val pageIndex: Int, val bbox: mihon.domain.ocr.model.OcrBoundingBox) : Event
     }
 }

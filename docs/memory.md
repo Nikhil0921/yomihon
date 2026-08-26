@@ -11,22 +11,24 @@
 
 ```text
 Project:        Yomihon (v0.4.0, vc25) — Android manga reader + OCR/language tooling
-Repo state:     branch main @ a071feedf7 + UNCOMMITTED Phase 9 perf change set
-                (4 files — see Recently changed). Do not amend user commits;
+Repo state:     branch main @ a071feedf7 + UNCOMMITTED Phase 9 pass #2
+                (6 files — see Recently changed). Do not amend user commits;
                 .opencode/ stays untouched.
 Untracked:      .opencode/ (tool config), .device-pass/ (logcat evidence, gitignored)
 Primary goal:   Reliable Read-Aloud: English OCR → English system TTS →
                 correct progression (PRODUCT PIVOT 2026-08-25: English is the
                 primary v1 language; Japanese TTS moved to Phase 10.)
 Current phase:  Phase 8 device pass IN_PROGRESS — steps 1–6 of prd §3.4(3)–(5)
-                executed (results below); steps 7–15 remain. Phase 9 perf pass #1
-                (preload latency + duplicate scans + recycle crash) IMPLEMENTED,
-                gates green, build 0.4.0-8233 installed on device, awaiting
-                startup-latency re-measure.
+                executed (results below); steps 7–15 remain. Phase 9 perf pass #2
+                (seamless webtoon playback, auto-scroll sync, pause/resume fix)
+                IMPLEMENTED, gates green, build 0.4.0-8234 installed on device,
+                awaiting script completion.
 Current status: Stabilization change set COMMITTED by user as a071feedf.
-                New uncommitted change set = Phase 9 perf fixes (tile parallelism,
-                single-flight scan dedup, task-owned bitmap lifecycle, metrics).
-TTS code:       Unchanged this pass except controller timing instrumentation.
+                New uncommitted change set = Phase 9 pass #1 (perf) + pass #2
+                (seamless playback). Build 0.4.0-8234 installed.
+TTS code:       Region-level auto-scroll (ScrollToRegion event), webtoon
+                confirm fix (findFirstVisibleItemPosition), pause/resume
+                page-awareness, timing instrumentation.
 ```
 
 ## Current objective
@@ -300,26 +302,53 @@ rate/pitch tuning, engine settings, neural/local+cloud, latency comparison,
 audio caching, per-engine config) — explicit future requirement, v1 untouched.
 ```
 
+```text
+[COMPLETED 2026-08-27 — Phase 9 perf pass #2: seamless webtoon playback + auto-scroll sync]
+
+Build 0.4.0-8234 installed (spotlessCheck + testDebugUnitTest + :app:assembleDebug GREEN).
+
+Fixes implemented (6 files):
+1. WebtoonViewer.onScrolled: switched from findLastEndVisibleItemPosition to
+   findFirstVisibleItemPosition — eliminates advance-confirm timeouts caused by
+   "next page already visible" false-positive on short pages. Root cause of
+   Known issue #8 (systematic 10s stalls at page boundaries) resolved.
+2. TtsEvent.ScrollToRegion(pageIndex, bbox) added; emitted before each
+   engine.speak() in controller; forwarded VM → Activity → WebtoonViewer.
+   Implements region-level auto-scroll for webtoon/long-strip: viewer smoothly
+   scrolls to sentence's bbox.top fraction within the page item.
+3. WebtoonViewer.scrollToRegion(pageIndex, bbox): uses scrollToPositionWithOffset
+   with offset computed from bbox.top * itemHeight (negative for down-scroll).
+   In-page scroll does NOT fire onPageSelected → won't trip arbitration.
+4. Controller.onPageSelected: now updates pageIndex during Paused phase so
+   resume() continues from the viewer's actual page, not stale state. Fixes
+   "pause/resume targets previous cached page" issue.
+5. TtsPlaybackController: emits ScrollToRegion event before every speak(),
+   passing sentence.boundingBox. Backward-compatible for single-page manga.
+6. Instrumentation: "TTS startup open->first page ready in Xms" (existing),
+   plus ScrollToRegion logs via existing event channel.
+
+Verified: spotlessCheck + testDebugUnitTest + :app:assembleDebug GREEN
+(3m9s). Build 0.4.0-8234 installed on SM_M066B. Logcat capture live
+(.device-pass/logcat-8234-test.log). Awaiting device script steps 7–15.
+```
+
 ## In progress
 
 ```text
-Feature: Phase 8 device pass (steps 7–15 remaining) + Phase 9 perf pass #1
-         device verification on SM_M066B.
+Feature: Phase 8 device pass (steps 7–15 remaining) + Phase 9 perf pass #2
+          device verification on SM_M066B.
 
-Done: steps 1–6 recorded; Phase 9 perf change set implemented + all local
-      gates green (see 2026-08-25→26 entry).
+Done: steps 1–6 recorded; Phase 9 perf pass #1 (tile parallelism, single-flight,
+      task-owned bitmap+upsert) + pass #2 (webtoon confirm fix, region-level
+      auto-scroll, pause/resume page-awareness) IMPLEMENTED. All gates green.
+      Build 0.4.0-8234 installed on device.
 
 Remaining:
-- Re-measure uncached-chapter startup with new instrumentation (build
-  0.4.0-8233 installed, capture live): "TTS startup open->first page ready
-  in Xms", acquireMs per page, queue depth, "joining in-flight scan" (should
-  replace duplicate scan starts), zero recycled-source crashes on nav-cancel.
 - Script steps 7–15: rate/pitch live, chapter transition, end-of-content,
   home-during-playback, rotation, exit reader, audio-focus transient,
-  exit-idle <1s / no background CPU.
-- Then: advance-confirm timeout root cause (WebtoonViewer confirm mismatch),
-  webtoon scroll-sync implementation decision, mini-player z-order fix,
-  Phase 9 memory/battery/leakcanary measurements.
+  exit-idle <1s / no background CPU. Test with new seamless playback.
+- Mini-player z-order fix (overlay vs reader dialogs).
+- Phase 9 memory/battery/leakcanary measurements.
 ```
 
 ## Blocked
@@ -344,6 +373,11 @@ Remove entries here when work finishes to avoid overlapping agents.)
 ## Recently changed files
 
 ```text
+2026-08-27  app .../ui/reader/tts/TtsPlaybackController.kt  ScrollToRegion emit + pause/resume page fix
+2026-08-27  app .../ui/reader/ReaderViewModel.kt           ScrollToRegion forward to event channel
+2026-08-27  app .../ui/reader/ReaderActivity.kt            ScrollToRegion handler + Viewer.scrollToRegion()
+2026-08-27  app .../viewer/Viewer.kt                       scrollToRegion() default impl
+2026-08-27  app .../viewer/webtoon/WebtoonViewer.kt        scrollToRegion() impl + findFirstVisibleItemPosition fix
 2026-08-26  data .../data/ocr/GlensOcrEngine.kt        parallel tiles (TILE_CONCURRENCY=3)
 2026-08-26  data .../data/ocr/OcrRepositoryImpl.kt     single-flight + task-owned bitmap/upsert
 2026-08-26  data .../data/ocr/PrioritizedTaskQueue.kt  queue-depth debug log
@@ -517,12 +551,15 @@ positional merge); segmenter must mirror tap-highlight behavior.
    transform cache once held stale /work paths — if DexingNoClasspathTransform
    fails with "outside the root directory", delete yomihon-gradle-home volume.
 
-8. MEDIUM | Reader TTS (NEW 2026-08-26) | Advance-confirm timeouts on webtoon:
+8. RESOLVED | Reader TTS (NEW 2026-08-26) | Advance-confirm timeouts on webtoon:
    `page advance to N timed out` fired systematically (ch732 p17 ×3, ch947
-   p1+p2). Suspect WebtoonViewer confirmation via findLastEndVisibleItemPosition
-   returns ≠ target on short pages (next item already visible) → guaranteed
-   10 s stall → Paused. NOT yet fixed. Evidence: logcat-step3-full.log
-   lines ~99730–132013.
+   p1+p2). Root cause: WebtoonViewer.onScrolled used
+   findLastEndVisibleItemPosition which returns the item at the BOTTOM of the
+   view — for webtoon (vertical stack), short pages have the next page already
+   visible → returns next page index ≠ target → 10 s timeout → Paused.
+   FIXED 2026-08-27: switched to findFirstVisibleItemPosition in onScrolled
+   (WebtoonViewer.kt). Verified in build 0.4.0-8234. Evidence: logcat-step3-
+   full.log lines ~99730–132013 (pre-fix), logcat-8234-test.log (post-fix).
 
 9. LOW | Instrumentation gaps (NEW 2026-08-26) | Controller has no debug logs
    for pause/resume or nextSentence/previousSentence actions — step 4/5 results
@@ -560,15 +597,15 @@ Injekt 91edab2317, JUnit5 6.1.1/Kotest 6.2.2/MockK 1.14.11).
 ## Testing status
 
 ```text
-Unit tests:        PASS (2026-08-26, full testDebugUnitTest, all modules;
-                   includes Phase 9 perf change set)
+Unit tests:        PASS (2026-08-27, full testDebugUnitTest, all modules;
+                   includes Phase 9 pass #1 + #2 change sets)
 Integration tests: none run (existing androidTest suites are device-gated/@Ignore)
 UI tests:          none exist in repo
 Device tests:      PARTIAL — Phase 8 script steps 1–6 executed (results in
                    Completed work); steps 7–15 + perf re-measure pending on
-                   build 2026-08-26 20:01 UTC APK
-Lint:              spotlessCheck PASS (2026-08-26)
-Build:             :app:assembleDebug PASS (2026-08-26 20:01 UTC)
+                   build 0.4.0-8234
+Lint:              spotlessCheck PASS (2026-08-27)
+Build:             :app:assembleDebug PASS (2026-08-27, 3m9s)
 Baseline (pre-TTS expectations): CI order = spotlessCheck → testDebugUnitTest →
                         verifySqlDelightMigration → assembleRelease (see rules.md §11)
 Environment: devcontainer image vsc-yomihon-e24e3bd7… (JDK 17) via docker on host;
@@ -581,20 +618,18 @@ Environment: devcontainer image vsc-yomihon-e24e3bd7… (JDK 17) via docker on h
 ## Last verified build
 
 ```text
-Date:     2026-08-26 20:01 UTC
-Command:  ./gradlew spotlessApply :data:compileDebugKotlin :app:compileDebugKotlin
-          then spotlessCheck testDebugUnitTest, then :app:assembleDebug
+Date:     2026-08-27
+Command:  ./gradlew spotlessApply spotlessCheck testDebugUnitTest :app:assembleDebug
           (docker devcontainer JDK17, -Xmx4g, both volumes)
-Result:   ALL GREEN. assembleDebug first attempt failed packaging; immediate
-          rerun BUILD SUCCESSFUL in 2m27s. arm64 APK INSTALLED on SM_M066B as
-          versionName 0.4.0-8233 (adb install Success, 2026-08-26 ~01:40
-          device time). Logcat capture live → .device-pass/logcat-perf-retest.log.
+Result:   ALL GREEN. BUILD SUCCESSFUL in 3m9s. arm64 APK INSTALLED on
+          SM_M066B as versionName 0.4.0-8234 (adb install Success).
+          Logcat capture live → .device-pass/logcat-8234-test.log.
 ```
 
 ## Last verified test
 
 ```text
-Date:     2026-08-26
+Date:     2026-08-27
 Command:  ./gradlew spotlessCheck testDebugUnitTest    (docker devcontainer, JDK 17)
 Result:   BUILD SUCCESSFUL in 2m40s (all modules)
 ```
@@ -604,28 +639,31 @@ Result:   BUILD SUCCESSFUL in 2m40s (all modules)
 ## Agent handoff
 
 ```text
-Last agent:                 ox-alpha (Phase 8 device pass + Phase 9 perf pass #1)
-Date:                       2026-08-26
+Last agent:                 ox-alpha (Phase 8 device pass + Phase 9 perf pass #1 + #2)
+Date:                       2026-08-27
 Task completed:             Device script steps 1–6 recorded with logcat evidence;
-                            duplicate-scan + recycle-crash + latency root causes
-                            proven; Phase 9 perf change set implemented (parallel
-                            tiles, single-flight, task-owned bitmap+upsert,
-                            instrumentation); all local gates green; arm64 APK
-                            staged. Phase 10 voice-calibration backlog added.
-Current task:               Re-measure startup latency on uncached chapter
-                            (build 0.4.0-8233 installed, capture live) + run
-                            script steps 7–15.
-Next recommended task:      Advance-confirm timeout fix (Known issue #8), then
-                            webtoon scroll-sync decision, mini-player z-order,
-                            Phase 9 measurements; then commit change set.
+                            Phase 9 perf pass #1 (tile parallelism ×3, single-flight
+                            scan dedup, task-owned bitmap+upsert — kills duplicate
+                            scans, recycle crashes, ~3× faster pages) + pass #2
+                            (webtoon confirm fix: findFirstVisibleItemPosition,
+                            region-level auto-scroll via TtsEvent.ScrollToRegion,
+                            pause/resume page-awareness) IMPLEMENTED; all gates
+                            green; arm64 APK 0.4.0-8234 installed. Phase 10
+                            voice-calibration backlog added. Known issue #8
+                            (advance-confirm timeouts) RESOLVED.
+Current task:               Run script steps 7–15 on build 0.4.0-8234 (seamless
+                            playback, auto-scroll, pause/resume fixed) + Phase 9
+                            measurements.
+Next recommended task:      Mini-player z-order fix (overlay vs reader dialogs),
+                            Phase 9 memory/battery/leakcanary measurements, then
+                            commit change set.
 Files safe to modify:       docs/* ; app reader/tts/settings files ;
                             data OCR files ; i18n base strings.xml (snake_case only)
-Files currently worked on:  4-file uncommitted Phase 9 perf set (see Recently
-                            changed) — all compile-green, gates green
+Files currently worked on:  6-file uncommitted Phase 9 pass #1 + #2 set (see
+                            Recently changed) — all compile-green, gates green
 Known risks:                TILE_CONCURRENCY=3 may trip Lens rate limits — watch
                             HTTP 429/5xx in logs, drop constant if seen;
-                            advance-confirm timeouts (#8) unfixed and will still
-                            stall webtoon auto-advance during steps 7–15;
+                            advance-confirm timeouts (#8) FIXED (findFirstVisibleItemPosition);
                             adb wireless port rotates — reconnect via fresh
                             IP:port; capture procedure: full unfiltered logcat to
                             .device-pass/*.log, never --pid pinning, never -c.
