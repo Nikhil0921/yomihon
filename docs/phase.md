@@ -5,19 +5,21 @@
 > A phase is COMPLETED only when its verification steps have actually been run
 > and recorded in `docs/memory.md`.
 
-Current phase pointer: **Phase 8 device pass IN_PROGRESS (steps 1–6 done,
-7–15 remain) + Phase 9 perf pass #1 + #2 + P0/P1 fixes LANDED + advance-confirm
-& stale-page fixes VERIFIED ON DEVICE — build 0.4.0-8236 reinstalled, run2/run3
-logcat analyzed: 22/22 advances confirmed 1–5ms / 0 timeouts (Finding #1 FIXED),
-pause/resume correct (Finding #2 fixed, timeout branch unexercised), Finding #3
-duplicate speech: button-triggered duplicates expected; hands-off variant NOT
-reproduced and USER DROPPED 2026-08-28 — LOW PRIORITY, revisit post-build
-(memory.md Deferred issues). TTS-DBG instrumentation removed; #1+#2 fixes kept.
-Mini-player z-order fix LANDED 2026-08-28 (UNCOMMITTED, ReaderActivity.kt):
-TtsPlaybackBar moved before the dialog block so reader dialogs/overlays render
-above the pill (was drawing on top of inline OcrResultOverlay). Controller
-action-level logging LANDED 2026-08-28 (UNCOMMITTED, TtsPlaybackController.kt):
-pause/resume/stop/stepBy/focus-loss DEBUG logs — closes Known issue #9. Gates green**.
+Current phase pointer: **Phase 8 device pass COMPLETE — script steps 1–15 ALL
+EXECUTED + USER-CONFIRMED (2026-08-28 RUN4 build 0.4.0-8238: steps 7–15 PASS;
+user confirmed step 7 rate/pitch live + step 11 rotation pause→resume-same-OCR-
+line). Chapter transition, end-of-content, home-during-playback, exit reader,
+audio-focus (PermanentLoss→pause→manual resume same sentence), exit-idle 550ms,
+4/4 advance confirms 1–2ms / 0 timeouts, 6 next-sentence steps clean,
+ScrollToRegion on-device verified, 3 clean pause/resume cycles. FINDING #4 (P1)
+FIXED 2026-08-28: background prefetch scan failure (transient DNS) escalated
+via scanOnDemand.fail() and killed a healthy paused session → reportFailure
+param gates failure reporting (prefetch passes false, logs best-effort).
+Uncommitted set: z-order fix + action logging + prefetch fix (all gates green);
+prefetch fix not yet device-verified. Phase 9 perf passes #1+#2, P0/P1,
+advance-confirm/stale-page fixes previously LANDED+VERIFIED (run2/run3: 22/22
+advances 1–5ms / 0 timeouts). Finding #3 duplicate speech USER DROPPED
+2026-08-28 — LOW PRIORITY post-build (memory.md Deferred issues)**.
 PRODUCT PIVOT 2026-08-25: English is the primary v1 Read-Aloud language;
 Japanese TTS moved to Phase 10.
 
@@ -159,7 +161,9 @@ Japanese TTS moved to Phase 10.
 
 ## Phase 8 — Testing
 
-- **Status**: IN_PROGRESS (2026-08-25: stabilization change set landed — Glens
+- **Status**: COMPLETED (2026-08-28: device script steps 1–15 all executed +
+  user-confirmed; all suites green. History: 2026-08-25: stabilization change
+  set landed — Glens
   strip tiling + EN ordering, JP gate removal, segmenter EN rules, progression
   fixes; spotlessCheck + testDebugUnitTest + :app:assembleDebug GREEN.
   2026-08-26: device script steps 1–6 executed (3 PASS / 3 PASS-WITH-ISSUE,
@@ -174,7 +178,13 @@ Japanese TTS moved to Phase 10.
   0 timeouts. Known issues #8 + #10 RESOLVED. Two new issues found:
    P0 prefetch spam loop, P1 rapid-swipe mass OCR — both FIXED 2026-08-28.
    Build 0.4.0-8236 run2/run3 verified Finding #1/#2; Finding #3 deferred LOW
-   PRIORITY post-build. Steps 7–15 remaining.
+   PRIORITY post-build. 2026-08-28 RUN4 (build 0.4.0-8238): script steps 7–15
+   EXECUTED — chapter transition, end-of-content, home-during-playback, exit
+   reader, audio-focus, exit-idle all PASS; 4/4 advance confirms 1–2ms / 0
+   timeouts; ScrollToRegion on-device verified. USER CONFIRMED: step 7
+   rate/pitch live PASS + step 11 rotation PASS (pause → resume same OCR
+   line/position). FINDING #4 (P1) prefetch-DNS escalation FIXED 2026-08-28
+   (reportFailure gate). Steps 1–15 all executed + confirmed — phase complete.
    The "missing-JP-voice" branch of the old script is OBSOLETE after the pivot.)
 - **Objective**: complete the test story.
 - **Tasks**: ensure segmenter+policy suites comprehensive; run full

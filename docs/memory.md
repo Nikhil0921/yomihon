@@ -19,16 +19,16 @@ Untracked:      .opencode/ (tool config), .device-pass/ (logcat evidence, gitign
 Primary goal:   Reliable Read-Aloud: English OCR → English system TTS →
                 correct progression (PRODUCT PIVOT 2026-08-25: English is the
                 primary v1 language; Japanese TTS moved to Phase 10.)
-Current phase:  Phase 8 device pass IN_PROGRESS — steps 1–6 executed; steps 7–15
-                remain. Phase 9 perf pass #1/#2 + P0/P1 + advance-confirm/stale-page
-                fixes landed; build 0.4.0-8236 installed and device-verified for
-                Findings #1/#2.
+Current phase:  Phase 8 device pass COMPLETE — script steps 1–15 all executed +
+                user-confirmed (2026-08-28 RUN4: steps 7–15; rate/pitch live +
+                rotation pause/resume-same-position confirmed by user). Phase 9
+                perf passes + fixes landed; prefetch-DNS escalation fix (Finding
+                #4) uncommitted + not yet device-verified.
 Current status: Finding #1 FIXED+VERIFIED (22/22 advances, 0 timeouts, 1–5ms).
                 Finding #2 FIXED (timeout sets pageIndex=target; unexercised).
-                Finding #3 duplicate speech: button-triggered duplicates expected;
-                hands-off variant not reproduced in run3; USER DROPPED 2026-08-28,
-                LOW PRIORITY post-build (Deferred issues). TTS-DBG instrumentation
-                removed; #1+#2 fixes kept.
+                Finding #3 duplicate speech: USER DROPPED 2026-08-28, LOW
+                PRIORITY post-build (Deferred issues). Finding #4 prefetch-DNS
+                session-kill FIXED 2026-08-28 (reportFailure gate).
 TTS code:       Region-level auto-scroll (ScrollToRegion event), webtoon
                 confirm fix (explicit onScrolled in moveToPage), pause/resume
                 page-awareness, prefetch/rebuild dedup, user-nav debounce.
@@ -40,7 +40,9 @@ Stabilize the read-aloud pipeline end-to-end for ENGLISH content per the
 2026-08-25 product decision: OCR must find actual dialogue (incl. long
 webtoon strips), text must be spoken completely without silent skips, and
 page/chapter progression must advance exactly once with user navigation
-authoritative. Device verification of prd.md §3.4(3)–(5) pending.
+authoritative. Device verification of prd.md §3.4(3)–(5) DONE (script steps
+1–15 executed + user-confirmed 2026-08-28). Remaining: Phase 9 hardening
+measurements (memory/battery/leakcanary) + commit uncommitted fix set.
 
 ## Completed work
 
@@ -390,6 +392,51 @@ CONTROLLER ACTION LOGGING (2026-08-28, uncommitted, all gates green):
     pause (event name). Indices/phase only — no spoken text (rules §7). Makes
     device script steps 4 (pause/resume) + 5 (prev/next sentence) verifiable.
 
+DEVICE VERIFICATION RUN4 — SCRIPT STEPS 7–15 (2026-08-28, build 0.4.0-8238):
+  Evidence: .device-pass/tts-steps7-15.log (144,053 lines, PID 5582,
+  19:44:42–19:49:29; chapters 1189 → 1188 auto-advance → 1942).
+  - Step 7 rate/pitch live: PASS (USER CONFIRMED 2026-08-28: rate and pitch
+    changes worked correctly during playback; engine setters have no logs by
+    design).
+  - Step 8 chapter transition: PASS — 19:45:43 "TTS chapter advance request"
+    ch1189→ch1188; page 0 on-demand scan 4.6s; playback continued from page 0.
+  - Step 9 end-of-content: PASS — 19:48:44 "TTS stop (phase=Finished)"; clean
+    finish, engine disconnected, no crash.
+  - Step 10 home-during-playback: PASS — home 19:46:13 (onTop=false), auto-pause
+    logged (page=1 sentence=1), return 19:46:30. (Session then needed restart
+    due to the prefetch-DNS bug below, not the home transition itself.)
+  - Step 11 rotation: PASS (USER CONFIRMED 2026-08-28: rotation worked —
+    playback paused on rotation, resume continued from the same OCR
+    line/position. No rotation events in logcat because reader orientation is
+    preference-locked; pause/resume path verified by user observation).
+  - Step 12 exit reader: PASS — stop(Playing) → stop(Idle) → "Disconnected from
+    TTS engine" <1s; zero TTS/OCR activity after exit.
+  - Step 13 audio focus: PASS — YouTube Music opened → "TTS audio focus lost
+    (PermanentLoss); pausing" 19:46:46 → auto-pause; manual resume 19:46:54
+    continued from the SAME sentence (page=1 sentence=5).
+  - Steps 14/15 exit-idle: PASS — final stop 19:48:47.383 → engine disconnect
+    19:48:47.932 (550ms); process idle of TTS work afterwards.
+  - Advance confirms: 4/4 confirmed 1–2ms, 0 timeouts; chapter advance 1/1.
+  - Sentence stepping: 6 rapid next-sentence steps (2→8) all re-acquired from
+    cache 4–9ms + ScrollToRegion; 0 boundary rejects. Pause/resume: 3 clean
+    cycles resuming from correct sentences (0, 8, 5).
+  - ScrollToRegion auto-scroll ON-DEVICE VERIFIED: bboxTop increases
+    monotonically per page (was "not visible in logs" before instrumentation).
+  - FINDING #4 (P1) FIXED 2026-08-28: background PREFETCH scan failure
+    escalated to a session-killing Error. Evidence: home-press 19:46:13 → DNS
+    failure (UnknownHostException lensfrontend-pa.googleapis.com) during page 2
+    prefetch at 19:46:20 → scanOnDemand called fail(TtsError.OcrError) →
+    healthy paused session entered Error phase; user had to restart (warm
+    start 50ms at 19:46:40). Root cause: scanOnDemand unconditionally calls
+    fail() on exception, but prefetch reuses it — the prefetch wrapper's
+    best-effort catch never fired because scanOnDemand swallows exceptions and
+    returns null. FIX: scanOnDemand gained reportFailure param (default true);
+    prefetch passes false and logs "prefetch scan failed (best-effort)";
+    misleading "prefetch complete" now only logs on non-null result. Main loop
+    behavior unchanged (still reports its own failures).
+  - GlanceAppWidget composition error 19:48:26 "CompositionLocal LocalContext
+    not present" — non-fatal, widget-related, NOT TTS — new Known issue #12.
+
 DEVICE VERIFICATION RUN2 (2026-08-28): build 0.4.0-8236 reinstalled, on-device
   logcat (.device-pass/logcat-8236-run2.log, 185,361 lines, PID 25847). NOTE:
   first capture attempt died — streaming `adb logcat` over wireless adb drops
@@ -424,28 +471,31 @@ Deferred issues (LOW PRIORITY, revisit post-build):
     under different utterance ids) or Google-TTS engine audio quirk.
 
 Remaining:
-- Script steps 7–15: rate/pitch live, chapter transition, end-of-content,
-  home-during-playback, rotation, exit reader, audio-focus transient,
-  exit-idle <1s / no background CPU.
 - Phase 9 memory/battery/leakcanary measurements.
-- (DONE 2026-08-28: mini-player z-order fix — see above.)
+- Device-verify prefetch-DNS fix (Finding #4) — needs build install (0.4.0-8238
+  on device does NOT include it).
+- Commit uncommitted set: z-order fix + action logging + prefetch-failure fix.
+- (DONE 2026-08-28: mini-player z-order fix; controller action logging;
+  script steps 7–15 executed + user-confirmed — see RUN4 block;
+  prefetch-DNS escalation fix.)
 ```
 
 ## Blocked
 
 ```text
 Nothing hard-blocked. Finding #3 deferred LOW PRIORITY by user (post-build).
-Device pass steps 7–15 need USER driving phone screen. SM_M066B via wireless adb;
-use on-device logcat capture (streaming adb logcat dies on blip). English TTS
-voice = device default. GLENS/network reachable. Standing decision unchanged:
-prd script stays manual/interactive.
+Phase 8 device script COMPLETE (steps 1–15 executed + user-confirmed).
+SM_M066B via wireless adb; use on-device logcat capture (streaming adb logcat
+dies on blip). English TTS voice = device default. GLENS/network reachable.
+Standing decision unchanged: prd script stays manual/interactive.
 ```
 
 ## Current files being modified
 
 ```text
 Current working files:
-- app .../ui/reader/tts/TtsPlaybackController.kt (action-level DEBUG logging, UNCOMMITTED)
+- app .../ui/reader/tts/TtsPlaybackController.kt (action logging + prefetch
+  reportFailure fix, UNCOMMITTED)
 - app .../ui/reader/ReaderActivity.kt (mini-player z-order fix, UNCOMMITTED)
 - docs/memory.md (this update)
 Prior fix set now COMMITTED by user (fff9583f0, 872c55397, 8cb320e7c):
@@ -456,6 +506,7 @@ TTS-DBG instrumentation removed; no active Finding #3 work.
 ## Recently changed files
 
 ```text
+2026-08-28  app .../ui/reader/tts/TtsPlaybackController.kt Prefetch failure no longer kills session (reportFailure gate); RUN4 analysis
 2026-08-28  app .../ui/reader/tts/TtsPlaybackController.kt Action-level DEBUG logs: pause/resume/stop/stepBy/focus-loss (UNCOMMITTED)
 2026-08-28  app .../ui/reader/ReaderActivity.kt           Mini-player z-order fix: TtsPlaybackBar moved before dialog block (UNCOMMITTED)
 2026-08-28  docs/memory.md, docs/phase.md                 Finding #3 deferred LOW PRIORITY; run2/run3 results; TTS-DBG removed
@@ -671,6 +722,22 @@ positional merge); segmenter must mirror tap-highlight behavior.
      Zero TTS/OCR logs, zero activity launches. All 6 user-reported issues
      cannot be verified — no test run occurred on build 0.4.0-8234 during this
      log capture. Fresh test required.
+
+12. LOW | App widget (NEW 2026-08-28) | GlanceAppWidget composition error
+     "CompositionLocal LocalContext not present" observed in run4 logcat
+     (19:48:26, non-fatal, app kept running). Unrelated to TTS/reader work —
+     pre-existing Glance widget issue. Investigate only if widget complaints
+     surface.
+
+13. RESOLVED | TTS prefetch failure escalation (NEW+FIXED 2026-08-28) | A failed
+     background prefetch scan (transient DNS: UnknownHostException for
+     lensfrontend-pa.googleapis.com while app backgrounded) called
+     scanOnDemand→fail(TtsError.OcrError) and pushed a healthy paused session
+     into Error phase; user had to restart. Root cause: scanOnDemand
+     unconditionally reported failure even for best-effort prefetch callers.
+     FIXED: reportFailure param (default true); prefetch passes false + logs
+     "prefetch scan failed (best-effort)"; "prefetch complete" now only on
+     success. Evidence: run4 log 19:46:13–19:46:40.
 ```
 
 ## Technical debt
@@ -699,10 +766,13 @@ Injekt 91edab2317, JUnit5 6.1.1/Kotest 6.2.2/MockK 1.14.11).
 Unit tests:        PASS (2026-08-28, full testDebugUnitTest, all modules)
 Integration tests: none run (existing androidTest suites are device-gated/@Ignore)
 UI tests:          none exist in repo
-Device tests:      PARTIAL — Phase 8 script steps 1–6 executed; build 0.4.0-8236
-                   run2/run3 verified Finding #1 (22/22 advances, 0 timeouts) and
-                   Finding #2; Finding #3 hands-off variant not reproduced and
-                   deferred LOW PRIORITY; steps 7–15 remain.
+Device tests:      COMPLETE — Phase 8 script steps 1–15 all executed +
+                    user-confirmed (2026-08-28 RUN4 build 0.4.0-8238: steps 7–15
+                    PASS incl. user-confirmed rate/pitch live + rotation
+                    pause/resume-same-position). run2/run3 verified Finding #1
+                    (22/22 advances, 0 timeouts) + Finding #2. Finding #3
+                    deferred LOW PRIORITY. Finding #4 prefetch-DNS fixed
+                    (device re-verify pending).
 Lint:              spotlessCheck PASS (2026-08-28)
 Build:             :app:assembleDebug PASS (2026-08-28, 0.4.0-8236 installed)
 Baseline (pre-TTS expectations): CI order = spotlessCheck → testDebugUnitTest →
@@ -720,10 +790,11 @@ Environment: devcontainer image vsc-yomihon-e24e3bd7… (JDK 17) via docker on h
 Date:     2026-08-28
 Command:  ./gradlew spotlessCheck :app:compileDebugKotlin testDebugUnitTest
           (docker devcontainer JDK17, -Xmx4g, both volumes)
-Result:   ALL GREEN after controller action-level logging (TtsPlaybackController.kt)
-          + mini-player z-order fix (ReaderActivity.kt). Prior entry: 0.4.0-8236
-          arm64 APK INSTALLED on SM_M066B; run2/run3 Finding #1 22/22 advances
-          0 timeouts, Finding #2 fixed, Finding #3 deferred low priority.
+Result:   ALL GREEN after prefetch reportFailure fix + action logging
+          (TtsPlaybackController.kt) + z-order fix (ReaderActivity.kt).
+          Build 0.4.0-8238 (with action logging + z-order fix) INSTALLED on
+          SM_M066B and used for RUN4 script steps 7–15. Prefetch fix NOT yet
+          on device (landed after RUN4).
 ```
 
 ## Last verified test
@@ -731,7 +802,7 @@ Result:   ALL GREEN after controller action-level logging (TtsPlaybackController
 ```text
 Date:     2026-08-28
 Command:  ./gradlew spotlessCheck testDebugUnitTest    (docker devcontainer, JDK 17)
-Result:   BUILD SUCCESSFUL (all modules) — after controller action-level logging
+Result:   BUILD SUCCESSFUL (all modules) — after prefetch reportFailure fix
 ```
 
 ---
@@ -767,25 +838,31 @@ P0 + P1 FIXES (2026-08-28): P0: TtsPlaybackController dedups rebuild on
                             ScrollToRegion logcat instrumentation added in
                             WebtoonViewer. All gates green (spotlessCheck +
                             testDebugUnitTest + :app:compileDebugKotlin).
-Current task:               DONE 2026-08-28: controller action-level logging (Known
-                            issue #9). TtsPlaybackController now logs DEBUG pause
-                            (page+sentence), resume (page+resumeIndex), stop (prior
-                            phase), stepBy next/prev (from->to + phase + boundary-reject),
-                            and audio-focus-loss pause (event). Indices/phase only, no
-                            spoken text (rules §7). Gates green (spotlessCheck +
-                            compileDebugKotlin + testDebugUnitTest). UNCOMMITTED.
-                            Also DONE this session: mini-player z-order fix
-                            (ReaderActivity.kt, TtsPlaybackBar before dialog block).
-                            User committed prior fix set: fff9583f0, 872c55397, 8cb320e7c.
-Next recommended task:      Device script steps 7–15 (USER drives phone; step 4/5 now
-                            loggable), Phase 9 memory/battery/leakcanary measurements,
-                            then commit the uncommitted z-order + logging changes. If
-                            #3b returns, re-add TTS-DBG from git history + OCR
+Current task:               DONE 2026-08-28: RUN4 device pass — script steps 7–15
+                            executed on build 0.4.0-8238 (tts-steps7-15.log, PID 5582).
+                            PASS: chapter transition, end-of-content, home-during-playback,
+                            exit reader, audio-focus (PermanentLoss→pause→manual resume
+                            same sentence), exit-idle 550ms, 4/4 advance confirms 1–2ms
+                            0 timeouts, 6 next-sentence steps clean, ScrollToRegion
+                            on-device verified, 3 clean pause/resume cycles. USER
+                            CONFIRMED 2026-08-28: step 7 rate/pitch live PASS + step 11
+                            rotation PASS (pause → resume same OCR line/position).
+                            PHASE 8 DEVICE SCRIPT COMPLETE (steps 1–15). FINDING #4
+                            (P1) FIXED same session: background prefetch DNS failure
+                            escalated via scanOnDemand.fail() and killed a healthy paused
+                            session → reportFailure param gates failure reporting
+                            (prefetch passes false). Gates green. UNCOMMITTED.
+Next recommended task:      Phase 9 memory/battery/leakcanary measurements;
+                            device-verify prefetch-DNS fix (needs build install —
+                            0.4.0-8238 on device lacks it); then commit uncommitted
+                            set (z-order + action logging + prefetch fix). If #3b
+                            returns, re-add TTS-DBG from git history + OCR
                             bbox/overlap logging.
 Files safe to modify:       docs/* ; app reader/tts/settings files ;
                             data OCR files ; i18n base strings.xml (snake_case only)
-Files currently worked on:  UNCOMMITTED: TtsPlaybackController.kt (action logging) +
-                            ReaderActivity.kt (z-order fix). Compile-green, gates green.
+Files currently worked on:  UNCOMMITTED: TtsPlaybackController.kt (action logging +
+                            prefetch reportFailure fix) + ReaderActivity.kt (z-order
+                            fix). Compile-green, gates green.
 Known risks:                TILE_CONCURRENCY=3 may trip Lens rate limits — watch
                             HTTP 429/5xx in logs, drop constant if seen;
                             advance-confirm timeouts (#8) FIXED+VERIFIED (moveToPage

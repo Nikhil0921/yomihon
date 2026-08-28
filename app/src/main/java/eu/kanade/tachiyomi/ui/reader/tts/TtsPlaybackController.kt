@@ -470,7 +470,11 @@ internal class TtsPlaybackController(
     }
 
     /** Cached-miss path: resolve the bitmap through the shared pipeline, scan, recycle. */
-    private suspend fun scanOnDemand(ctx: TtsChapterContext, pageIndex: Int) = try {
+    private suspend fun scanOnDemand(
+        ctx: TtsChapterContext,
+        pageIndex: Int,
+        reportFailure: Boolean = true,
+    ) = try {
         logcat(LogPriority.DEBUG) { "TTS on-demand scan start chapter=${ctx.chapter.id} page=$pageIndex" }
         withOcrScanSession.await {
             val pages = pageSourceResolver.resolve(ctx.manga, ctx.chapter)
@@ -488,11 +492,11 @@ internal class TtsPlaybackController(
         throw e
     } catch (e: OutOfMemoryError) {
         logcat(LogPriority.ERROR, e) { "OOM during TTS page scan" }
-        fail(TtsError.OcrError)
+        if (reportFailure) fail(TtsError.OcrError)
         null
     } catch (e: Exception) {
         logcat(LogPriority.ERROR, e) { "TTS on-demand scan failed" }
-        fail(TtsError.OcrError)
+        if (reportFailure) fail(TtsError.OcrError)
         null
     }
 
@@ -518,8 +522,14 @@ internal class TtsPlaybackController(
                 return@launch
             }
             try {
-                scanOnDemand(ctx, pageIndex)
-                logcat(LogPriority.DEBUG) { "TTS prefetch complete page=$pageIndex" }
+                // Best-effort: failures must not kill the session; the main loop
+                // re-scans and reports its own errors when it reaches this page.
+                val scanned = scanOnDemand(ctx, pageIndex, reportFailure = false)
+                if (scanned != null) {
+                    logcat(LogPriority.DEBUG) { "TTS prefetch complete page=$pageIndex" }
+                } else {
+                    logcat(LogPriority.DEBUG) { "TTS prefetch scan failed page=$pageIndex (best-effort)" }
+                }
             } catch (e: CancellationException) {
                 logcat(LogPriority.DEBUG) { "TTS prefetch cancelled page=$pageIndex" }
                 throw e
