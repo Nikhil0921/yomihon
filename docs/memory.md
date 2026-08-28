@@ -437,6 +437,20 @@ DEVICE VERIFICATION RUN4 — SCRIPT STEPS 7–15 (2026-08-28, build 0.4.0-8238):
   - GlanceAppWidget composition error 19:48:26 "CompositionLocal LocalContext
     not present" — non-fatal, widget-related, NOT TTS — new Known issue #12.
 
+PREFETCH-DNS FIX DEVICE VERIFICATION (2026-08-28, fresh APK with fix):
+  Evidence: .device-pass/logcat-prefetch-verify.log (ring-buffer dump, PID
+  22599, 20:12–20:16, chapter 1187, wifi-killed test). RESULT: FIX VERIFIED.
+  - 13 prefetch failures for page 4 (wifi off) each logged "TTS prefetch scan
+    failed page=4 (best-effort)" while page 3 playback + 13 next-sentence
+    steps continued uninterrupted — zero Error-state escalation.
+  - Home-press mid-prefetch (page 6 scan in flight) → auto-pause 20:16:14
+    (page=5 sentence=17) → stop(phase=Paused) — user observed Paused, not
+    Error (the exact run4 regression scenario).
+  - Main-loop scan failure on the CURRENT page (page 4, wifi off) still
+    honestly reports Error; user retry after wifi restore → 16.8s tiled scan
+    → playback resumed. Correct by design.
+  - Advance confirms 4/4 @ 1–4ms, 0 timeouts; pause/resume cycles clean.
+
 DEVICE VERIFICATION RUN2 (2026-08-28): build 0.4.0-8236 reinstalled, on-device
   logcat (.device-pass/logcat-8236-run2.log, 185,361 lines, PID 25847). NOTE:
   first capture attempt died — streaming `adb logcat` over wireless adb drops
@@ -472,8 +486,6 @@ Deferred issues (LOW PRIORITY, revisit post-build):
 
 Remaining:
 - Phase 9 memory/battery/leakcanary measurements.
-- Device-verify prefetch-DNS fix (Finding #4) — needs build install (0.4.0-8238
-  on device does NOT include it).
 - Commit uncommitted set: z-order fix + action logging + prefetch-failure fix.
 - (DONE 2026-08-28: mini-player z-order fix; controller action logging;
   script steps 7–15 executed + user-confirmed — see RUN4 block;
@@ -729,15 +741,24 @@ positional merge); segmenter must mirror tap-highlight behavior.
      pre-existing Glance widget issue. Investigate only if widget complaints
      surface.
 
-13. RESOLVED | TTS prefetch failure escalation (NEW+FIXED 2026-08-28) | A failed
-     background prefetch scan (transient DNS: UnknownHostException for
-     lensfrontend-pa.googleapis.com while app backgrounded) called
-     scanOnDemand→fail(TtsError.OcrError) and pushed a healthy paused session
-     into Error phase; user had to restart. Root cause: scanOnDemand
-     unconditionally reported failure even for best-effort prefetch callers.
-     FIXED: reportFailure param (default true); prefetch passes false + logs
-     "prefetch scan failed (best-effort)"; "prefetch complete" now only on
-     success. Evidence: run4 log 19:46:13–19:46:40.
+13. RESOLVED | TTS prefetch failure escalation (NEW+FIXED 2026-08-28,
+     DEVICE-VERIFIED 2026-08-28) | A failed background prefetch scan (transient
+     DNS: UnknownHostException for lensfrontend-pa.googleapis.com while app
+     backgrounded) called scanOnDemand→fail(TtsError.OcrError) and pushed a
+     healthy paused session into Error phase; user had to restart. Root cause:
+     scanOnDemand unconditionally reported failure even for best-effort
+     prefetch callers. FIXED: reportFailure param (default true); prefetch
+     passes false + logs "prefetch scan failed (best-effort)"; "prefetch
+     complete" now only on success. VERIFIED ON DEVICE (logcat-prefetch-
+     verify.log, PID 22599, wifi-killed test): 13 prefetch failures for page 4
+     logged "(best-effort)" while page 3 playback + 13 sentence-steps
+     continued uninterrupted; home-press mid-prefetch (page 6 scan in flight)
+     → auto-pause, stop(phase=Paused), NO Error. Main-loop failure on the
+     CURRENT page still honestly errors (page 4 wifi-off → Error bar → user
+     retry after wifi restore → 16.8s tiled scan → playback resumed) — correct
+     by design. INFO observation: each next-sentence tap while wifi down
+     restarted the failed page-4 prefetch (~170ms fast-fail each) — harmless,
+     tap-rate bounded, no fix needed.
 ```
 
 ## Technical debt
@@ -792,9 +813,11 @@ Command:  ./gradlew spotlessCheck :app:compileDebugKotlin testDebugUnitTest
           (docker devcontainer JDK17, -Xmx4g, both volumes)
 Result:   ALL GREEN after prefetch reportFailure fix + action logging
           (TtsPlaybackController.kt) + z-order fix (ReaderActivity.kt).
-          Build 0.4.0-8238 (with action logging + z-order fix) INSTALLED on
-          SM_M066B and used for RUN4 script steps 7–15. Prefetch fix NOT yet
-          on device (landed after RUN4).
+          Fresh APK WITH prefetch fix INSTALLED on SM_M066B 2026-08-28
+          (versionName 0.4.0-8238 — suffix = commit count, fix uncommitted)
+          and DEVICE-VERIFIED via wifi-killed test (logcat-prefetch-verify.log):
+          prefetch failures stay best-effort, home-press mid-prefetch → Paused
+          not Error.
 ```
 
 ## Last verified test
@@ -852,12 +875,11 @@ Current task:               DONE 2026-08-28: RUN4 device pass — script steps 7
                             escalated via scanOnDemand.fail() and killed a healthy paused
                             session → reportFailure param gates failure reporting
                             (prefetch passes false). Gates green. UNCOMMITTED.
-Next recommended task:      Phase 9 memory/battery/leakcanary measurements;
-                            device-verify prefetch-DNS fix (needs build install —
-                            0.4.0-8238 on device lacks it); then commit uncommitted
-                            set (z-order + action logging + prefetch fix). If #3b
-                            returns, re-add TTS-DBG from git history + OCR
-                            bbox/overlap logging.
+Next recommended task:      Phase 9 memory/battery/leakcanary measurements; then
+                            commit uncommitted set (z-order + action logging +
+                            prefetch fix — all device-verified). If #3b returns,
+                            re-add TTS-DBG from git history + OCR bbox/overlap
+                            logging.
 Files safe to modify:       docs/* ; app reader/tts/settings files ;
                             data OCR files ; i18n base strings.xml (snake_case only)
 Files currently worked on:  UNCOMMITTED: TtsPlaybackController.kt (action logging +
