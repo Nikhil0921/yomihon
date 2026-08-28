@@ -12,7 +12,12 @@ logcat analyzed: 22/22 advances confirmed 1–5ms / 0 timeouts (Finding #1 FIXED
 pause/resume correct (Finding #2 fixed, timeout branch unexercised), Finding #3
 duplicate speech: button-triggered duplicates expected; hands-off variant NOT
 reproduced and USER DROPPED 2026-08-28 — LOW PRIORITY, revisit post-build
-(memory.md Deferred issues). TTS-DBG instrumentation removed; #1+#2 fixes kept**.
+(memory.md Deferred issues). TTS-DBG instrumentation removed; #1+#2 fixes kept.
+Mini-player z-order fix LANDED 2026-08-28 (UNCOMMITTED, ReaderActivity.kt):
+TtsPlaybackBar moved before the dialog block so reader dialogs/overlays render
+above the pill (was drawing on top of inline OcrResultOverlay). Controller
+action-level logging LANDED 2026-08-28 (UNCOMMITTED, TtsPlaybackController.kt):
+pause/resume/stop/stepBy/focus-loss DEBUG logs — closes Known issue #9. Gates green**.
 PRODUCT PIVOT 2026-08-25: English is the primary v1 Read-Aloud language;
 Japanese TTS moved to Phase 10.
 
@@ -198,8 +203,12 @@ Japanese TTS moved to Phase 10.
    logcat instrumentation added. All gates green. 2026-08-28: build 0.4.0-8236
    device run2/run3 verified advance-confirm/stale-page fixes; hands-off duplicate
    speech not reproduced and USER DROPPED it as LOW PRIORITY post-build. TTS-DBG
-   removed. REMAINING: device script steps 7–15, mini-player z-order fix,
-   memory/battery/leakcanary profiles, exit-to-idle timing)
+   removed. REMAINING: device script steps 7–15, memory/battery/leakcanary
+   profiles, exit-to-idle timing. Mini-player z-order fix DONE 2026-08-28
+   (UNCOMMITTED, ReaderActivity.kt — TtsPlaybackBar moved before dialog block).
+   Controller action-level logging DONE 2026-08-28 (UNCOMMITTED,
+   TtsPlaybackController.kt — pause/resume/stop/stepBy/focus-loss; closes Known
+   issue #9, makes script steps 4/5 verifiable).)
 - **Objective**: production quality under stress.
 - **Tasks**: bitmap lifecycle audit (no retention across suspension points);
   cancellation correctness (swipe-away, chapter switch mid-scan); memory profile

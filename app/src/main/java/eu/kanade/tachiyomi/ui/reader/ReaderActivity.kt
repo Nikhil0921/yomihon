@@ -802,6 +802,17 @@ class ReaderActivity : BaseActivity() {
                     )
                 }
 
+                // Read-aloud playback pill (before dialogs so overlays render above it)
+                TtsPlaybackBar(
+                    state = state.ttsState,
+                    onTogglePlayPause = viewModel::toggleReadAloudPlayPause,
+                    onNextSentence = viewModel::nextReadAloudSentence,
+                    onPreviousSentence = viewModel::previousReadAloudSentence,
+                    onStop = viewModel::stopReadAloud,
+                    onRetry = viewModel::retryReadAloud,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+
                 val onDismissRequest = viewModel::closeDialog
                 val onDismissOcrResult = ::dismissActiveOcrOverlaySession
                 when (val dialog = state.dialog) {
@@ -917,17 +928,6 @@ class ReaderActivity : BaseActivity() {
                 // OCR loading bar at bottom of screen
                 OcrLoadingIndicator(
                     visible = state.isProcessingOcr,
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                )
-
-                // Read-aloud playback pill
-                TtsPlaybackBar(
-                    state = state.ttsState,
-                    onTogglePlayPause = viewModel::toggleReadAloudPlayPause,
-                    onNextSentence = viewModel::nextReadAloudSentence,
-                    onPreviousSentence = viewModel::previousReadAloudSentence,
-                    onStop = viewModel::stopReadAloud,
-                    onRetry = viewModel::retryReadAloud,
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }

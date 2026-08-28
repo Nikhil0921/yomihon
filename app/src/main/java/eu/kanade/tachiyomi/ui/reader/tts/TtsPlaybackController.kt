@@ -138,7 +138,10 @@ internal class TtsPlaybackController(
     init {
         engine.onFocusEvent = { event ->
             when (event) {
-                TtsFocusEvent.TransientLoss, TtsFocusEvent.PermanentLoss -> pause()
+                TtsFocusEvent.TransientLoss, TtsFocusEvent.PermanentLoss -> {
+                    logcat(LogPriority.DEBUG) { "TTS audio focus lost ($event); pausing" }
+                    pause()
+                }
                 TtsFocusEvent.Regained -> Unit // resume stays manual for transient loss
             }
         }
@@ -161,12 +164,16 @@ internal class TtsPlaybackController(
         paused = true
         engine.stop() // interrupts the current utterance; speak() returns false
         mutableState.update { it.copy(phase = TtsPhase.Paused) }
+        logcat(LogPriority.DEBUG) {
+            "TTS pause page=${mutableState.value.pageIndex} sentence=${mutableState.value.sentenceIndex}"
+        }
     }
 
     fun resume() {
         if (!paused || stopped) return
         paused = false
         val pageIndex = mutableState.value.pageIndex
+        logcat(LogPriority.DEBUG) { "TTS resume page=$pageIndex sentence=$resumeIndex" }
         playbackJob?.cancel()
         playbackJob = scope.launch {
             if (engine.initialize()) {
@@ -183,6 +190,7 @@ internal class TtsPlaybackController(
     }
 
     fun stop() {
+        logcat(LogPriority.DEBUG) { "TTS stop (phase=${mutableState.value.phase})" }
         context = null
         resetSession(stoppedFlag = true)
         mutableState.value = TtsPlaybackState(phase = TtsPhase.Idle)
@@ -530,9 +538,19 @@ internal class TtsPlaybackController(
         val current = mutableState.value
         if (current.phase != TtsPhase.Playing && current.phase != TtsPhase.Paused) return
         val newIndex = current.sentenceIndex + delta
-        if (newIndex !in queue.indices) return // page boundary crossing stays manual in v1
+        if (newIndex !in queue.indices) {
+            logcat(LogPriority.DEBUG) {
+                "TTS step ${if (delta > 0) "next" else "prev"} rejected at boundary " +
+                    "sentence=${current.sentenceIndex} queueSize=${queue.size}"
+            }
+            return // page boundary crossing stays manual in v1
+        }
 
         resumeIndex = newIndex
+        logcat(LogPriority.DEBUG) {
+            "TTS step ${if (delta > 0) "next" else "prev"} sentence ${current.sentenceIndex}->$newIndex " +
+                "(phase=${current.phase})"
+        }
         if (current.phase == TtsPhase.Playing) {
             playbackJob?.cancel()
             engine.stop()

@@ -11,9 +11,10 @@
 
 ```text
 Project:        Yomihon (v0.4.0, vc25) — Android manga reader + OCR/language tooling
-Repo state:     branch main @ a071feedf7 + UNCOMMITTED Phase 9/P0/P1 + Finding
-                #1/#2 fix set (3 source files + docs; TTS-DBG removed). Do not
-                amend user commits; .opencode/ stays untouched.
+Repo state:     branch main @ 8cb320e7c + UNCOMMITTED mini-player z-order fix
+                (ReaderActivity.kt only). User committed the Phase 9/P0/P1 fix set
+                (fff9583f0, 872c55397, 8cb320e7c). Do not amend user commits;
+                .opencode/ stays untouched.
 Untracked:      .opencode/ (tool config), .device-pass/ (logcat evidence, gitignored)
 Primary goal:   Reliable Read-Aloud: English OCR → English system TTS →
                 correct progression (PRODUCT PIVOT 2026-08-25: English is the
@@ -372,6 +373,23 @@ P0 + P1 FIXES LANDED (2026-08-28, uncommitted, all gates green):
   - ScrollToRegion: added logcat in WebtoonViewer.scrollToRegion (success +
     view-not-laid-out paths) so next device run confirms auto-scroll fires.
 
+MINI-PLAYER Z-ORDER FIX (2026-08-28, uncommitted, all gates green):
+  - Root cause: in the inner ContentOverlay Box (ReaderActivity.kt),
+    TtsPlaybackBar was the LAST child — declared after `when (state.dialog)` —
+    so it drew ON TOP of the inline OcrResultOverlay (scrim + popup/sheet),
+    while window-based dialogs (AdaptiveSheet) always covered it: inconsistent
+    z-order. FIX: moved TtsPlaybackBar before the dialog block so all
+    dialogs/overlays render above the pill. OcrLoadingIndicator position
+    unchanged (pre-existing behavior). User committed prior fix set as
+    fff9583f0 + 872c55397 + 8cb320e7c.
+
+CONTROLLER ACTION LOGGING (2026-08-28, uncommitted, all gates green):
+  - Known issue #9 closed. TtsPlaybackController now logs DEBUG action-level
+    events: pause (page+sentence), resume (page+resumeIndex), stop (prior phase),
+    stepBy next/prev (from->to + phase, plus boundary-reject), and audio-focus-loss
+    pause (event name). Indices/phase only — no spoken text (rules §7). Makes
+    device script steps 4 (pause/resume) + 5 (prev/next sentence) verifiable.
+
 DEVICE VERIFICATION RUN2 (2026-08-28): build 0.4.0-8236 reinstalled, on-device
   logcat (.device-pass/logcat-8236-run2.log, 185,361 lines, PID 25847). NOTE:
   first capture attempt died — streaming `adb logcat` over wireless adb drops
@@ -409,8 +427,8 @@ Remaining:
 - Script steps 7–15: rate/pitch live, chapter transition, end-of-content,
   home-during-playback, rotation, exit reader, audio-focus transient,
   exit-idle <1s / no background CPU.
-- Mini-player z-order fix (overlay vs reader dialogs).
 - Phase 9 memory/battery/leakcanary measurements.
+- (DONE 2026-08-28: mini-player z-order fix — see above.)
 ```
 
 ## Blocked
@@ -427,17 +445,19 @@ prd script stays manual/interactive.
 
 ```text
 Current working files:
-- docs/memory.md, docs/phase.md (docs-only update for Finding #3 deferral)
-Uncommitted source change set (not actively being modified):
-- app .../ui/reader/tts/TtsPlaybackController.kt (#2 timeout pageIndex, P0 dedup)
-- app .../ui/reader/ReaderViewModel.kt (P1 debounce)
-- app .../viewer/webtoon/WebtoonViewer.kt (#1 explicit onScrolled)
+- app .../ui/reader/tts/TtsPlaybackController.kt (action-level DEBUG logging, UNCOMMITTED)
+- app .../ui/reader/ReaderActivity.kt (mini-player z-order fix, UNCOMMITTED)
+- docs/memory.md (this update)
+Prior fix set now COMMITTED by user (fff9583f0, 872c55397, 8cb320e7c):
+- TtsPlaybackController.kt, ReaderViewModel.kt, WebtoonViewer.kt
 TTS-DBG instrumentation removed; no active Finding #3 work.
 ```
 
 ## Recently changed files
 
 ```text
+2026-08-28  app .../ui/reader/tts/TtsPlaybackController.kt Action-level DEBUG logs: pause/resume/stop/stepBy/focus-loss (UNCOMMITTED)
+2026-08-28  app .../ui/reader/ReaderActivity.kt           Mini-player z-order fix: TtsPlaybackBar moved before dialog block (UNCOMMITTED)
 2026-08-28  docs/memory.md, docs/phase.md                 Finding #3 deferred LOW PRIORITY; run2/run3 results; TTS-DBG removed
 2026-08-28  app .../viewer/webtoon/WebtoonViewer.kt       #1 moveToPage explicit onScrolled; TTS-DBG removed
 2026-08-28  app .../ui/reader/tts/TtsPlaybackController.kt #2 timeout pageIndex=target; P0 rebuild/prefetch dedup; TTS-DBG removed
@@ -630,10 +650,13 @@ positional merge); segmenter must mirror tap-highlight behavior.
    (WebtoonViewer.kt). Verified in build 0.4.0-8234. Evidence: logcat-step3-
    full.log lines ~99730–132013 (pre-fix), logcat-8234-test.log (post-fix).
 
-9. LOW | Instrumentation gaps (NEW 2026-08-26) | Controller has no debug logs
-   for pause/resume or nextSentence/previousSentence actions — step 4/5 results
-   were only partially verifiable from logs. Add action-level logging when
-   touching the controller next.
+9. RESOLVED | Instrumentation gaps (NEW 2026-08-26, FIXED 2026-08-28) | Controller
+   lacked debug logs for pause/resume/stop + nextSentence/previousSentence, so step
+   4/5 results were only partially verifiable. FIXED 2026-08-28: added DEBUG
+   action-level logs in TtsPlaybackController — pause (page+sentence), resume
+   (page+resumeIndex), stop (prior phase), stepBy next/prev (from->to + phase, and
+   boundary-reject), and audio-focus-loss pause (event name). No text content logged
+   (rules §7). Step 4/5 now verifiable from logcat.
 
 10. RESOLVED | OCR duplicate scans + recycle crash (2026-08-26) | Root causes
      were: no single-flight in OcrRepositoryImpl.scanPage; bitmap recycled by
@@ -695,12 +718,12 @@ Environment: devcontainer image vsc-yomihon-e24e3bd7… (JDK 17) via docker on h
 
 ```text
 Date:     2026-08-28
-Command:  ./gradlew spotlessCheck testDebugUnitTest :app:assembleDebug
+Command:  ./gradlew spotlessCheck :app:compileDebugKotlin testDebugUnitTest
           (docker devcontainer JDK17, -Xmx4g, both volumes)
-Result:   ALL GREEN after TTS-DBG removal. arm64 APK INSTALLED on SM_M066B as
-          versionName 0.4.0-8236. Device run2/run3: Finding #1 verified 22/22
-          advances, 0 timeouts; Finding #2 fixed; Finding #3 hands-off variant
-          not reproduced; deferred low priority.
+Result:   ALL GREEN after controller action-level logging (TtsPlaybackController.kt)
+          + mini-player z-order fix (ReaderActivity.kt). Prior entry: 0.4.0-8236
+          arm64 APK INSTALLED on SM_M066B; run2/run3 Finding #1 22/22 advances
+          0 timeouts, Finding #2 fixed, Finding #3 deferred low priority.
 ```
 
 ## Last verified test
@@ -708,7 +731,7 @@ Result:   ALL GREEN after TTS-DBG removal. arm64 APK INSTALLED on SM_M066B as
 ```text
 Date:     2026-08-28
 Command:  ./gradlew spotlessCheck testDebugUnitTest    (docker devcontainer, JDK 17)
-Result:   BUILD SUCCESSFUL (all modules)
+Result:   BUILD SUCCESSFUL (all modules) — after controller action-level logging
 ```
 
 ---
@@ -744,21 +767,25 @@ P0 + P1 FIXES (2026-08-28): P0: TtsPlaybackController dedups rebuild on
                             ScrollToRegion logcat instrumentation added in
                             WebtoonViewer. All gates green (spotlessCheck +
                             testDebugUnitTest + :app:compileDebugKotlin).
-Current task:               DONE: user confirmed run2 duplicates were button taps;
-                            hands-off #3 variant not reproduced in run3; USER DROPPED
-                            it 2026-08-28 as LOW PRIORITY post-build (Deferred issues
-                            #3b). TTS-DBG instrumentation removed; #1+#2 fixes kept.
-                            Docs updated.
-Next recommended task:      Device script steps 7–15, mini-player z-order fix,
-                            Phase 9 memory/battery/leakcanary measurements, then
-                            commit uncommitted fix set. If #3b returns, re-add
-                            TTS-DBG from git history + OCR bbox/overlap logging.
+Current task:               DONE 2026-08-28: controller action-level logging (Known
+                            issue #9). TtsPlaybackController now logs DEBUG pause
+                            (page+sentence), resume (page+resumeIndex), stop (prior
+                            phase), stepBy next/prev (from->to + phase + boundary-reject),
+                            and audio-focus-loss pause (event). Indices/phase only, no
+                            spoken text (rules §7). Gates green (spotlessCheck +
+                            compileDebugKotlin + testDebugUnitTest). UNCOMMITTED.
+                            Also DONE this session: mini-player z-order fix
+                            (ReaderActivity.kt, TtsPlaybackBar before dialog block).
+                            User committed prior fix set: fff9583f0, 872c55397, 8cb320e7c.
+Next recommended task:      Device script steps 7–15 (USER drives phone; step 4/5 now
+                            loggable), Phase 9 memory/battery/leakcanary measurements,
+                            then commit the uncommitted z-order + logging changes. If
+                            #3b returns, re-add TTS-DBG from git history + OCR
+                            bbox/overlap logging.
 Files safe to modify:       docs/* ; app reader/tts/settings files ;
                             data OCR files ; i18n base strings.xml (snake_case only)
-Files currently worked on:  uncommitted Phase 9 pass #1 + #2 + P0/P1 fix set —
-                            TtsPlaybackController.kt, ReaderViewModel.kt,
-                            WebtoonViewer.kt (+ earlier 6-file perf set). All
-                            compile-green, gates green.
+Files currently worked on:  UNCOMMITTED: TtsPlaybackController.kt (action logging) +
+                            ReaderActivity.kt (z-order fix). Compile-green, gates green.
 Known risks:                TILE_CONCURRENCY=3 may trip Lens rate limits — watch
                             HTTP 429/5xx in logs, drop constant if seen;
                             advance-confirm timeouts (#8) FIXED+VERIFIED (moveToPage
