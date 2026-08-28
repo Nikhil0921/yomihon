@@ -353,14 +353,15 @@ class WebtoonViewer(val activity: ReaderActivity, val isContinuous: Boolean = tr
      */
     override fun moveToPage(page: ReaderPage) {
         val position = adapter.items.indexOf(page)
-        if (position != -1) {
-            layoutManager.scrollToPositionWithOffset(position, 0)
-            if (layoutManager.findLastEndVisibleItemPosition() == -1) {
-                onScrolled(pos = position)
-            }
-        } else {
+        if (position == -1) {
             logcat { "Page $page not found in adapter" }
+            return
         }
+        layoutManager.scrollToPositionWithOffset(position, 0)
+        // scrollToPositionWithOffset is a layout-driven jump: RecyclerView does NOT
+        // dispatch onScrolled for it, so relying on the scroll listener leaves the
+        // TTS advance unconfirmed. Confirm the target page explicitly.
+        onScrolled(pos = position)
     }
 
     /**
@@ -380,13 +381,17 @@ class WebtoonViewer(val activity: ReaderActivity, val isContinuous: Boolean = tr
         // The item view height may differ from image height due to scaling.
         // Use the layoutManager to find the view at position and compute offset.
         val view = layoutManager.findViewByPosition(position)
-            ?: return
+            ?: run {
+                logcat { "TTS scrollToRegion: view not laid out yet page=$pageIndex pos=$position" }
+                return
+            }
         val itemHeight = view.height
         if (itemHeight <= 0) return
 
         // bbox.top is 0..1 from top of image. Positive offset in scrollToPositionWithOffset
         // means scroll DOWN (content moves up), so we negate.
         val targetOffset = -((bbox.top * itemHeight).toInt())
+        logcat { "TTS scrollToRegion page=$pageIndex pos=$position bboxTop=${bbox.top} offset=$targetOffset" }
         layoutManager.scrollToPositionWithOffset(position, targetOffset)
     }
 

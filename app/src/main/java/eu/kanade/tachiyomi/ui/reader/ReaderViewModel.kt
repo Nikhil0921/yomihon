@@ -51,7 +51,9 @@ import eu.kanade.tachiyomi.util.ocr.toOcrImage
 import eu.kanade.tachiyomi.util.storage.DiskUtil
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -181,6 +183,9 @@ class ReaderViewModel @JvmOverloads constructor(
     private var ttsControllerInstance: TtsPlaybackController? = null
     private val ttsController: TtsPlaybackController
         get() = ttsControllerInstance ?: createTtsController().also { ttsControllerInstance = it }
+
+    /** Debounce job for TTS page-selected during rapid swipes (avoids mass OCR). */
+    private var ttsPageSelectedJob: Job? = null
 
     private fun createTtsController(): TtsPlaybackController {
         val controller = TtsPlaybackController(
@@ -612,7 +617,20 @@ class ReaderViewModel @JvmOverloads constructor(
             logcat { "Setting ${selectedChapter.chapter.url} as active" }
             loadNewChapter(selectedChapter)
         } else {
-            ttsControllerInstance?.onPageSelected(page.index)
+            ttsControllerInstance?.let { controller ->
+                if (controller.hasPendingAdvance) {
+                    // Advance confirmation must land immediately; never debounce it.
+                    controller.onPageSelected(page.index)
+                } else {
+                    // User navigation: debounce so a fast swipe only rebuilds once,
+                    // not once per intermediate page (avoids mass on-demand OCR).
+                    ttsPageSelectedJob?.cancel()
+                    ttsPageSelectedJob = viewModelScope.launch {
+                        delay(TTS_PAGE_SELECTED_DEBOUNCE_MS)
+                        controller.onPageSelected(page.index)
+                    }
+                }
+            }
         }
 
         val inDownloadRange = page.number.toDouble() / pages.size > 0.25
@@ -1248,5 +1266,9 @@ class ReaderViewModel @JvmOverloads constructor(
         data class TtsError(val error: eu.kanade.tachiyomi.ui.reader.tts.TtsError) : Event
         data object TtsNoTextFound : Event
         data class TtsScrollToRegion(val pageIndex: Int, val bbox: mihon.domain.ocr.model.OcrBoundingBox) : Event
+    }
+
+    private companion object {
+        const val TTS_PAGE_SELECTED_DEBOUNCE_MS = 250L
     }
 }

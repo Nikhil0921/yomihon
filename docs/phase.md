@@ -6,9 +6,13 @@
 > and recorded in `docs/memory.md`.
 
 Current phase pointer: **Phase 8 device pass IN_PROGRESS (steps 1–6 done,
-7–15 remain) + Phase 9 perf pass #1 + #2 IMPLEMENTED — build 0.4.0-8234
-installed on SM_M066B, FRESH logcat analysis COMPLETE (real activity: 9/9
-advances confirmed, 2 new issues found; Known issues #8 + #10 RESOLVED)**.
+7–15 remain) + Phase 9 perf pass #1 + #2 + P0/P1 fixes LANDED + advance-confirm
+& stale-page fixes VERIFIED ON DEVICE — build 0.4.0-8236 reinstalled, run2/run3
+logcat analyzed: 22/22 advances confirmed 1–5ms / 0 timeouts (Finding #1 FIXED),
+pause/resume correct (Finding #2 fixed, timeout branch unexercised), Finding #3
+duplicate speech: button-triggered duplicates expected; hands-off variant NOT
+reproduced and USER DROPPED 2026-08-28 — LOW PRIORITY, revisit post-build
+(memory.md Deferred issues). TTS-DBG instrumentation removed; #1+#2 fixes kept**.
 PRODUCT PIVOT 2026-08-25: English is the primary v1 Read-Aloud language;
 Japanese TTS moved to Phase 10.
 
@@ -163,8 +167,10 @@ Japanese TTS moved to Phase 10.
   (7,793 lines, PID 27363). Results: 3 chapters tested (206, 205, 1),
   9/9 page advances confirmed, 0 recycle crashes, 0 sentence failures,
   0 timeouts. Known issues #8 + #10 RESOLVED. Two new issues found:
-  P0 prefetch spam loop, P1 rapid-swipe mass OCR. Steps 7–15 remaining.
-  The "missing-JP-voice" branch of the old script is OBSOLETE after the pivot.)
+   P0 prefetch spam loop, P1 rapid-swipe mass OCR — both FIXED 2026-08-28.
+   Build 0.4.0-8236 run2/run3 verified Finding #1/#2; Finding #3 deferred LOW
+   PRIORITY post-build. Steps 7–15 remaining.
+   The "missing-JP-voice" branch of the old script is OBSOLETE after the pivot.)
 - **Objective**: complete the test story.
 - **Tasks**: ensure segmenter+policy suites comprehensive; run full
   `testDebugUnitTest`; device pass of the prd.md §3.4(3) script (cached path,
@@ -186,9 +192,14 @@ Japanese TTS moved to Phase 10.
   Phase 9 fixes VERIFIED: findFirstVisibleItemPosition ✓, single-flight ✓,
   task-owned bitmap ✓, pause/resume page-awareness ✓, tile parallelism ✓.
   Known issues #8 + #10 RESOLVED. Two new issues found: P0 prefetch spam
-  loop, P1 rapid-swipe mass OCR. REMAINING: fix P0 + P1, device re-measure,
-  mini-player z-order fix, memory/battery/leakcanary profiles, exit-to-idle
-  timing, ScrollToRegion auto-scroll verification)
+  loop, P1 rapid-swipe mass OCR. 2026-08-28: P0 + P1 FIXED (rebuild dedup +
+  prefetch guard in TtsPlaybackController; 250ms debounce in
+   ReaderViewModel.onPageSelected, advance confirmations exempt) + ScrollToRegion
+   logcat instrumentation added. All gates green. 2026-08-28: build 0.4.0-8236
+   device run2/run3 verified advance-confirm/stale-page fixes; hands-off duplicate
+   speech not reproduced and USER DROPPED it as LOW PRIORITY post-build. TTS-DBG
+   removed. REMAINING: device script steps 7–15, mini-player z-order fix,
+   memory/battery/leakcanary profiles, exit-to-idle timing)
 - **Objective**: production quality under stress.
 - **Tasks**: bitmap lifecycle audit (no retention across suspension points);
   cancellation correctness (swipe-away, chapter switch mid-scan); memory profile

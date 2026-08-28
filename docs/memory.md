@@ -11,27 +11,26 @@
 
 ```text
 Project:        Yomihon (v0.4.0, vc25) — Android manga reader + OCR/language tooling
-Repo state:     branch main @ a071feedf7 + UNCOMMITTED Phase 9 pass #2
-                (6 files — see Recently changed). Do not amend user commits;
-                .opencode/ stays untouched.
+Repo state:     branch main @ a071feedf7 + UNCOMMITTED Phase 9/P0/P1 + Finding
+                #1/#2 fix set (3 source files + docs; TTS-DBG removed). Do not
+                amend user commits; .opencode/ stays untouched.
 Untracked:      .opencode/ (tool config), .device-pass/ (logcat evidence, gitignored)
 Primary goal:   Reliable Read-Aloud: English OCR → English system TTS →
                 correct progression (PRODUCT PIVOT 2026-08-25: English is the
                 primary v1 language; Japanese TTS moved to Phase 10.)
-Current phase:  Phase 8 device pass IN_PROGRESS — steps 1–6 of prd §3.4(3)–(5)
-                executed (results below); steps 7–15 remain. Phase 9 perf pass #2
-                (seamless webtoon playback, auto-scroll sync, pause/resume fix)
-                IMPLEMENTED, gates green, build 0.4.0-8234 installed on device,
-                awaiting script completion.
-Current status: Stabilization change set COMMITTED by user as a071feedf.
-                New uncommitted change set = Phase 9 pass #1 (perf) + pass #2
-                (seamless playback). Build 0.4.0-8234 installed on device.
-                FRESH logcat analysis COMPLETE — real TTS/OCR activity captured.
-                Phase 9 fixes verified; 2 new issues found (prefetch spam loop,
-                rapid-swipe mass OCR).
+Current phase:  Phase 8 device pass IN_PROGRESS — steps 1–6 executed; steps 7–15
+                remain. Phase 9 perf pass #1/#2 + P0/P1 + advance-confirm/stale-page
+                fixes landed; build 0.4.0-8236 installed and device-verified for
+                Findings #1/#2.
+Current status: Finding #1 FIXED+VERIFIED (22/22 advances, 0 timeouts, 1–5ms).
+                Finding #2 FIXED (timeout sets pageIndex=target; unexercised).
+                Finding #3 duplicate speech: button-triggered duplicates expected;
+                hands-off variant not reproduced in run3; USER DROPPED 2026-08-28,
+                LOW PRIORITY post-build (Deferred issues). TTS-DBG instrumentation
+                removed; #1+#2 fixes kept.
 TTS code:       Region-level auto-scroll (ScrollToRegion event), webtoon
-                confirm fix (findFirstVisibleItemPosition), pause/resume
-                page-awareness, timing instrumentation.
+                confirm fix (explicit onScrolled in moveToPage), pause/resume
+                page-awareness, prefetch/rebuild dedup, user-nav debounce.
 ```
 
 ## Current objective
@@ -344,7 +343,7 @@ Feature: Phase 8 device pass (steps 7–15 remaining) + Phase 9 perf pass #2
 Done: steps 1–6 recorded; Phase 9 perf pass #1 (tile parallelism ×3, single-flight,
       task-owned bitmap+upsert) + pass #2 (webtoon confirm fix, region-level
       auto-scroll, pause/resume page-awareness) IMPLEMENTED. All gates green.
-      Build 0.4.0-8234 installed on device.
+      Build 0.4.0-8236 installed on device.
 
 FRESH LOGCAT ANALYSIS (2026-08-28): logcat-8234-phase9.log (7,793 lines,
   PID 27363, 12 min window 02:26:39–02:38:50). Real TTS/OCR activity captured
@@ -356,15 +355,57 @@ FRESH LOGCAT ANALYSIS (2026-08-28): logcat-8234-phase9.log (7,793 lines,
   - OCR scan times: 957ms–16.7s (tiled strips)
   - Cold startup: 6.7–13.9s; warm startup: 1.9s
   - NEW ISSUE: Page 15→16 spam loop (19 prefetch cancellations + 20 scan starts
-    in 7s) — prefetch restart race condition
+    in 7s) — prefetch restart race condition → FIXED 2026-08-28 (see below)
   - NEW ISSUE: Rapid swipe (13 pages in 0.7s) fires 13 simultaneous OCR scans
-  - ScrollToRegion: not visible in logs (need instrumentation check)
+    → FIXED 2026-08-28 (see below)
+  - ScrollToRegion: not visible in logs → instrumentation ADDED 2026-08-28
   - HTTP 502 GLens error (server-side, retry succeeded)
 
+P0 + P1 FIXES LANDED (2026-08-28, uncommitted, all gates green):
+  - P0 prefetch spam: TtsPlaybackController.rebuildQueueForUserNavigation now
+    dedups on lastRebuildPageIndex (skip if same page already handled);
+    schedulePrefetch guards on prefetchPageIndex (skip if same page already
+    in flight); both trackers reset in resetSession + on provideContext()==null.
+  - P1 rapid-swipe mass OCR: ReaderViewModel.onPageSelected debounces the TTS
+    call by 250ms (TTS_PAGE_SELECTED_DEBOUNCE_MS) for user navigation; advance
+    confirmations (hasPendingAdvance) still land immediately, never debounced.
+  - ScrollToRegion: added logcat in WebtoonViewer.scrollToRegion (success +
+    view-not-laid-out paths) so next device run confirms auto-scroll fires.
+
+DEVICE VERIFICATION RUN2 (2026-08-28): build 0.4.0-8236 reinstalled, on-device
+  logcat (.device-pass/logcat-8236-run2.log, 185,361 lines, PID 25847). NOTE:
+  first capture attempt died — streaming `adb logcat` over wireless adb drops
+  when the link blips; use ON-DEVICE capture instead:
+  `adb shell "logcat -c; nohup logcat -v threadtime > /sdcard/tts-test.log 2>&1 &"`
+  then `adb pull`. Findings:
+  - FINDING #1 (advance-confirm) FIXED+VERIFIED: 22/22 advances confirmed,
+    0 timeouts, request→confirm latency 1–5ms (was 10s wall). Root cause was
+    scrollToPositionWithOffset = layout-driven jump that never dispatches
+    onScrolled; fix = WebtoonViewer.moveToPage now calls onScrolled(pos)
+    explicitly after the scroll. Session ran clean page 4→22 auto-advancing.
+  - FINDING #2 (stale page on timeout) FIXED (safety net): awaitAdvanceConfirmation
+    timeout branch now sets pageIndex=target so resume() can't re-read the prior
+    page. 0 timeouts occurred so branch unexercised; pause/resume verified correct
+    (resume pageIndex=3 resumeIndex=4 then 9).
+  - FINDING #3 (duplicate speech) RESOLVED-AS-EXPECTED + DEFERRED: run2 dups were
+     USER tapping prev/next-sentence buttons (confirmed) — stepBy() re-speaks from
+     the chosen sentence, expected nav behavior, NOT a bug. A SEPARATE hands-off
+     "words/phrases read twice" was reported but did NOT reproduce in run3
+     (logcat-8236-run3.log: 55 dispatches/55 unique ids, 0 engine onStop/onError,
+     0 retries, 4/4 advances). Likely manga-specific OCR overlapping regions or a
+     Google-TTS audio quirk. USER DECISION 2026-08-28: DROP for now, LOW PRIORITY,
+     revisit after full app build (see Deferred issues).
+  - TTS-DBG instrumentation REMOVED 2026-08-28 (all files reverted); #1 + #2 fixes
+     KEPT. Gates re-run green (spotlessCheck + testDebugUnitTest + assembleDebug).
+
+Deferred issues (LOW PRIORITY, revisit post-build):
+  - #3b hands-off duplicate words/phrases: intermittent, manga-specific, never
+    reproduced under instrumentation. To re-debug: re-add TTS-DBG logs (git history)
+    + log per-sentence bounding box to catch duplicate/overlapping OCR regions;
+    reproduce on the affected manga. Hypotheses: OCR overlapping regions (same text
+    under different utterance ids) or Google-TTS engine audio quirk.
+
 Remaining:
-- Fix page 15→16 prefetch spam loop (race condition in prefetch cancellation)
-- Add throttle for rapid swipes (debounce/coalesce in onPageSelected)
-- Verify ScrollToRegion auto-scroll instrumentation
 - Script steps 7–15: rate/pitch live, chapter transition, end-of-content,
   home-during-playback, rotation, exit reader, audio-focus transient,
   exit-idle <1s / no background CPU.
@@ -375,27 +416,32 @@ Remaining:
 ## Blocked
 
 ```text
-Nothing hard-blocked. Device pass needs the USER driving the phone screen:
-SM_M066B connected via wireless adb (PID 27363 active). English TTS voice =
-device default (Google TTS en-IN present). GLENS/network reachable on device.
-Two new issues found in fresh logcat need fixes before script completion:
-  1. P0: Prefetch spam loop (page 15→16 race condition)
-  2. P1: Rapid-swipe mass OCR (13 simultaneous scans)
-Standing decision unchanged: prd script stays manual/interactive.
+Nothing hard-blocked. Finding #3 deferred LOW PRIORITY by user (post-build).
+Device pass steps 7–15 need USER driving phone screen. SM_M066B via wireless adb;
+use on-device logcat capture (streaming adb logcat dies on blip). English TTS
+voice = device default. GLENS/network reachable. Standing decision unchanged:
+prd script stays manual/interactive.
 ```
 
 ## Current files being modified
 
 ```text
 Current working files:
-- docs/memory.md (this file — always current)
-(none in source; Phase 1 list above becomes the working set when started.
-Remove entries here when work finishes to avoid overlapping agents.)
+- docs/memory.md, docs/phase.md (docs-only update for Finding #3 deferral)
+Uncommitted source change set (not actively being modified):
+- app .../ui/reader/tts/TtsPlaybackController.kt (#2 timeout pageIndex, P0 dedup)
+- app .../ui/reader/ReaderViewModel.kt (P1 debounce)
+- app .../viewer/webtoon/WebtoonViewer.kt (#1 explicit onScrolled)
+TTS-DBG instrumentation removed; no active Finding #3 work.
 ```
 
 ## Recently changed files
 
 ```text
+2026-08-28  docs/memory.md, docs/phase.md                 Finding #3 deferred LOW PRIORITY; run2/run3 results; TTS-DBG removed
+2026-08-28  app .../viewer/webtoon/WebtoonViewer.kt       #1 moveToPage explicit onScrolled; TTS-DBG removed
+2026-08-28  app .../ui/reader/tts/TtsPlaybackController.kt #2 timeout pageIndex=target; P0 rebuild/prefetch dedup; TTS-DBG removed
+2026-08-28  app .../ui/reader/ReaderViewModel.kt          P1 250ms TTS page-selected debounce; advance confirmations exempt
 2026-08-27  app .../ui/reader/tts/TtsPlaybackController.kt  ScrollToRegion emit + pause/resume page fix
 2026-08-27  app .../ui/reader/ReaderViewModel.kt           ScrollToRegion forward to event channel
 2026-08-27  app .../ui/reader/ReaderActivity.kt            ScrollToRegion handler + Viewer.scrollToRegion()
@@ -627,19 +673,15 @@ Injekt 91edab2317, JUnit5 6.1.1/Kotest 6.2.2/MockK 1.14.11).
 ## Testing status
 
 ```text
-Unit tests:        PASS (2026-08-27, full testDebugUnitTest, all modules;
-                   includes Phase 9 pass #1 + #2 change sets)
+Unit tests:        PASS (2026-08-28, full testDebugUnitTest, all modules)
 Integration tests: none run (existing androidTest suites are device-gated/@Ignore)
 UI tests:          none exist in repo
-Device tests:      PARTIAL — Phase 8 script steps 1–6 executed (results in
-                   Completed work); FRESH logcat analysis COMPLETE
-                   (logcat-8234-phase9.log, 7,793 lines, PID 27363):
-                   - 3 chapters tested (206, 205, 1), 9/9 advances confirmed
-                   - 0 recycle crashes, 0 sentence failures, 0 timeouts
-                   - 2 new issues found (prefetch spam, rapid-swipe mass OCR)
-                   - Steps 7–15 + issue fixes remaining
-Lint:              spotlessCheck PASS (2026-08-27)
-Build:             :app:assembleDebug PASS (2026-08-27, 3m9s)
+Device tests:      PARTIAL — Phase 8 script steps 1–6 executed; build 0.4.0-8236
+                   run2/run3 verified Finding #1 (22/22 advances, 0 timeouts) and
+                   Finding #2; Finding #3 hands-off variant not reproduced and
+                   deferred LOW PRIORITY; steps 7–15 remain.
+Lint:              spotlessCheck PASS (2026-08-28)
+Build:             :app:assembleDebug PASS (2026-08-28, 0.4.0-8236 installed)
 Baseline (pre-TTS expectations): CI order = spotlessCheck → testDebugUnitTest →
                          verifySqlDelightMigration → assembleRelease (see rules.md §11)
 Environment: devcontainer image vsc-yomihon-e24e3bd7… (JDK 17) via docker on host;
@@ -652,22 +694,21 @@ Environment: devcontainer image vsc-yomihon-e24e3bd7… (JDK 17) via docker on h
 ## Last verified build
 
 ```text
-Date:     2026-08-27
-Command:  ./gradlew spotlessApply spotlessCheck testDebugUnitTest :app:assembleDebug
+Date:     2026-08-28
+Command:  ./gradlew spotlessCheck testDebugUnitTest :app:assembleDebug
           (docker devcontainer JDK17, -Xmx4g, both volumes)
-Result:   ALL GREEN. BUILD SUCCESSFUL in 3m9s. arm64 APK INSTALLED on
-          SM_M066B as versionName 0.4.0-8234 (adb install Success).
-          FRESH logcat analysis COMPLETE: logcat-8234-phase9.log (7,793 lines,
-          PID 27363) — real TTS/OCR activity, 3 chapters, 9/9 advances,
-          0 crashes, 2 new issues found.
+Result:   ALL GREEN after TTS-DBG removal. arm64 APK INSTALLED on SM_M066B as
+          versionName 0.4.0-8236. Device run2/run3: Finding #1 verified 22/22
+          advances, 0 timeouts; Finding #2 fixed; Finding #3 hands-off variant
+          not reproduced; deferred low priority.
 ```
 
 ## Last verified test
 
 ```text
-Date:     2026-08-27
+Date:     2026-08-28
 Command:  ./gradlew spotlessCheck testDebugUnitTest    (docker devcontainer, JDK 17)
-Result:   BUILD SUCCESSFUL in 2m40s (all modules)
+Result:   BUILD SUCCESSFUL (all modules)
 ```
 
 ---
@@ -694,21 +735,37 @@ FRESH LOGCAT ANALYSIS:     logcat-8234-phase9.log (7,793 lines, PID 27363)
                                 for p16 in 7s — race condition in prefetch restart)
                             P1: Rapid-swipe mass OCR (13 simultaneous scans from
                                 fast swipe — no throttle/debounce)
-Current task:               Fix P0 prefetch spam loop + P1 rapid-swipe throttle,
-                            then continue device script steps 7–15.
-Next recommended task:      Mini-player z-order fix (overlay vs reader dialogs),
+P0 + P1 FIXES (2026-08-28): P0: TtsPlaybackController dedups rebuild on
+                            lastRebuildPageIndex + guards prefetch on
+                            prefetchPageIndex (both reset in resetSession and on
+                            provideContext()==null). P1: ReaderViewModel.onPageSelected
+                            debounces TTS call 250ms for user nav; advance
+                            confirmations (hasPendingAdvance) never debounced.
+                            ScrollToRegion logcat instrumentation added in
+                            WebtoonViewer. All gates green (spotlessCheck +
+                            testDebugUnitTest + :app:compileDebugKotlin).
+Current task:               DONE: user confirmed run2 duplicates were button taps;
+                            hands-off #3 variant not reproduced in run3; USER DROPPED
+                            it 2026-08-28 as LOW PRIORITY post-build (Deferred issues
+                            #3b). TTS-DBG instrumentation removed; #1+#2 fixes kept.
+                            Docs updated.
+Next recommended task:      Device script steps 7–15, mini-player z-order fix,
                             Phase 9 memory/battery/leakcanary measurements, then
-                            commit change set.
+                            commit uncommitted fix set. If #3b returns, re-add
+                            TTS-DBG from git history + OCR bbox/overlap logging.
 Files safe to modify:       docs/* ; app reader/tts/settings files ;
                             data OCR files ; i18n base strings.xml (snake_case only)
-Files currently worked on:  6-file uncommitted Phase 9 pass #1 + #2 set (see
-                            Recently changed) — all compile-green, gates green
+Files currently worked on:  uncommitted Phase 9 pass #1 + #2 + P0/P1 fix set —
+                            TtsPlaybackController.kt, ReaderViewModel.kt,
+                            WebtoonViewer.kt (+ earlier 6-file perf set). All
+                            compile-green, gates green.
 Known risks:                TILE_CONCURRENCY=3 may trip Lens rate limits — watch
                             HTTP 429/5xx in logs, drop constant if seen;
-                            advance-confirm timeouts (#8) FIXED (findFirstVisibleItemPosition);
-                            adb wireless PID 27363 active;
-                            capture procedure: --pid=27363 filter to
-                            .device-pass/logcat-8234-phase9.log.
+                            advance-confirm timeouts (#8) FIXED+VERIFIED (moveToPage
+                            explicit onScrolled; 22/22 1–5ms run2);
+                            CAPTURE: streaming `adb logcat` DIES on wireless-adb
+                            blip — use ON-DEVICE: adb shell "logcat -c; nohup logcat
+                            -v threadtime > /sdcard/tts-test.log 2>&1 &" then adb pull.
 ```
 
 ---

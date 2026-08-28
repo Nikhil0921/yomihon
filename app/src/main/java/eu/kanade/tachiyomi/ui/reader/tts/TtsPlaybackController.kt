@@ -104,6 +104,10 @@ internal class TtsPlaybackController(
     /** Completed by [onPageSelected] with the index of the page actually shown. */
     private var pendingAdvance: CompletableDeferred<Int>? = null
 
+    /** True while waiting for an advance confirmation; callers must not debounce those. */
+    val hasPendingAdvance: Boolean
+        get() = pendingAdvance != null
+
     private var context: TtsChapterContext? = null
 
     private var queue: List<TtsSentence> = emptyList()
@@ -124,6 +128,9 @@ internal class TtsPlaybackController(
     private var playbackJob: Job? = null
 
     private var prefetchJob: Job? = null
+
+    /** Page currently being prefetched; guards against redundant cancel/restart. */
+    private var prefetchPageIndex = -1
 
     /** ElapsedRealtime marker set in [start]; first successful acquire logs startup latency. */
     private var sessionStartedAtElapsed = 0L
@@ -238,7 +245,12 @@ internal class TtsPlaybackController(
                 else -> {
                     logcat(LogPriority.WARN) { "TTS page advance to $target timed out" }
                     paused = true
-                    mutableState.update { it.copy(phase = TtsPhase.Paused, sentenceText = "") }
+                    // Reflect the requested advance so resume() continues from the target
+                    // page instead of re-reading the page we just finished. User navigation
+                    // during the pause still wins via onPageSelected updating pageIndex.
+                    mutableState.update {
+                        it.copy(phase = TtsPhase.Paused, pageIndex = target, sentenceText = "")
+                    }
                     return false
                 }
             }
@@ -248,10 +260,10 @@ internal class TtsPlaybackController(
     }
 
     private fun rebuildQueueForUserNavigation(pageIndex: Int) {
-        // Dedup: skip if we're already playing this page — prevents prefetch spam
-        // during rapid swipes (multiple onPageSelected fires for the same target).
-        if (pageIndex == lastRebuildPageIndex && playbackJob?.isActive == true) {
-            logcat(LogPriority.DEBUG) { "TTS rebuild dedup: already playing page=$pageIndex" }
+        // Dedup: skip if we already rebuilt for this page — prevents prefetch/scan
+        // spam when onPageSelected fires repeatedly for the same target during a swipe.
+        if (pageIndex == lastRebuildPageIndex) {
+            logcat(LogPriority.DEBUG) { "TTS rebuild dedup: already handling page=$pageIndex" }
             return
         }
         lastRebuildPageIndex = pageIndex
@@ -263,7 +275,9 @@ internal class TtsPlaybackController(
         val ctx = provideContext()
         if (ctx == null) {
             // Chapter not ready yet; surface an honest paused state until the
-            // viewer reports a page and triggers another rebuild.
+            // viewer reports a page and triggers another rebuild. Clear the dedup
+            // marker so that retry rebuild is not swallowed.
+            lastRebuildPageIndex = -1
             paused = true
             mutableState.update { it.copy(pageIndex = pageIndex, phase = TtsPhase.Paused, sentenceText = "") }
             return
@@ -476,6 +490,11 @@ internal class TtsPlaybackController(
 
     private fun schedulePrefetch(ctx: TtsChapterContext, pageIndex: Int) {
         if (pageIndex >= ctx.totalPages) return
+        // Guard: skip if this exact page is already being prefetched.
+        if (pageIndex == prefetchPageIndex && prefetchJob?.isActive == true) {
+            return
+        }
+        prefetchPageIndex = pageIndex
         prefetchJob?.cancel()
         prefetchJob = scope.launch {
             logcat(LogPriority.DEBUG) { "TTS prefetch start page=$pageIndex" }
@@ -545,6 +564,8 @@ internal class TtsPlaybackController(
         playbackJob = null
         prefetchJob?.cancel()
         prefetchJob = null
+        prefetchPageIndex = -1
+        lastRebuildPageIndex = -1
         pendingAdvance = null
         paused = false
         queue = emptyList()
