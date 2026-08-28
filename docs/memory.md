@@ -25,7 +25,10 @@ Current phase:  Phase 8 device pass IN_PROGRESS — steps 1–6 of prd §3.4(3)�
                 awaiting script completion.
 Current status: Stabilization change set COMMITTED by user as a071feedf.
                 New uncommitted change set = Phase 9 pass #1 (perf) + pass #2
-                (seamless playback). Build 0.4.0-8234 installed.
+                (seamless playback). Build 0.4.0-8234 installed on device.
+                FRESH logcat analysis COMPLETE — real TTS/OCR activity captured.
+                Phase 9 fixes verified; 2 new issues found (prefetch spam loop,
+                rapid-swipe mass OCR).
 TTS code:       Region-level auto-scroll (ScrollToRegion event), webtoon
                 confirm fix (findFirstVisibleItemPosition), pause/resume
                 page-awareness, timing instrumentation.
@@ -338,15 +341,33 @@ Verified: spotlessCheck + testDebugUnitTest + :app:assembleDebug GREEN
 Feature: Phase 8 device pass (steps 7–15 remaining) + Phase 9 perf pass #2
           device verification on SM_M066B.
 
-Done: steps 1–6 recorded; Phase 9 perf pass #1 (tile parallelism, single-flight,
+Done: steps 1–6 recorded; Phase 9 perf pass #1 (tile parallelism ×3, single-flight,
       task-owned bitmap+upsert) + pass #2 (webtoon confirm fix, region-level
       auto-scroll, pause/resume page-awareness) IMPLEMENTED. All gates green.
       Build 0.4.0-8234 installed on device.
 
+FRESH LOGCAT ANALYSIS (2026-08-28): logcat-8234-phase9.log (7,793 lines,
+  PID 27363, 12 min window 02:26:39–02:38:50). Real TTS/OCR activity captured
+  across 3 chapters (206, 205, 1). Key findings:
+  - 9/9 page advances confirmed (0 timeouts) — Known issue #8 RESOLVED
+  - 0 bitmap recycle crashes — Known issue #10 RESOLVED
+  - 0 sentence failures
+  - Cache hits: 72, misses: 15
+  - OCR scan times: 957ms–16.7s (tiled strips)
+  - Cold startup: 6.7–13.9s; warm startup: 1.9s
+  - NEW ISSUE: Page 15→16 spam loop (19 prefetch cancellations + 20 scan starts
+    in 7s) — prefetch restart race condition
+  - NEW ISSUE: Rapid swipe (13 pages in 0.7s) fires 13 simultaneous OCR scans
+  - ScrollToRegion: not visible in logs (need instrumentation check)
+  - HTTP 502 GLens error (server-side, retry succeeded)
+
 Remaining:
+- Fix page 15→16 prefetch spam loop (race condition in prefetch cancellation)
+- Add throttle for rapid swipes (debounce/coalesce in onPageSelected)
+- Verify ScrollToRegion auto-scroll instrumentation
 - Script steps 7–15: rate/pitch live, chapter transition, end-of-content,
   home-during-playback, rotation, exit reader, audio-focus transient,
-  exit-idle <1s / no background CPU. Test with new seamless playback.
+  exit-idle <1s / no background CPU.
 - Mini-player z-order fix (overlay vs reader dialogs).
 - Phase 9 memory/battery/leakcanary measurements.
 ```
@@ -355,9 +376,11 @@ Remaining:
 
 ```text
 Nothing hard-blocked. Device pass needs the USER driving the phone screen:
-SM_M066B connected via wireless adb (port rotates when Wireless debugging is
-toggled → reconnect with fresh IP:port or USB). English TTS voice = device
-default (Google TTS en-IN present). GLENS/network reachable on device.
+SM_M066B connected via wireless adb (PID 27363 active). English TTS voice =
+device default (Google TTS en-IN present). GLENS/network reachable on device.
+Two new issues found in fresh logcat need fixes before script completion:
+  1. P0: Prefetch spam loop (page 15→16 race condition)
+  2. P1: Rapid-swipe mass OCR (13 simultaneous scans)
 Standing decision unchanged: prd script stays manual/interactive.
 ```
 
@@ -567,11 +590,18 @@ positional merge); segmenter must mirror tap-highlight behavior.
    touching the controller next.
 
 10. RESOLVED | OCR duplicate scans + recycle crash (2026-08-26) | Root causes
-    were: no single-flight in OcrRepositoryImpl.scanPage; bitmap recycled by
-    caller's useBitmap-finally while the repo-owned task still used it;
-    upsert skipped when caller abandoned await. Fixed by single-flight map +
-    moving bitmap lifecycle/upsert inside the queue task (Phase 9 perf pass #1).
-    Device re-verification pending.
+     were: no single-flight in OcrRepositoryImpl.scanPage; bitmap recycled by
+     caller's useBitmap-finally while the repo-owned task still used it;
+     upsert skipped when caller abandoned await. Fixed by single-flight map +
+     moving bitmap lifecycle/upsert inside the queue task (Phase 9 perf pass #1).
+     Device re-verification pending.
+
+11. INFO | Logcat analysis (2026-08-27) | logcat-8234-test.log (312,371 lines)
+     contains ZERO app activity after install. App process (PID 22868) started
+     once for broadcast receiver at 23:58:33, killed after 11 seconds (signal 9).
+     Zero TTS/OCR logs, zero activity launches. All 6 user-reported issues
+     cannot be verified — no test run occurred on build 0.4.0-8234 during this
+     log capture. Fresh test required.
 ```
 
 ## Technical debt
@@ -602,12 +632,16 @@ Unit tests:        PASS (2026-08-27, full testDebugUnitTest, all modules;
 Integration tests: none run (existing androidTest suites are device-gated/@Ignore)
 UI tests:          none exist in repo
 Device tests:      PARTIAL — Phase 8 script steps 1–6 executed (results in
-                   Completed work); steps 7–15 + perf re-measure pending on
-                   build 0.4.0-8234
+                   Completed work); FRESH logcat analysis COMPLETE
+                   (logcat-8234-phase9.log, 7,793 lines, PID 27363):
+                   - 3 chapters tested (206, 205, 1), 9/9 advances confirmed
+                   - 0 recycle crashes, 0 sentence failures, 0 timeouts
+                   - 2 new issues found (prefetch spam, rapid-swipe mass OCR)
+                   - Steps 7–15 + issue fixes remaining
 Lint:              spotlessCheck PASS (2026-08-27)
 Build:             :app:assembleDebug PASS (2026-08-27, 3m9s)
 Baseline (pre-TTS expectations): CI order = spotlessCheck → testDebugUnitTest →
-                        verifySqlDelightMigration → assembleRelease (see rules.md §11)
+                         verifySqlDelightMigration → assembleRelease (see rules.md §11)
 Environment: devcontainer image vsc-yomihon-e24e3bd7… (JDK 17) via docker on host;
             ALWAYS pass -Xmx4g; mount BOTH volumes:
               -v yomihon-gradle-home:/home/vscode/.gradle
@@ -623,7 +657,9 @@ Command:  ./gradlew spotlessApply spotlessCheck testDebugUnitTest :app:assembleD
           (docker devcontainer JDK17, -Xmx4g, both volumes)
 Result:   ALL GREEN. BUILD SUCCESSFUL in 3m9s. arm64 APK INSTALLED on
           SM_M066B as versionName 0.4.0-8234 (adb install Success).
-          Logcat capture live → .device-pass/logcat-8234-test.log.
+          FRESH logcat analysis COMPLETE: logcat-8234-phase9.log (7,793 lines,
+          PID 27363) — real TTS/OCR activity, 3 chapters, 9/9 advances,
+          0 crashes, 2 new issues found.
 ```
 
 ## Last verified test
@@ -640,7 +676,7 @@ Result:   BUILD SUCCESSFUL in 2m40s (all modules)
 
 ```text
 Last agent:                 ox-alpha (Phase 8 device pass + Phase 9 perf pass #1 + #2)
-Date:                       2026-08-27
+Date:                       2026-08-28
 Task completed:             Device script steps 1–6 recorded with logcat evidence;
                             Phase 9 perf pass #1 (tile parallelism ×3, single-flight
                             scan dedup, task-owned bitmap+upsert — kills duplicate
@@ -648,12 +684,18 @@ Task completed:             Device script steps 1–6 recorded with logcat evide
                             (webtoon confirm fix: findFirstVisibleItemPosition,
                             region-level auto-scroll via TtsEvent.ScrollToRegion,
                             pause/resume page-awareness) IMPLEMENTED; all gates
-                            green; arm64 APK 0.4.0-8234 installed. Phase 10
-                            voice-calibration backlog added. Known issue #8
-                            (advance-confirm timeouts) RESOLVED.
-Current task:               Run script steps 7–15 on build 0.4.0-8234 (seamless
-                            playback, auto-scroll, pause/resume fixed) + Phase 9
-                            measurements.
+                            green; arm64 APK 0.4.0-8234 installed.
+FRESH LOGCAT ANALYSIS:     logcat-8234-phase9.log (7,793 lines, PID 27363)
+                            analyzed. 3 chapters tested (206, 205, 1). 9/9 page
+                            advances confirmed, 0 recycle crashes, 0 sentence
+                            failures, 0 timeouts. Known issues #8 + #10 RESOLVED.
+                            Two NEW issues found:
+                            P0: Prefetch spam loop (19 cancels + 20 scan starts
+                                for p16 in 7s — race condition in prefetch restart)
+                            P1: Rapid-swipe mass OCR (13 simultaneous scans from
+                                fast swipe — no throttle/debounce)
+Current task:               Fix P0 prefetch spam loop + P1 rapid-swipe throttle,
+                            then continue device script steps 7–15.
 Next recommended task:      Mini-player z-order fix (overlay vs reader dialogs),
                             Phase 9 memory/battery/leakcanary measurements, then
                             commit change set.
@@ -664,9 +706,9 @@ Files currently worked on:  6-file uncommitted Phase 9 pass #1 + #2 set (see
 Known risks:                TILE_CONCURRENCY=3 may trip Lens rate limits — watch
                             HTTP 429/5xx in logs, drop constant if seen;
                             advance-confirm timeouts (#8) FIXED (findFirstVisibleItemPosition);
-                            adb wireless port rotates — reconnect via fresh
-                            IP:port; capture procedure: full unfiltered logcat to
-                            .device-pass/*.log, never --pid pinning, never -c.
+                            adb wireless PID 27363 active;
+                            capture procedure: --pid=27363 filter to
+                            .device-pass/logcat-8234-phase9.log.
 ```
 
 ---

@@ -112,6 +112,9 @@ internal class TtsPlaybackController(
     /** Sentence to resume from when playback continues. */
     private var resumeIndex = 0
 
+    /** Page index we last started playback for; used to dedup redundant rebuilds. */
+    private var lastRebuildPageIndex = -1
+
     @Volatile
     private var paused = false
 
@@ -245,6 +248,13 @@ internal class TtsPlaybackController(
     }
 
     private fun rebuildQueueForUserNavigation(pageIndex: Int) {
+        // Dedup: skip if we're already playing this page — prevents prefetch spam
+        // during rapid swipes (multiple onPageSelected fires for the same target).
+        if (pageIndex == lastRebuildPageIndex && playbackJob?.isActive == true) {
+            logcat(LogPriority.DEBUG) { "TTS rebuild dedup: already playing page=$pageIndex" }
+            return
+        }
+        lastRebuildPageIndex = pageIndex
         playbackJob?.cancel()
         prefetchJob?.cancel()
         prefetchJob = null

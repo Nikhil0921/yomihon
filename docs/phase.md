@@ -7,7 +7,8 @@
 
 Current phase pointer: **Phase 8 device pass IN_PROGRESS (steps 1–6 done,
 7–15 remain) + Phase 9 perf pass #1 + #2 IMPLEMENTED — build 0.4.0-8234
-installed on SM_M066B, awaiting script completion**.
+installed on SM_M066B, FRESH logcat analysis COMPLETE (real activity: 9/9
+advances confirmed, 2 new issues found; Known issues #8 + #10 RESOLVED)**.
 PRODUCT PIVOT 2026-08-25: English is the primary v1 Read-Aloud language;
 Japanese TTS moved to Phase 10.
 
@@ -158,8 +159,12 @@ Japanese TTS moved to Phase 10.
   2026-08-27: Phase 9 perf pass #2 landed — webtoon advance-confirm fix
   (findFirstVisibleItemPosition), region-level auto-scroll (ScrollToRegion
   event), pause/resume page-awareness — build 0.4.0-8234 installed. All gates
-  green. REMAINING: script steps 7–15 on new build. The
-  "missing-JP-voice" branch of the old script is OBSOLETE after the pivot.)
+  green. 2026-08-28: FRESH logcat analysis COMPLETE — logcat-8234-phase9.log
+  (7,793 lines, PID 27363). Results: 3 chapters tested (206, 205, 1),
+  9/9 page advances confirmed, 0 recycle crashes, 0 sentence failures,
+  0 timeouts. Known issues #8 + #10 RESOLVED. Two new issues found:
+  P0 prefetch spam loop, P1 rapid-swipe mass OCR. Steps 7–15 remaining.
+  The "missing-JP-voice" branch of the old script is OBSOLETE after the pivot.)
 - **Objective**: complete the test story.
 - **Tasks**: ensure segmenter+policy suites comprehensive; run full
   `testDebugUnitTest`; device pass of the prd.md §3.4(3) script (cached path,
@@ -177,9 +182,13 @@ Japanese TTS moved to Phase 10.
   recycle crashes, ~3× faster pages expected]; perf pass #2 DONE 2026-08-27
   [webtoon confirm fix: findFirstVisibleItemPosition, region-level auto-scroll
   via TtsEvent.ScrollToRegion, pause/resume page-awareness] — all gates green,
-  build 0.4.0-8234 installed. REMAINING: device re-measure on new build,
+  build 0.4.0-8234 installed. 2026-08-28: FRESH logcat analysis COMPLETE.
+  Phase 9 fixes VERIFIED: findFirstVisibleItemPosition ✓, single-flight ✓,
+  task-owned bitmap ✓, pause/resume page-awareness ✓, tile parallelism ✓.
+  Known issues #8 + #10 RESOLVED. Two new issues found: P0 prefetch spam
+  loop, P1 rapid-swipe mass OCR. REMAINING: fix P0 + P1, device re-measure,
   mini-player z-order fix, memory/battery/leakcanary profiles, exit-to-idle
-  timing)
+  timing, ScrollToRegion auto-scroll verification)
 - **Objective**: production quality under stress.
 - **Tasks**: bitmap lifecycle audit (no retention across suspension points);
   cancellation correctness (swipe-away, chapter switch mid-scan); memory profile
