@@ -5,21 +5,20 @@
 > A phase is COMPLETED only when its verification steps have actually been run
 > and recorded in `docs/memory.md`.
 
-Current phase pointer: **Phase 8 device pass COMPLETE — script steps 1–15 ALL
-EXECUTED + USER-CONFIRMED (2026-08-28 RUN4 build 0.4.0-8238: steps 7–15 PASS;
-user confirmed step 7 rate/pitch live + step 11 rotation pause→resume-same-OCR-
-line). Chapter transition, end-of-content, home-during-playback, exit reader,
-audio-focus (PermanentLoss→pause→manual resume same sentence), exit-idle 550ms,
-4/4 advance confirms 1–2ms / 0 timeouts, 6 next-sentence steps clean,
-ScrollToRegion on-device verified, 3 clean pause/resume cycles. FINDING #4 (P1)
-FIXED 2026-08-28: background prefetch scan failure (transient DNS) escalated
-via scanOnDemand.fail() and killed a healthy paused session → reportFailure
-param gates failure reporting (prefetch passes false, logs best-effort).
-Uncommitted set: z-order fix + action logging + prefetch fix (all gates green);
-prefetch fix not yet device-verified. Phase 9 perf passes #1+#2, P0/P1,
-advance-confirm/stale-page fixes previously LANDED+VERIFIED (run2/run3: 22/22
-advances 1–5ms / 0 timeouts). Finding #3 duplicate speech USER DROPPED
-2026-08-28 — LOW PRIORITY post-build (memory.md Deferred issues)**.
+Current phase pointer: **Phase 9 IN_PROGRESS (hardening tail) — Phase 8
+device pass COMPLETE (steps 1–15 executed + user-confirmed 2026-08-28 RUN4
+build 0.4.0-8238). All prior fix sets committed (latest 80deac5b8: z-order +
+action logging + prefetch reportFailure fix, the latter DEVICE-VERIFIED via
+wifi-killed test). LeakCanary enabled 2026-08-28 → FINDING #5: reader screen
+retained ~100MB after exit (TTS-engine onFocusEvent → dead controller →
+ViewModel → Activity) → FIX IMPLEMENTED, UNCOMMITTED 3-file set
+(ReaderViewModel.onCleared onFocusEvent=null; ReaderActivity DisposableEffect
+ioCoroutineScope cancel; build.gradle.kts LeakCanary core) — GATES GREEN
+2026-08-29. Remaining before
+Phase 9 COMPLETED: commit leak-fix set, device re-verify leak gone, battery
+measurement. Findings #1/#2 FIXED+VERIFIED (22/22 advances 1–5ms / 0
+timeouts); Finding #3 duplicate speech USER DROPPED 2026-08-28 — LOW
+PRIORITY post-build (memory.md Deferred issues)**.
 PRODUCT PIVOT 2026-08-25: English is the primary v1 Read-Aloud language;
 Japanese TTS moved to Phase 10.
 
@@ -206,19 +205,21 @@ Japanese TTS moved to Phase 10.
   build 0.4.0-8234 installed. 2026-08-28: FRESH logcat analysis COMPLETE.
   Phase 9 fixes VERIFIED: findFirstVisibleItemPosition ✓, single-flight ✓,
   task-owned bitmap ✓, pause/resume page-awareness ✓, tile parallelism ✓.
-  Known issues #8 + #10 RESOLVED. Two new issues found: P0 prefetch spam
-  loop, P1 rapid-swipe mass OCR. 2026-08-28: P0 + P1 FIXED (rebuild dedup +
-  prefetch guard in TtsPlaybackController; 250ms debounce in
-   ReaderViewModel.onPageSelected, advance confirmations exempt) + ScrollToRegion
-   logcat instrumentation added. All gates green. 2026-08-28: build 0.4.0-8236
-   device run2/run3 verified advance-confirm/stale-page fixes; hands-off duplicate
-   speech not reproduced and USER DROPPED it as LOW PRIORITY post-build. TTS-DBG
-   removed. REMAINING: device script steps 7–15, memory/battery/leakcanary
-   profiles, exit-to-idle timing. Mini-player z-order fix DONE 2026-08-28
-   (UNCOMMITTED, ReaderActivity.kt — TtsPlaybackBar moved before dialog block).
-   Controller action-level logging DONE 2026-08-28 (UNCOMMITTED,
-   TtsPlaybackController.kt — pause/resume/stop/stepBy/focus-loss; closes Known
-   issue #9, makes script steps 4/5 verifiable).)
+  Known issues #8 + #10 RESOLVED. P0 prefetch spam loop + P1 rapid-swipe mass
+  OCR FIXED. Build 0.4.0-8236 run2/run3 verified advance-confirm/stale-page
+  fixes; hands-off duplicate speech USER DROPPED (LOW PRIORITY post-build).
+  TTS-DBG removed. Script steps 7–15 EXECUTED + USER-CONFIRMED (RUN4 build
+  0.4.0-8238) — Phase 8 device script COMPLETE; exit-to-idle 550ms measured;
+  prefetch-DNS fix (Finding #4) DEVICE-VERIFIED; z-order + action logging +
+  prefetch fix committed by user (41200022e, be31edb71, 80deac5b8).
+  2026-08-28: LeakCanary enabled → FINDING #5 ~100MB reader leak
+  (engine onFocusEvent retention chain) → 3-file fix IMPLEMENTED,
+  UNCOMMITTED (ReaderViewModel onFocusEvent=null, ReaderActivity
+  DisposableEffect ioCoroutineScope cancel, build.gradle.kts LeakCanary
+  core) — GATES GREEN 2026-08-29 (spotlessCheck + compileDebugKotlin +
+  testDebugUnitTest, BUILD SUCCESSFUL 2m56s); memory profile captured
+  (meminfo-profile.log, stable); REMAINING: commit leak-fix set, device
+  re-verify leak gone, battery measurement.)
 - **Objective**: production quality under stress.
 - **Tasks**: bitmap lifecycle audit (no retention across suspension points);
   cancellation correctness (swipe-away, chapter switch mid-scan); memory profile

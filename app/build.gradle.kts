@@ -328,7 +328,8 @@ dependencies {
     testRuntimeOnly(libs.junit.platform.launcher)
 
     // For detecting memory leaks; see https://square.github.io/leakcanary/
-    // debugImplementation(libs.leakCanary.android)
+    // Enabled for Phase 9 leak verification (debug builds only).
+    debugImplementation(libs.leakCanary.core)
     implementation(libs.leakCanary.plumber)
 
     testImplementation(libs.kotlinx.coroutines.test)

@@ -336,6 +336,12 @@ class ReaderViewModel @JvmOverloads constructor(
         ttsControllerInstance?.let { controller ->
             controller.stop()
             ttsEngine.shutdown()
+            // Detach the controller from the singleton engine: the system TTS
+            // service keeps a native GC root to the TextToSpeech callback, which
+            // reaches the engine, and onFocusEvent would retain the dead
+            // controller -> this ViewModel -> destroyed ReaderActivity (~100 MB,
+            // LeakCanary 2026-08-28). Next session re-registers in controller init.
+            ttsEngine.onFocusEvent = null
         }
         val currentChapters = state.value.viewerChapters
         if (currentChapters != null) {
