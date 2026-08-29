@@ -5,6 +5,9 @@
 build
 .android-adb/
 
+# Local Gradle home/cache (host-side; 36k files / ~2.5 GB)
+gradle-home/
+
 # IDE files
 *.iml
 .idea/*

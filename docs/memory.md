@@ -11,13 +11,10 @@
 
 ```text
 Project:        Yomihon (v0.4.0, vc25) — Android manga reader + OCR/language tooling
-Repo state:     branch main @ 80deac5b8 (user committed the z-order + action-
-                logging + prefetch-fix set: 41200022e, be31edb71, 80deac5b8).
-                UNCOMMITTED: 3-file Phase 9 leak-fix set (app/build.gradle.kts
-                LeakCanary core, ReaderActivity.kt ioCoroutineScope cancel,
-                ReaderViewModel.kt onFocusEvent=null). Do not amend user
-                commits; .opencode/ stays untouched. Stray untracked
-                gradle-home/ dir (2.5G) in repo root — remove, do not commit.
+Repo state:     branch main @ 8cb320e7c + UNCOMMITTED mini-player z-order fix
+                (ReaderActivity.kt only). User committed the Phase 9/P0/P1 fix set
+                (fff9583f0, 872c55397, 8cb320e7c). Do not amend user commits;
+                .opencode/ stays untouched.
 Untracked:      .opencode/ (tool config), .device-pass/ (logcat evidence, gitignored)
 Primary goal:   Reliable Read-Aloud: English OCR → English system TTS →
                 correct progression (PRODUCT PIVOT 2026-08-25: English is the
@@ -26,14 +23,12 @@ Current phase:  Phase 8 device pass COMPLETE — script steps 1–15 all execute
                 user-confirmed (2026-08-28 RUN4: steps 7–15; rate/pitch live +
                 rotation pause/resume-same-position confirmed by user). Phase 9
                 perf passes + fixes landed; prefetch-DNS escalation fix (Finding
-                #4) FIXED + DEVICE-VERIFIED (wifi-killed test, committed
-                80deac5b8). NEW: LeakCanary flagged ~100MB reader leak on device
-                2026-08-28 → leak-fix set implemented (uncommitted).
+                #4) uncommitted + not yet device-verified.
 Current status: Finding #1 FIXED+VERIFIED (22/22 advances, 0 timeouts, 1–5ms).
                 Finding #2 FIXED (timeout sets pageIndex=target; unexercised).
                 Finding #3 duplicate speech: USER DROPPED 2026-08-28, LOW
                 PRIORITY post-build (Deferred issues). Finding #4 prefetch-DNS
-                session-kill FIXED+VERIFIED 2026-08-28 (reportFailure gate).
+                session-kill FIXED 2026-08-28 (reportFailure gate).
 TTS code:       Region-level auto-scroll (ScrollToRegion event), webtoon
                 confirm fix (explicit onScrolled in moveToPage), pause/resume
                 page-awareness, prefetch/rebuild dedup, user-nav debounce.
@@ -47,9 +42,7 @@ webtoon strips), text must be spoken completely without silent skips, and
 page/chapter progression must advance exactly once with user navigation
 authoritative. Device verification of prd.md §3.4(3)–(5) DONE (script steps
 1–15 executed + user-confirmed 2026-08-28). Remaining: Phase 9 hardening
-measurements (memory/battery/leakcanary) — leak-fix set IMPLEMENTED
-(2026-08-28, uncommitted, LeakCanary evidence below) awaiting gates +
-device re-verification, then commit.
+measurements (memory/battery/leakcanary) + commit uncommitted fix set.
 
 ## Completed work
 
@@ -347,9 +340,8 @@ Verified: spotlessCheck + testDebugUnitTest + :app:assembleDebug GREEN
 ## In progress
 
 ```text
-Feature: Phase 9 hardening — leak-fix set (Finding #5) implemented +
-          device re-verification + battery measurement remaining.
-          (Phase 8 COMPLETE; Phase 9 perf passes #1/#2 landed + verified.)
+Feature: Phase 8 device pass (steps 7–15 remaining) + Phase 9 perf pass #2
+          device verification on SM_M066B.
 
 Done: steps 1–6 recorded; Phase 9 perf pass #1 (tile parallelism ×3, single-flight,
       task-owned bitmap+upsert) + pass #2 (webtoon confirm fix, region-level
@@ -485,32 +477,6 @@ DEVICE VERIFICATION RUN2 (2026-08-28): build 0.4.0-8236 reinstalled, on-device
   - TTS-DBG instrumentation REMOVED 2026-08-28 (all files reverted); #1 + #2 fixes
      KEPT. Gates re-run green (spotlessCheck + testDebugUnitTest + assembleDebug).
 
-LEAKCANARY PASS — FINDING #5 ~100MB READER LEAK (2026-08-28):
-  Evidence: .device-pass/logcat-leakcanary.log (37M; LeakCanary permission
-  prompt 20:33:01, leak-launcher badge present = leak detected; TTS session
-  PID 31288 same log). LeakCanary (previously commented out upstream) was
-  enabled via debugImplementation(libs.leakCanary.core) (UNCOMMITTED
-  app/build.gradle.kts) and flagged the reader screen retaining ~100MB after
-  exit. Root cause: system TTS service keeps a native GC root to the
-  TextToSpeech callback → AndroidTtsEngine singleton → onFocusEvent lambda →
-  dead TtsPlaybackController → ReaderViewModel → destroyed ReaderActivity.
-  FIX (3 files, UNCOMMITTED, compile-green):
-  - ReaderViewModel.onCleared: ttsEngine.onFocusEvent = null after
-    stop()/shutdown() — detaches controller from singleton engine; next
-    reader session re-registers in controller init. Supersedes the old
-    Known issue #5 "bounded, self-healing" assessment: LeakCanary showed
-    ~100MB retained, NOT a small bounded object graph.
-  - ReaderActivity: DisposableEffect { onDispose { settingsScreenModel
-    .ioCoroutineScope.cancel() } } (both composition blocks) — the settings
-    screen model's io scope outlived the Activity otherwise.
-  - app/build.gradle.kts: LeakCanary core re-enabled for debug builds
-    (Phase 9 leak verification; upstream had it commented out).
-  Known issue #5 → RESOLVED by this fix. GATES GREEN 2026-08-29
-  (spotlessCheck + :app:compileDebugKotlin + testDebugUnitTest, BUILD
-  SUCCESSFUL 2m56s — after fixing root-owned build artifacts from a stray
-  root docker run via chown). Device re-verification with new debug APK
-  still pending.
-
 Deferred issues (LOW PRIORITY, revisit post-build):
   - #3b hands-off duplicate words/phrases: intermittent, manga-specific, never
     reproduced under instrumentation. To re-debug: re-add TTS-DBG logs (git history)
@@ -519,16 +485,11 @@ Deferred issues (LOW PRIORITY, revisit post-build):
     under different utterance ids) or Google-TTS engine audio quirk.
 
 Remaining:
-- Commit the 3-file leak-fix set (gates green 2026-08-29).
-- Install new debug APK (LeakCanary core enabled) on device → re-run leak
-  check → confirm ~100MB retention gone.
-- Phase 9 battery measurement + final leakcanary sign-off; memory profile
-  already captured (meminfo-profile.log: Java 8–25MB / Native 8–28MB /
-  TOTAL ~160–267MB, stable, no leak spike).
-- (DONE 2026-08-28: mini-player z-order fix + action logging +
-  prefetch-failure fix COMMITTED by user: 41200022e, be31edb71, 80deac5b8;
-  script steps 7–15 executed + user-confirmed; prefetch fix device-verified.
-  DONE 2026-08-29: gates green on leak-fix set.)
+- Phase 9 memory/battery/leakcanary measurements.
+- Commit uncommitted set: z-order fix + action logging + prefetch-failure fix.
+- (DONE 2026-08-28: mini-player z-order fix; controller action logging;
+  script steps 7–15 executed + user-confirmed — see RUN4 block;
+  prefetch-DNS escalation fix.)
 ```
 
 ## Blocked
@@ -545,29 +506,21 @@ Standing decision unchanged: prd script stays manual/interactive.
 
 ```text
 Current working files:
-- app/build.gradle.kts (debugImplementation(libs.leakCanary.core) enabled,
-  UNCOMMITTED)
-- app .../ui/reader/ReaderViewModel.kt (onCleared: ttsEngine.onFocusEvent =
-  null — Known issue #5 fix, UNCOMMITTED)
-- app .../ui/reader/ReaderActivity.kt (DisposableEffect cancels
-  settingsScreenModel.ioCoroutineScope on dispose, both composition blocks,
-  UNCOMMITTED)
-- docs/memory.md, docs/phase.md (this update)
-Prior fix set now COMMITTED by user (41200022e, be31edb71, 80deac5b8):
-z-order, action logging, prefetch reportFailure fix.
+- app .../ui/reader/tts/TtsPlaybackController.kt (action logging + prefetch
+  reportFailure fix, UNCOMMITTED)
+- app .../ui/reader/ReaderActivity.kt (mini-player z-order fix, UNCOMMITTED)
+- docs/memory.md (this update)
+Prior fix set now COMMITTED by user (fff9583f0, 872c55397, 8cb320e7c):
+- TtsPlaybackController.kt, ReaderViewModel.kt, WebtoonViewer.kt
 TTS-DBG instrumentation removed; no active Finding #3 work.
 ```
 
 ## Recently changed files
 
 ```text
-2026-08-28  app/build.gradle.kts                               LeakCanary core enabled for debug (Phase 9 leak verification) (UNCOMMITTED)
-2026-08-28  app .../ui/reader/ReaderViewModel.kt              Known issue #5 fix: ttsEngine.onFocusEvent = null in onCleared (~100MB leak) (UNCOMMITTED)
-2026-08-28  app .../ui/reader/ReaderActivity.kt               DisposableEffect cancels settingsScreenModel.ioCoroutineScope on dispose (UNCOMMITTED)
-2026-08-28  docs/memory.md, docs/phase.md                     LeakCanary finding #5 + fix; log-collection results; committed-set hashes updated
-2026-08-28  (committed 41200022e/be31edb71/80deac5b8) z-order fix + action logging + prefetch reportFailure fix (device-verified)
 2026-08-28  app .../ui/reader/tts/TtsPlaybackController.kt Prefetch failure no longer kills session (reportFailure gate); RUN4 analysis
-2026-08-28  app .../ui/reader/tts/TtsPlaybackController.kt Action-level DEBUG logs: pause/resume/stop/stepBy/focus-loss
+2026-08-28  app .../ui/reader/tts/TtsPlaybackController.kt Action-level DEBUG logs: pause/resume/stop/stepBy/focus-loss (UNCOMMITTED)
+2026-08-28  app .../ui/reader/ReaderActivity.kt           Mini-player z-order fix: TtsPlaybackBar moved before dialog block (UNCOMMITTED)
 2026-08-28  docs/memory.md, docs/phase.md                 Finding #3 deferred LOW PRIORITY; run2/run3 results; TTS-DBG removed
 2026-08-28  app .../viewer/webtoon/WebtoonViewer.kt       #1 moveToPage explicit onScrolled; TTS-DBG removed
 2026-08-28  app .../ui/reader/tts/TtsPlaybackController.kt #2 timeout pageIndex=target; P0 rebuild/prefetch dedup; TTS-DBG removed
@@ -726,18 +679,14 @@ positional merge); segmenter must mirror tap-highlight behavior.
 4. INFO | Docs env | AGENTS.md notes .devcontainer "Java 17" note stale — CI/toolchain
    effectively JDK 21 (Gradle java property 17). Use CI commands from rules.md §11.
 
-5. RESOLVED | TTS leak (FIXED 2026-08-28, UNCOMMITTED) | Singleton TtsEngine
-   retained last TtsPlaybackController via onFocusEvent lambda after
-   ReaderViewModel.onCleared. LeakCanary (enabled 2026-08-28 for Phase 9)
-   showed ~100MB retained after reader exit — NOT the small bounded graph
-   previously assumed (system TTS service keeps a native GC root to the
-   TextToSpeech callback → engine singleton → lambda → dead controller →
-   ViewModel → destroyed Activity). FIX: ReaderViewModel.onCleared sets
-   ttsEngine.onFocusEvent = null after stop()/shutdown(); next session
-   re-registers in controller init. (Clearing inside engine.shutdown()
-   remains REJECTED: ensureInitialized() calls shutdown() mid-session on the
-   engine-init-failure path, which would drop focus-loss handling for the
-   live controller.) Gates + device re-verification pending.
+5. LOW | TTS | Singleton TtsEngine retains last TtsPlaybackController via
+   onFocusEvent lambda after ReaderViewModel.onCleared until next reader session
+   re-registers (new controller init) — bounded, self-healing retention of a
+   small object graph with dead (cancelled) scope. Clearing it inside
+   engine.shutdown() was REJECTED: ensureInitialized() calls shutdown() on the
+   engine-init-failure path mid-session, which would permanently drop focus-loss
+   handling for that controller. Revisit if leakcanary (Phase 9 device pass)
+   flags more than the controller itself.
 
 6. MEDIUM | OCR tiling | Glens strip tiling dedupes seam
    repeats by IoU ≥0.45; a bubble straddling a seam can still yield two
@@ -835,8 +784,7 @@ Injekt 91edab2317, JUnit5 6.1.1/Kotest 6.2.2/MockK 1.14.11).
 ## Testing status
 
 ```text
-Unit tests:        PASS (2026-08-29, full testDebugUnitTest, all modules —
-                    on the 3-file leak-fix set, uncommitted)
+Unit tests:        PASS (2026-08-28, full testDebugUnitTest, all modules)
 Integration tests: none run (existing androidTest suites are device-gated/@Ignore)
 UI tests:          none exist in repo
 Device tests:      COMPLETE — Phase 8 script steps 1–15 all executed +
@@ -844,15 +792,10 @@ Device tests:      COMPLETE — Phase 8 script steps 1–15 all executed +
                     PASS incl. user-confirmed rate/pitch live + rotation
                     pause/resume-same-position). run2/run3 verified Finding #1
                     (22/22 advances, 0 timeouts) + Finding #2. Finding #3
-                    deferred LOW PRIORITY. Finding #4 prefetch-DNS fix
-                    DEVICE-VERIFIED (logcat-prefetch-verify.log). LeakCanary
-                    found Finding #5 (~100MB reader leak) → fix implemented,
-                    device re-verify pending.
-Lint:              spotlessCheck PASS (2026-08-29, leak-fix set)
-Build:             :app:assembleDebug PASS (2026-08-28, 0.4.0-8238 installed)
-Memory profile:    captured (meminfo-profile.log): Java 8–25MB / Native 8–28MB /
-                    TOTAL ~160–267MB across session, stable, no leak spike
-                    (the ~100MB retention only visible via LeakCanary heap dump).
+                    deferred LOW PRIORITY. Finding #4 prefetch-DNS fixed
+                    (device re-verify pending).
+Lint:              spotlessCheck PASS (2026-08-28)
+Build:             :app:assembleDebug PASS (2026-08-28, 0.4.0-8236 installed)
 Baseline (pre-TTS expectations): CI order = spotlessCheck → testDebugUnitTest →
                          verifySqlDelightMigration → assembleRelease (see rules.md §11)
 Environment: devcontainer image vsc-yomihon-e24e3bd7… (JDK 17) via docker on host;
@@ -865,22 +808,24 @@ Environment: devcontainer image vsc-yomihon-e24e3bd7… (JDK 17) via docker on h
 ## Last verified build
 
 ```text
-Date:     2026-08-29
+Date:     2026-08-28
 Command:  ./gradlew spotlessCheck :app:compileDebugKotlin testDebugUnitTest
           (docker devcontainer JDK17, -Xmx4g, both volumes)
-Result:   BUILD SUCCESSFUL in 2m56s — on the 3-file leak-fix set
-          (uncommitted). Prior green at 80deac5b8 (prefetch fix + action
-          logging + z-order) DEVICE-VERIFIED via wifi-killed test
-          (logcat-prefetch-verify.log). LeakCanary pass on 0.4.0-8238 →
-          Finding #5 (~100MB leak; fix implemented, device re-verify pending).
+Result:   ALL GREEN after prefetch reportFailure fix + action logging
+          (TtsPlaybackController.kt) + z-order fix (ReaderActivity.kt).
+          Fresh APK WITH prefetch fix INSTALLED on SM_M066B 2026-08-28
+          (versionName 0.4.0-8238 — suffix = commit count, fix uncommitted)
+          and DEVICE-VERIFIED via wifi-killed test (logcat-prefetch-verify.log):
+          prefetch failures stay best-effort, home-press mid-prefetch → Paused
+          not Error.
 ```
 
 ## Last verified test
 
 ```text
-Date:     2026-08-29
+Date:     2026-08-28
 Command:  ./gradlew spotlessCheck testDebugUnitTest    (docker devcontainer, JDK 17)
-Result:   BUILD SUCCESSFUL (all modules) — on the 3-file leak-fix set (uncommitted)
+Result:   BUILD SUCCESSFUL (all modules) — after prefetch reportFailure fix
 ```
 
 ---
@@ -916,32 +861,30 @@ P0 + P1 FIXES (2026-08-28): P0: TtsPlaybackController dedups rebuild on
                             ScrollToRegion logcat instrumentation added in
                             WebtoonViewer. All gates green (spotlessCheck +
                             testDebugUnitTest + :app:compileDebugKotlin).
-Current task:               DONE 2026-08-28: log-collection + analysis session —
-                            logcat-8236-run2.log (23.6M, TTS-DBG pipeline
-                            confirmed: 3003ms startup, 83% cache hit, advances
-                            1–5ms), logcat-prefetch-verify.log (29M, best-effort
-                            verified), meminfo-profile.log (stable, no spike),
-                            logcat-leakcanary.log (37M → Finding #5 ~100MB leak).
-                            Leak-fix set implemented (3 files, uncommitted):
-                            ReaderViewModel.onCleared onFocusEvent=null,
-                            ReaderActivity DisposableEffect ioCoroutineScope
-                            cancel, build.gradle.kts LeakCanary core.
-                            Known issue #5 → RESOLVED; #12 (GlanceAppWidget
-                            CompositionLocal error) added.
-Next recommended task:      1) Commit leak-fix set (gates green 2026-08-29).
-                            2) Install new debug APK (LeakCanary enabled) →
-                            device re-run → confirm ~100MB retention gone.
-                            3) Phase 9 battery measurement → then Phase 9
-                            COMPLETED. If #3b returns, re-add TTS-DBG from git
-                            history + OCR bbox/overlap logging.
+Current task:               DONE 2026-08-28: RUN4 device pass — script steps 7–15
+                            executed on build 0.4.0-8238 (tts-steps7-15.log, PID 5582).
+                            PASS: chapter transition, end-of-content, home-during-playback,
+                            exit reader, audio-focus (PermanentLoss→pause→manual resume
+                            same sentence), exit-idle 550ms, 4/4 advance confirms 1–2ms
+                            0 timeouts, 6 next-sentence steps clean, ScrollToRegion
+                            on-device verified, 3 clean pause/resume cycles. USER
+                            CONFIRMED 2026-08-28: step 7 rate/pitch live PASS + step 11
+                            rotation PASS (pause → resume same OCR line/position).
+                            PHASE 8 DEVICE SCRIPT COMPLETE (steps 1–15). FINDING #4
+                            (P1) FIXED same session: background prefetch DNS failure
+                            escalated via scanOnDemand.fail() and killed a healthy paused
+                            session → reportFailure param gates failure reporting
+                            (prefetch passes false). Gates green. UNCOMMITTED.
+Next recommended task:      Phase 9 memory/battery/leakcanary measurements; then
+                            commit uncommitted set (z-order + action logging +
+                            prefetch fix — all device-verified). If #3b returns,
+                            re-add TTS-DBG from git history + OCR bbox/overlap
+                            logging.
 Files safe to modify:       docs/* ; app reader/tts/settings files ;
                             data OCR files ; i18n base strings.xml (snake_case only)
-Files currently worked on:  UNCOMMITTED (3-file leak-fix set): app/build.gradle.kts
-                            (LeakCanary core), ReaderActivity.kt (DisposableEffect),
-                            ReaderViewModel.kt (onFocusEvent=null). Gates green
-                            2026-08-29; device re-verify pending. NOTE: stray
-                            untracked gradle-home/ dir (2.5G) in repo root —
-                            delete, never commit.
+Files currently worked on:  UNCOMMITTED: TtsPlaybackController.kt (action logging +
+                            prefetch reportFailure fix) + ReaderActivity.kt (z-order
+                            fix). Compile-green, gates green.
 Known risks:                TILE_CONCURRENCY=3 may trip Lens rate limits — watch
                             HTTP 429/5xx in logs, drop constant if seen;
                             advance-confirm timeouts (#8) FIXED+VERIFIED (moveToPage
