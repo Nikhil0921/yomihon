@@ -862,6 +862,8 @@ internal class GlensOcrEngine : OcrEngine {
     companion object {
         private const val LENS_ENDPOINT = "https://lensfrontend-pa.googleapis.com/v1/crupload"
         private const val CONTENT_TYPE_PROTOBUF = "application/x-protobuf"
+        // Inherited from upstream Yomihon: public Google Lens API key shipped in upstream
+        // source/releases. Do not treat as a private credential; removal breaks Lens OCR.
         private const val API_KEY = "AIzaSyDr2UxVnv_U85AbhhY8XSHSIavUW0DC-sY"
         private const val DEFAULT_USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"

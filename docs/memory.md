@@ -10,18 +10,15 @@
 ## Current project state
 
 ```text
-Project:        Yomihon (v0.4.0, vc25) — Android manga reader + OCR/language tooling
-Repo state:     branch main @ fd52a613a. All TTS fix sets COMMITTED by user:
-                z-order + action logging + prefetch reportFailure fix
-                (41200022e, be31edb71, 80deac5b8 — prefetch fix DEVICE-VERIFIED)
-                and leak-fix set (5c7d2cc2c: ReaderViewModel onFocusEvent=null,
-                ReaderActivity ioCoroutineScope cancel, LeakCanary core enabled).
-                fd52a613a (docs commit) accidentally reverted parts of memory.md/
-                phase.md to pre-leak-fix state and broke ReaderActivity import
-                order — import order FIXED again via spotlessApply (uncommitted,
-                2 lines); doc accuracy restored in this session. Do not amend
-                user commits; .opencode/ stays untouched.
-Untracked:      .opencode/ (tool config), .device-pass/ (logcat evidence, gitignored)
+Project:        Yomihon fork (v0.5.0, vc26) — Android manga reader + OCR/language tooling
+Repo state:     branch main. v0.5.0 release prep DONE 2026-08-30: .opencode/
+                untracked + gitignored, README rewritten as honest fork identity,
+                CHANGELOG v0.5.0 entry, version bump 0.4.0/vc25 → 0.5.0/vc26,
+                Lens API key documented as inherited upstream compat. All prior
+                TTS fix sets committed (see git log). Do not amend user commits.
+Untracked:      .opencode/ (generated agent/session state — REMOVED from git
+                tracking 2026-08-30, now gitignored; never commit it again),
+                .device-pass/ (logcat evidence, gitignored)
 Primary goal:   Reliable Read-Aloud: English OCR → English system TTS →
                 correct progression (PRODUCT PIVOT 2026-08-25: English is the
                 primary v1 language; Japanese TTS moved to Phase 10.)
@@ -958,14 +955,13 @@ Environment: devcontainer image vsc-yomihon-e24e3bd7… (JDK 17) via docker on h
 ## Last verified build
 
 ```text
-Date:     2026-08-29
-Command:  ./gradlew spotlessCheck (docker devcontainer JDK17, -Xmx4g, both
-          volumes) — re-run after fd52a613a import-order regression +
-          spotlessApply repair
-Result:   BUILD SUCCESSFUL. Full gates (spotlessCheck + :app:compileDebugKotlin
-          + testDebugUnitTest) last ran GREEN 2026-08-29 on leak-fix set
-          (5c7d2cc2c, BUILD SUCCESSFUL 2m56s). Debug APK 0.4.0-8241 built from
-          5c7d2cc2c installed on SM_M066B 2026-08-29 18:10 IST.
+Date:     2026-08-30
+Command:  ./gradlew spotlessCheck :app:compileDebugKotlin testDebugUnitTest
+          (docker devcontainer JDK17, -Xmx4g, both volumes)
+Result:   BUILD SUCCESSFUL (spotlessCheck 86 tasks; compile+tests 2m31s,
+          248 tasks) — on v0.5.0 release-prep set (.opencode untrack,
+          README/CHANGELOG identity, version bump, API key comment).
+          versionCode=26, versionName="0.5.0" verified in app/build.gradle.kts.
 ```
 
 ## Last verified test

@@ -20,7 +20,7 @@ Yomitan-style dictionary lookups, and one-click Anki card creation.
 - Application ID: `app.yomihon` (code namespaces remain `eu.kanade.tachiyomi.*`,
   `mihon.*`, `tachiyomi.*` — see `docs/rules.md`).
 - Requires Android 8.0+ (`minSdk 26`); `targetSdk 36`, `compileSdk 37`.
-- Current release: v0.4.0 (version code 25).
+- Current release: v0.5.0 (version code 26).
 
 ### 1.2 Who it is for
 

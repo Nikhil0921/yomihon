@@ -2,42 +2,53 @@
 
 <img src="./.github/assets/logo.png" alt="Yomihon logo" width="128" height="128" />
 
-# Yomihon
-### Full-Featured Reader for Android
+# Yomihon (fork)
+### Full-Featured Reader for Android — with Text-to-Speech and OCR enhancements
 Discover and read manga, webtoons, comics, and more – easier than ever on your Android device.
 
-
-[![Discord server](https://img.shields.io/discord/1464063546257182876.svg?label=&labelColor=6A7EC2&color=7389D8&logo=discord&logoColor=FFFFFF)](https://discord.com/invite/TXvTZdBuQa)
-[![GitHub downloads](https://img.shields.io/github/downloads/yomihon/yomihon/total?label=downloads&labelColor=27303D&color=0D1117&logo=github&logoColor=FFFFFF&style=flat)](https://yomihon.github.io/download)
-
-[![CI](https://img.shields.io/github/actions/workflow/status/yomihon/yomihon/build.yml?labelColor=27303D)](https://github.com/yomihon/yomihon/actions/workflows/build_push.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/Nikhil0921/yomihon/build.yml?label=CI&labelColor=27303D)](https://github.com/Nikhil0921/yomihon/actions/workflows/build.yml)
+[![GitHub release](https://img.shields.io/github/v/release/Nikhil0921/yomihon?label=Stable&labelColor=06599d&color=043b69)](https://github.com/Nikhil0921/yomihon/releases)
 [![License: Apache-2.0](https://img.shields.io/github/license/mihonapp/mihon?labelColor=27303D&color=0877d2)](/LICENSE)
-<!--
-[![Translation status](https://img.shields.io/weblate/progress/mihon?labelColor=27303D&color=946300)](https://hosted.weblate.org/engage/mihon/)
--->
-
-## Download
-
-
-[![Yomihon Stable](https://img.shields.io/github/release/yomihon/yomihon.svg?maxAge=3600&label=Stable&labelColor=06599d&color=043b69)](https://yomihon.github.io/download)
-<!--
-[![Mihon Beta](https://img.shields.io/github/v/release/mihonapp/mihon-preview.svg?maxAge=3600&label=Beta&labelColor=2c2c47&color=1c1c39)](https://mihon.app/download)
--->
 
 *Requires Android 8.0 or higher.*
 
-New to Yomihon? Check out our [**Getting Started Guide**](https://yomihon.github.io/docs/guides/getting-started) to set up your library.
-
 ---
+
 </div>
+
+## About this fork
+
+This repository is a **fork of [Yomihon](https://github.com/yomihon/yomihon)**, an open-source
+manga reader for Android that is itself a community fork of [Mihon](https://github.com/mihonapp/mihon)
+(Tachiyomi lineage).
+
+This fork is **not** the official Yomihon project, is not affiliated with it, and does not
+replace it. It is an independent downstream project that builds on the excellent Yomihon
+base and extends it with its own development — most notably a **Text-to-Speech (Read-Aloud)**
+feature and **OCR pipeline improvements**. Upstream Yomihon continues its own development
+separately; if you want the official project, use the links above.
+
+For bugs and features specific to this fork (TTS, OCR changes), please report them here,
+not to the upstream project.
 
 ## Features
 
-Yomihon takes the features of Mihon and enhances them with advanced tools for language learners.
+Everything in the Yomihon base, plus this fork's additions:
+
+### Added in this fork
 
 | Feature | Description |
 | :--- | :--- |
-| 🔍 **Built-in Text Recognition** | Fast, on-device OCR to extract text from images in real-time. Online models are also available for more languages. |
+| 🔊 **Text-to-Speech (Read-Aloud)** | Reads manga aloud using the system TTS engine: sentence-by-sentence playback, auto page turn, auto chapter advance, pause/resume, next/previous sentence, and speech rate/pitch controls. No new permissions. |
+| 📜 **Webtoon-aware speech** | On long-strip/webtoon pages the reader auto-scrolls to the text region being spoken, and tall strips are tiled so OCR can actually read them. |
+| ⚡ **OCR pipeline improvements** | Tall webtoon strips are split into overlapping tiles (with duplicate-region dedup) before recognition — previously they were downscaled into unreadability. English reading order fixed for non-Japanese pages. Scan requests are deduplicated (single-flight) and cached, so swiping no longer triggers repeated OCR scans. |
+| 🧠 **Reliability hardening** | Reader memory-leak fix (LeakCanary-verified), background prefetch can no longer kill a playback session, rapid page swipes are debounced. |
+
+### Inherited from the Yomihon base
+
+| Feature | Description |
+| :--- | :--- |
+| 🔍 **Built-in Text Recognition** | On-device OCR to extract text from images in real-time. Online models are also available for more languages. |
 | 📖 **Yomitan Dictionary Support** | Seamless dictionary lookups for language learners across multiple languages. |
 | **One-click Anki Cards** | Instantly create flashcards while reading and looking up new words. |
 
@@ -53,11 +64,15 @@ Core Reader Features:
 * Create backups locally to read offline or to your desired cloud service.
 * Plus much more...
 
+## Download
+
+Releases are published on this repository's [Releases page](https://github.com/Nikhil0921/yomihon/releases).
+
 ## 🤝 Contributing
 
-Feature requests, bug reports, and pull requests are welcome. For major changes, please open an issue or join our [discord](https://discord.com/invite/TXvTZdBuQa) to discuss what you would like to change.
-
-Before opening an issue, please check the [FAQ](https://yomihon.github.io/docs/faq/general) and search [existing issues](https://github.com/yomihon/yomihon/issues).
+Feature requests, bug reports, and pull requests are welcome. Before opening an
+issue, please search [existing issues](https://github.com/Nikhil0921/yomihon/issues)
+and keep in mind which project your report belongs to (this fork vs. upstream).
 
 [Code of conduct](./CODE_OF_CONDUCT.md) · [Contributing guide](./CONTRIBUTING.md)
 
@@ -65,9 +80,14 @@ Model and dataset attribution for externally fetched ML assets is documented in 
 
 ## Credits
 
-Yomihon is a community-driven fork of the [Mihon](https://github.com/mihonapp/mihon) project. Thank you to all the people who have contributed.
+This fork is based on [Yomihon](https://github.com/yomihon/yomihon), which is a
+community-driven fork of the [Mihon](https://github.com/mihonapp/mihon) project.
+Thank you to all the people who have contributed to those projects and to this one.
 
-> Note: this project is unaffiliated with the official Mihon Organization.
+> Note: this fork is unaffiliated with the official Yomihon and Mihon projects.
+
+Community links (Discord, website) for this fork do not exist yet; they will be
+added here if and when they do.
 
 ---
 
@@ -80,4 +100,3 @@ Copyright © 2024 Mihon Open Source Project
 Copyright © 2025 Yomihon  
 
 Licensed under the Apache License, Version 2.0. See the [LICENSE](/LICENSE) file for more details.
-

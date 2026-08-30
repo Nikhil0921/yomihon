@@ -10,6 +10,33 @@ The format is a modified version of [Keep a Changelog](https://keepachangelog.co
 - `Fixed` - for any bug fixes.
 - `Other` - for technical stuff.
 
+## [v0.5.0] - 2026-08-30
+
+First release of this fork. This repository is a fork of [Yomihon](https://github.com/yomihon/yomihon)
+(and through it, Mihon); it is not the official Yomihon project. This release contains
+significant development on top of the upstream Yomihon v0.4.0 base.
+
+### Added
+- Add Text-to-Speech (Read-Aloud) mode: reads manga aloud via the system TTS engine with sentence-by-sentence playback, next/previous sentence stepping, pause/resume, and automatic page/chapter progression
+- Add Read-Aloud settings (speech rate, pitch, auto page turn, auto next chapter, keep screen on)
+- Add region-level auto-scroll on webtoon/long-strip pages: the reader scrolls to the text region being spoken
+- Add OCR sentence cache and N+1 page prefetch for smooth Read-Aloud playback
+
+### Improved
+- OCR on tall webtoon strips: pages are now tiled with overlap (and seam duplicates deduplicated) instead of downscaled, making text actually readable for recognition; tiles run concurrently for faster scans
+- Fix English text reading order on non-Japanese pages
+- Deduplicate concurrent OCR scans of the same page (single-flight) so rapid page swipes no longer trigger repeated scans
+
+### Fixed
+- Fix reader memory leak (~100 MB retained after reader exit, LeakCanary-verified) by detaching the TTS controller from the engine on teardown
+- Fix background OCR prefetch failures killing a healthy playback session (e.g. on brief network loss)
+- Fix advance-confirmation timeouts on webtoon pages (visible-item detection)
+- Fix TTS not following manual page navigation in some pause/resume cases
+
+### Other
+- Remove generated agent/session state (`.opencode/`) from the tracked repository and ignore it going forward
+- Improve `.gitignore` protection (release artifacts `*.apk`/`*.aab`, `.opencode/`)
+
 ## [v0.4.0] - 2026-07-28
 
 ### Added
@@ -179,8 +206,9 @@ The format is a modified version of [Keep a Changelog](https://keepachangelog.co
 - The full changelog for Mihon releases is available in their [repository](https://github.com/mihonapp/mihon/blob/main/CHANGELOG.md).
 
 
-[unreleased]: https://github.com/yomihon/yomihon/compare/v0.4.0...main
-[v0.4.0]: https://github.com/yomihon/yomihon/compare/v0.3.2...v0.4.0
+[unreleased]: https://github.com/Nikhil0921/yomihon/compare/v0.5.0...main
+[v0.5.0]: https://github.com/Nikhil0921/yomihon/compare/v0.4.0...v0.5.0
+[v0.4.0]: https://github.com/Nikhil0921/yomihon/compare/v0.3.2...v0.4.0
 [v0.3.2]: https://github.com/yomihon/yomihon/compare/v0.3.1...v0.3.2
 [v0.3.1]: https://github.com/yomihon/yomihon/compare/v0.3.0...v0.3.1
 [v0.3.0]: https://github.com/yomihon/yomihon/compare/v0.2.5...v0.3.0
