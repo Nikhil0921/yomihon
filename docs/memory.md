@@ -956,12 +956,14 @@ Environment: devcontainer image vsc-yomihon-e24e3bd7… (JDK 17) via docker on h
 
 ```text
 Date:     2026-08-30
-Command:  ./gradlew spotlessCheck :app:compileDebugKotlin testDebugUnitTest
+Command:  ./gradlew spotlessApply spotlessCheck testDebugUnitTest, then
+          :app:assembleRelease -Pinclude-telemetry -Penable-updater
           (docker devcontainer JDK17, -Xmx4g, both volumes)
-Result:   BUILD SUCCESSFUL (spotlessCheck 86 tasks; compile+tests 2m31s,
-          248 tasks) — on v0.5.0 release-prep set (.opencode untrack,
-          README/CHANGELOG identity, version bump, API key comment).
-          versionCode=26, versionName="0.5.0" verified in app/build.gradle.kts.
+Result:   ALL GREEN. v0.5.0 RELEASE PUBLISHED (tag v0.5.0 = 7e0d52697,
+          GitHub release with arm64+universal APKs, both verified
+          versionCode=26 versionName="0.5.0" via output-metadata.json).
+          Updater GITHUB_REPO now points at Nikhil0921/yomihon (was
+          upstream — would have offered upstream releases to fork users).
 ```
 
 ## Last verified test
