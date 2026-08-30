@@ -35,12 +35,12 @@ class AppUpdateChecker {
     }
 }
 
+// This fork's repository — update checks must not point users at upstream releases.
 val GITHUB_REPO: String by lazy {
     if (isPreviewBuildType) {
-        // Preview builds/repo aren't available yet.
-        "yomihon/yomihon"
+        "Nikhil0921/yomihon"
     } else {
-        "yomihon/yomihon"
+        "Nikhil0921/yomihon"
     }
 }
 
