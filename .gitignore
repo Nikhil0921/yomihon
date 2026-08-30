@@ -42,3 +42,10 @@ data/src/main/assets/panel_detector/model.tflite
 # Java heap dumps
 *.hprof
 .device-pass/
+
+# Release artifacts
+*.apk
+*.aab
+
+# Generated agent/session state (local only; never commit)
+.opencode/
