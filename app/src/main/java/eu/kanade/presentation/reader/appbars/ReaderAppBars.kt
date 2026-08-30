@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
@@ -75,6 +76,7 @@ fun ReaderAppBars(
     onClickSettings: () -> Unit,
     onClickOcr: () -> Unit,
     onClickReadAloud: () -> Unit,
+    onBottomTrayHeightChanged: ((Int) -> Unit)? = null,
 ) {
     val backgroundColor = MaterialTheme.colorScheme
         .surfaceColorAtElevation(3.dp)
@@ -145,6 +147,11 @@ fun ReaderAppBars(
             visible = visible,
             enter = slideInVertically(readerBarsSlideAnimationSpec) { it } + fadeIn(readerBarsFadeAnimationSpec),
             exit = slideOutVertically(readerBarsSlideAnimationSpec) { it } + fadeOut(readerBarsFadeAnimationSpec),
+            modifier = Modifier.onGloballyPositioned { coordinates ->
+                onBottomTrayHeightChanged?.invoke(
+                    if (visible) coordinates.size.height else 0,
+                )
+            },
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small)) {
                 if (chapterNavigatorType.isHorizontal()) {

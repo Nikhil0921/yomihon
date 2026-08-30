@@ -6,13 +6,15 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Pause
@@ -26,9 +28,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import eu.kanade.tachiyomi.ui.reader.tts.TtsError
@@ -36,6 +41,8 @@ import eu.kanade.tachiyomi.ui.reader.tts.TtsPhase
 import eu.kanade.tachiyomi.ui.reader.tts.TtsPlaybackState
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
+
+private val pillShape = RoundedCornerShape(28.dp)
 
 @Composable
 fun TtsPlaybackBar(
@@ -49,25 +56,32 @@ fun TtsPlaybackBar(
 ) {
     AnimatedVisibility(
         visible = state.phase != TtsPhase.Idle,
-        enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
-        exit = fadeOut() + slideOutVertically(targetOffsetY = { it }),
+        enter = fadeIn() + slideInVertically(initialOffsetY = { it / 2 }),
+        exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 }),
         modifier = modifier,
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceContainer)
-                .padding(horizontal = 24.dp, vertical = 12.dp),
+                .fillMaxWidth(0.92f)
+                .widthIn(max = 560.dp)
+                .shadow(6.dp, pillShape)
+                .clip(pillShape)
+                .background(
+                    MaterialTheme.colorScheme
+                        .surfaceColorAtElevation(3.dp)
+                        .copy(alpha = if (isSystemInDarkTheme()) 0.9f else 0.95f),
+                )
+                .padding(horizontal = 16.dp, vertical = 4.dp),
         ) {
             when (state.phase) {
                 TtsPhase.Preparing, TtsPhase.LoadingPage -> {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         CircularProgressIndicator(
-                            modifier = Modifier.padding(14.dp).size(20.dp),
+                            modifier = Modifier.padding(4.dp).size(20.dp),
                             strokeWidth = 2.dp,
                         )
                         Text(
@@ -110,15 +124,14 @@ private fun PlaybackContent(
 ) {
     val playing = state.phase == TtsPhase.Playing || state.phase == TtsPhase.LoadingPage
     Row(
-        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(modifier = Modifier.weight(1f)) {
+        Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
             if (state.sentenceText.isNotBlank()) {
                 Text(
                     text = state.sentenceText,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -132,7 +145,7 @@ private fun PlaybackContent(
                             else -> MR.strings.action_read_aloud
                         },
                     ),
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -183,7 +196,6 @@ private fun ErrorContent(
     onStop: () -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -196,7 +208,7 @@ private fun ErrorContent(
             text = errorMessage(state.error),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.padding(start = 4.dp).weight(1f),
         )
         IconButton(onClick = onRetry) {
             Icon(

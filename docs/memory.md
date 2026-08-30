@@ -602,6 +602,48 @@ BATTERY MEASUREMENT — PHASE 9 FINAL ITEM (2026-08-29, build 0.4.0-8241):
   PHASE 9 COMPLETE. Remaining: commit small uncommitted set (import order
   + docs) when user approves.
 
+[COMPLETED 2026-08-30 — Reader TTS mini-player UI polish, UNCOMMITTED (3 files)]
+- Redesigned TtsPlaybackBar full-width bottom bar → floating pill:
+  wrap→fixed width (fillMaxWidth(0.92f) + widthIn(max=560dp)), 28dp rounded
+  corners, surfaceColorAtElevation(3).copy(0.9/0.95 alpha), shadow 6dp,
+  text slots weight(1f) so icon row anchors (no width jump per sentence).
+- Layout-aware positioning (no hardcoded offsets): ReaderAppBars gains
+  onBottomTrayHeightChanged callback — onGloballyPositioned on bottom
+  AnimatedVisibility reports real tray height (incl. nav-bar insets; 0 when
+  hidden); ReaderActivity computes clearance = max(trayPx, navBarPx,
+  cutoutPx) + 12dp margin; pill rides above bottom tray when menu visible,
+  falls back to insets when hidden. Rotations/config changes re-measured.
+- Perf: position animated via animateIntAsState → Modifier.offset{} lambda =
+  PLACEMENT-phase only (zero re-measure per frame), 150ms tween (was
+  animateDpAsState→padding 200ms = measure-phase churn = choppy).
+  Root cause of "slow/choppy" was structural (padding invalidation), not
+  jank — confirmed via logcat (no skip attributable to pill).
+- Gates GREEN 2026-08-30: spotlessCheck + testDebugUnitTest + :app:assembleDebug
+  (devcontainer JDK17, -Xmx4g). Installed SM_M06B arm64 APK.
+  User device-tested ALL scenarios PASS (manga+webtoon, portrait+landscape,
+  rotation, phase changes incl. Preparing/Playing/Paused/Error).
+- Final logcat verification pass (.device-pass/ui-polish-final.log, PID 11054,
+  23:53–23:57 session): 0 TTS errors/timeouts, 0 crashes, 0 Compose errors.
+  All Choreographer frame-skips attributed, NONE from pill code:
+  319f+68f+39f+34f = LeakCanary heap-dump cycle (hprof 74MB 5.2s + explicit
+  GCs, debug-build tooling, absent in release); 53f = dropdown popup attach;
+  51f = reading-mode viewer switch (webtoon→L2R pager recreation + toast,
+  known upstream cost); 37f = background GC freeing 36MB (normal churn).
+  TTS advances 1–6ms confirms, OCR cache hits 5–25ms, prefetch clean.
+- LeakCanary same-session analysis: flagged 1 APPLICATION LEAK signature
+  (WebtoonPageHolder ~49.9MB, d385fca8…) — WEBTOON page holder retained
+  via mapLatest flow chain while reader ACTIVE (Activity mDestroyed=false,
+  view attached). NOT the TTS pill; NOT reader-exit retention (past passes
+  showed 0 application leaks after exit). Likely live-page bitmap cache
+  held by still-active viewer page recycling lag; separate investigation
+  item, not a regression of this change set. No release impact.
+- KNOWN ISSUE #13 (NEW, LOW): LeakCanary Toast-watching noise (retained
+  Toast FrameLayout) triggers debug heap dumps mid-session; consider
+  excluding android.widget.Toast in LeakCanary config if it bothers future
+  device passes.
+```
+
+```
 Deferred issues (LOW PRIORITY, revisit post-build):
   - #3b hands-off duplicate words/phrases: intermittent, manga-specific, never
     reproduced under instrumentation. To re-debug: re-add TTS-DBG logs (git history)
