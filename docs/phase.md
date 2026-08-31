@@ -5,28 +5,23 @@
 > A phase is COMPLETED only when its verification steps have actually been run
 > and recorded in `docs/memory.md`.
 
-Current phase pointer: **Phase 9 COMPLETED (2026-08-29) — all hardening
-  items done. Phase 8 device pass COMPLETE (steps 1–15 executed +
-  user-confirmed 2026-08-28 RUN4 build 0.4.0-8238). All prior fix sets
-  committed (z-order 41200022e, action logging be31edb71, prefetch-DNS fix
-  80deac5b8 — the latter DEVICE-VERIFIED via wifi-killed test). LeakCanary
-  enabled 2026-08-28 → FINDING #5: reader screen retained ~100MB after
-  exit (TTS-engine onFocusEvent → dead controller → ViewModel → Activity)
-  → FIX COMMITTED as 5c7d2cc2c (ReaderViewModel.onCleared onFocusEvent=null;
-  ReaderActivity DisposableEffect ioCoroutineScope cancel; build.gradle.kts
-  LeakCanary core) — GATES GREEN 2026-08-29, memory profile captured
-  (stable). Debug APK 0.4.0-8241 installed 2026-08-29. DEVICE RE-VERIFY
-  DONE 2026-08-29 (leak-full.log): LeakCanary reports 0 APPLICATION LEAKS
-  after two reader TTS sessions + exits — leakcanary sign-off COMPLETE.
-  BATTERY MEASUREMENT DONE 2026-08-29 (PASS — 23min session, 3 chapters,
-  58/58 advances, 94 OCR scans; app fg CPU ~1mAh/min, screen dominates;
-  ZERO post-exit activity/wakelocks, app reaped+frozen post-exit).
-  PHASE 9 COMPLETE — remaining housekeeping only: commit uncommitted set
-  (import order + docs). Findings #1/#2 FIXED+VERIFIED (22/22 advances
-  1–5ms / 0 timeouts); Finding #3 duplicate speech USER DROPPED 2026-08-28
-  — LOW PRIORITY post-build (memory.md Deferred issues)**.
+Current phase pointer: **Phase 10A COMPLETED (2026-08-31) — advanced system
+  TTS voice configuration, device-verified (USER CONFIRMED PASS, build
+  0.5.0-8250, evidence .device-pass/tts-10a-test.log). Includes the
+  user-requested voice-picker search/filter follow-up. All work UNCOMMITTED
+  awaiting user commit. Phase 10B backlog remains (per-voice profiles,
+  cloud/neural providers, expressive speech). Phase 9 COMPLETED
+  (2026-08-29) — all hardening items done. Phase 8 device pass COMPLETE
+  (steps 1–15 executed + user-confirmed 2026-08-28 RUN4 build 0.4.0-8238).
+  All prior fix sets committed (z-order 41200022e, action logging
+  be31edb71, prefetch-DNS fix 80deac5b8 — the latter DEVICE-VERIFIED via
+  wifi-killed test; leak fix 5c7d2cc2c — 0 leaks re-verified). LeakCanary
+  enabled 2026-08-28 → Finding #5 fixed + device-verified; battery
+  measurement PASS (2026-08-29). Findings #1/#2 FIXED+VERIFIED (22/22
+  advances 1–5ms / 0 timeouts); Finding #3 duplicate speech USER DROPPED
+  2026-08-28 — LOW PRIORITY post-build (memory.md Deferred issues)**.
 PRODUCT PIVOT 2026-08-25: English is the primary v1 Read-Aloud language;
-Japanese TTS moved to Phase 10.
+  Japanese TTS moved to Phase 10B.
 
 ---
 
@@ -253,28 +248,58 @@ Japanese TTS moved to Phase 10.
   stop; documented measurements in memory.md.
 - **Tests required**: repeat device matrix + `:app:assembleDebug` release build.
 
-## Phase 10 — Future engines (backlog)
+## Phase 10A — Advanced system TTS voice configuration
 
-- **Status**: NOT_STARTED (explicitly out of v1)
-- **Candidates**: Japanese/multi-language TTS voice selection (revisit the
-  language-preflight removed on 2026-08-25 as an explicit opt-in, not a gate);
-  cloud TTS provider(s); local neural TTS; explicit voice picker;
-  background playback via FGS+MediaSession; on-image bbox highlight; audio
-  caching for high-latency engines; porting Glens ordering into local Legacy/Fast
-  scans; cross-tile text merge for seam bubbles (Known issue #6).
-- **Advanced TTS / Voice Calibration system** (explicit requirement added
-  2026-08-25): dedicated Read-Aloud configuration beyond the current basic
-  rate/pitch controls. Must investigate and calibrate: multiple TTS engines;
-  multiple voice models; voice selection/picker; voice quality comparison;
-  language/locale-specific voices; voice-specific rate tuning; voice-specific
-  pitch tuning; engine-specific settings; neural/local TTS models where
-  appropriate; cloud TTS providers where appropriate; higher-quality narration
-  voices; latency comparison between engines; audio caching for high-latency
-  engines; per-engine/per-voice configuration where technically appropriate.
-  Revisit ONLY after Phase 8/9 device verification + performance work complete.
-  v1 scope unchanged — do not pull any of this forward.
+- **Status**: COMPLETED (2026-08-31). Code Tasks 1–6 done 2026-08-30
+  (spotlessCheck + testDebugUnitTest + :app:compileDebugKotlin GREEN per
+  task reports; verifySqlDelightMigration not needed — no DB change).
+  Task 7 DEVICE PASS DONE 2026-08-31, build 0.5.0-8250 on SM_M066B:
+  USER CONFIRMED all manual checks PASS — Read Aloud playback, language/
+  locale selection, voice selection, preview, speech rate, persistence,
+  no crashes. Evidence: `.device-pass/tts-10a-test.log` (571k lines:
+  advances confirmed 1–2ms, paired audio-focus request/abandon, SystemDefault
+  voice-restore path logged ×4, 0 FATAL exceptions, single engine connection
+  per session). Follow-up improvement same session: voice-picker SEARCH
+  (BasicListPreference `searchable` flag → ListPreferenceWidget filter
+  field; gates green, APK installed). All work UNCOMMITTED awaiting user
+  commit.
+- **Objective**: user-configurable system TTS engine/voice/language with
+  calibration + preview, reader behavior unchanged.
+- **Files affected** (all UNCOMMITTED): `:domain` —
+  `TtsVoicePreferences.kt` (+`TtsVoicePreferencesTest`, 5 cases) new,
+  `TtsEngine.kt` extended (getEngines/getVoices/setEnginePackage +
+  TtsEngineInfo/TtsVoiceInfo); `:app` — `AndroidTtsEngine.kt` (engine-package-
+  aware creation, initialize-time config re-apply, voice fallback),
+  `ReadAloudSettingsScreenModel.kt` + `SettingsReadAloudScreen.kt` new,
+  `SettingsSearchScreen.kt`, `SettingsMainScreen.kt`, `SettingsScreen.kt`,
+  `MainActivity.kt`, `Constants.kt`, `ReaderSettingsDialog.kt`,
+  `ReadAloudPage.kt`, `ReaderActivity.kt` (both dialog call sites), DI
+  (`DomainModule.kt`, `PreferenceModule.kt`); `:i18n` base strings +18 keys.
+- **Completion criteria**: device verification of the full flow (above)
+  executed + recorded in `docs/memory.md`; then user review + commit.
+- **Tests required**: `TtsVoicePreferencesTest` (unit, done); full
+  `testDebugUnitTest` (done, green); device pass (Task 7, DONE 2026-08-31 —
+  user-confirmed PASS, evidence in memory.md).
+
+## Phase 10B — Future engines (backlog)
+
+- **Status**: NOT_STARTED
+- **Note**: Phase 10A landed the system-engine voice configuration subset of
+  the old Phase 10 block (engines, voices, picker, locale voices, latency/
+  quality display, per-engine discovery). What REMAINS from that block and
+  from the 2026-08-25 advanced-TTS requirement: per-voice rate/pitch profiles
+  (global pair for now — deliberate); cloud TTS provider(s) (credentials,
+  billing/cost, network, privacy, streaming/downloaded audio, caching,
+  latency management); local neural TTS; downloadable AI voices; expressive
+  speech (needs provider SSML/prosody/emotion controls — pitch/rate alone are
+  NOT expressive narration, never fake emotion via random pitch); Japanese/
+  multi-language preflight as explicit opt-in (not a gate); background
+  playback via FGS+MediaSession; on-image bbox highlight; audio caching for
+  high-latency engines; porting Glens ordering into local Legacy/Fast scans;
+  cross-tile text merge for seam bubbles (Known issue #6); voice-specific
+  rate/pitch tuning where technically appropriate.
 - **Rule**: each requires a PRD update + architecture review BEFORE coding
-  (rules.md §10). None may regress v1 behavior.
+  (rules.md §10). None may regress v1/10A behavior.
 
 ---
 
@@ -282,10 +307,10 @@ Japanese TTS moved to Phase 10.
 
 ```text
 P0 ──> P1 ──> P2 ──┐
-        │          ├──> P5 ──> P6 ──> P7 ──> P8 ──> P9
+        │          ├──> P5 ──> P6 ──> P7 ──> P8 ──> P9 ──> P10A (in progress)
         └──> P3 ───┤
         └──> P4 ───┘
-P10 (backlog, gated)
+P10B (backlog, gated on 10A completion + PRD/architecture review)
 ```
 
 Update statuses in this file AND `docs/memory.md` whenever work happens.

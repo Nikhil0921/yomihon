@@ -12,11 +12,22 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import logcat.LogPriority
 import mihon.domain.tts.engine.TtsEngine
+import mihon.domain.tts.engine.TtsEngineInfo
 import mihon.domain.tts.engine.TtsFocusEvent
+import mihon.domain.tts.engine.TtsVoiceInfo
+import mihon.domain.tts.service.TtsVoicePreferences
+import mihon.domain.tts.service.TtsVoiceSelection
+import mihon.domain.tts.service.resolveVoiceSelection
+import tachiyomi.core.common.util.system.logcat
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicReference
 
-class AndroidTtsEngine(private val context: Context) : TtsEngine {
+class AndroidTtsEngine(
+    private val context: Context,
+    private val voicePreferences: TtsVoicePreferences,
+) : TtsEngine {
 
     private val mutex = Mutex()
 
@@ -30,15 +41,33 @@ class AndroidTtsEngine(private val context: Context) : TtsEngine {
 
     private var pitch: Float = 1f
 
+    private var enginePackage: String = voicePreferences.ttsEnginePackage().get()
+
+    private var voiceName: String = voicePreferences.ttsVoiceName().get()
+
+    private var languageTag: String = voicePreferences.ttsLanguageTag().get()
+
+    private var activeEnginePackage: String = ""
+
     override var onFocusEvent: ((TtsFocusEvent) -> Unit)? = null
 
     override suspend fun initialize(): Boolean = mutex.withLock {
-        if (tts.get() != null) return@withLock true
+        val existing = tts.get()
+        if (existing != null) {
+            applyVoiceConfig(existing)
+            return@withLock true
+        }
 
         val readiness = CompletableDeferred<Boolean>()
+        val createPackage = enginePackage
         val engine = withContext(Dispatchers.Main) {
-            TextToSpeech(context.applicationContext) { status ->
+            val initListener = TextToSpeech.OnInitListener { status ->
                 readiness.complete(status == TextToSpeech.SUCCESS)
+            }
+            if (createPackage.isNotEmpty()) {
+                TextToSpeech(context.applicationContext, initListener, createPackage)
+            } else {
+                TextToSpeech(context.applicationContext, initListener)
             }.apply {
                 setOnUtteranceProgressListener(
                     object : UtteranceProgressListener() {
@@ -79,6 +108,8 @@ class AndroidTtsEngine(private val context: Context) : TtsEngine {
         }
 
         tts.set(engine)
+        activeEnginePackage = createPackage
+        applyVoiceConfig(engine)
         true
     }
 
@@ -114,6 +145,39 @@ class AndroidTtsEngine(private val context: Context) : TtsEngine {
         tts.get()?.setPitch(value)
     }
 
+    override fun setEnginePackage(pkg: String) {
+        if (pkg == enginePackage) return
+        enginePackage = pkg
+        if (activeEnginePackage != pkg) shutdown()
+    }
+
+    override suspend fun getEngines(): List<TtsEngineInfo> = withContext(Dispatchers.Main) {
+        val engine = tts.get() ?: return@withContext emptyList()
+        val defaultPkg = engine.defaultEngine
+        engine.engines.orEmpty().map {
+            TtsEngineInfo(
+                packageName = it.name,
+                label = it.label,
+                isSystemDefault = it.name == defaultPkg,
+            )
+        }
+    }
+
+    override suspend fun getVoices(): List<TtsVoiceInfo> = withContext(Dispatchers.Main) {
+        val engine = tts.get() ?: return@withContext emptyList()
+        engine.voices.orEmpty().map {
+            TtsVoiceInfo(
+                name = it.name,
+                languageTag = it.locale.toLanguageTag(),
+                displayName = it.name,
+                quality = it.quality,
+                latency = it.latency,
+                features = it.features.orEmpty().toList(),
+                networkRequired = it.isNetworkConnectionRequired,
+            )
+        }
+    }
+
     override fun acquireFocus() {
         val manager = audioManager() ?: return
         val request = audioFocusRequest ?: buildFocusRequest().also { audioFocusRequest = it }
@@ -137,6 +201,54 @@ class AndroidTtsEngine(private val context: Context) : TtsEngine {
         abandonFocus()
         audioFocusRequest = null
         engine.shutdown()
+    }
+
+    private fun applyVoiceConfig(engine: TextToSpeech) {
+        voiceName = voicePreferences.ttsVoiceName().get()
+        languageTag = voicePreferences.ttsLanguageTag().get()
+
+        val voices = engine.voices.orEmpty()
+        val availableVoiceNames = voices.map { it.name }.toSet()
+        val availableLanguageTags = voices.map { it.locale.toLanguageTag() }.toSet()
+        val availableEnginePackages = engine.engines.orEmpty().map { it.name }.toSet()
+
+        when (
+            resolveVoiceSelection(
+                selectedEnginePackage = enginePackage,
+                selectedVoiceName = voiceName,
+                selectedLanguageTag = languageTag,
+                availableEnginePackages = availableEnginePackages,
+                availableVoiceNames = availableVoiceNames,
+                availableLanguageTags = availableLanguageTags,
+            )
+        ) {
+            TtsVoiceSelection.SystemDefault -> {
+                val defaultVoice = engine.defaultVoice
+                if (defaultVoice == null) {
+                    logcat(LogPriority.DEBUG) { "TTS system default fallback: no default voice" }
+                } else {
+                    engine.setVoice(defaultVoice)
+                    logcat(LogPriority.DEBUG) { "TTS default voice restored name=${defaultVoice.name}" }
+                }
+            }
+            is TtsVoiceSelection.Voice -> {
+                val voice = voices.firstOrNull { it.name == voiceName }
+                if (voice == null) {
+                    logcat(LogPriority.DEBUG) { "TTS voice fallback: voice unavailable name=$voiceName" }
+                } else {
+                    engine.setVoice(voice)
+                    logcat(LogPriority.DEBUG) { "TTS voice applied name=${voice.name}" }
+                }
+            }
+            is TtsVoiceSelection.Language -> {
+                val result = engine.setLanguage(Locale.forLanguageTag(languageTag))
+                if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                    logcat(LogPriority.DEBUG) { "TTS language fallback: unsupported tag=$languageTag result=$result" }
+                } else {
+                    logcat(LogPriority.DEBUG) { "TTS language applied tag=$languageTag" }
+                }
+            }
+        }
     }
 
     private fun completeUtterance(utteranceId: String?, success: Boolean) {

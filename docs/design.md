@@ -168,3 +168,42 @@ Placement mirrors established reader patterns:
   later, it must reuse the cached `OcrRegion.boundingBox` data and the drawing
   approach of `ReaderOcrOverlayRenderer` (normalized coords → view coords,
   WCAG-safe strokes) so it stays consistent with tap-to-lookup visuals.
+
+## 13. Read aloud & voice settings screen (Phase 10A)
+
+Entry: Settings root row "Read aloud & voice" (VolumeUp icon, after Reader),
+reader quick-settings "Advanced voice settings" row (deep-link), settings
+search. Composed of existing `Preference` components (`PreferenceGroup`,
+`BasicListPreference`, `SliderPreference`, `TextPreference`, `InfoPreference`,
+`CustomPreference`) — no new primitives.
+
+- **Loading state**: `CustomPreference` with a `CircularProgressIndicator`
+  (Anki screen pattern) while the engine initializes.
+- **Failure state**: `InfoPreference` (voices unavailable) + retry
+  `TextPreference`; loading is user-retryable, never a dead end.
+- **Group 1 — Text to speech**: engine picker, language picker, locale picker
+  (enabled only when a language is selected), voice picker. Voice list is
+  filtered to the selected language (exact tag match when the tag contains a
+  `-`, prefix match for bare tags, all voices when empty). Stale persisted
+  values no longer offered by the engine render their RAW stored value via
+  `subtitleProvider { v, e -> e[v] ?: v }` — never "null"; the engine picker
+  falls back to the "Default system engine" label. The VOICE picker dialog is
+  `searchable` (added 2026-08-31): an `OutlinedTextField` filter (placeholder
+  = existing `action_search` string) sits above the list and case-insensitively
+  matches entry labels — engines expose hundreds of voices; other pickers
+  unchanged (`searchable` defaults false on `BasicListPreference`).
+- **Group 2 — Voice calibration**: rate + pitch sliders (50–200 %, reusing the
+  global `pref_tts_speech_rate`/`pref_tts_pitch` keys), preview row showing a
+  small 2dp-stroke `CircularProgressIndicator` widget while the sample plays;
+  tapping again stops it.
+- **Group 3 — Advanced**: engine info row (label + voice count, no onClick),
+  "Available voices: %d" info row, reset action + confirmation toast.
+- **Voice metadata labels — API facts only**: quality ≥ 400 → "high quality",
+  latency ≤ 200 → "low latency", network-required flag → "network" marker.
+  No invented quality tiers; no display of raw numeric values.
+- **Locale display names**: `Locale.forLanguageTag(tag).getDisplayName()` in
+  picker entries; blank display name falls back to the raw tag.
+- **Reader tab stays minimal**: rate slider + auto page turn / auto next
+  chapter / keep-screen-on checkboxes + one "Advanced voice settings" row
+  linking to the full screen (pitch slider relocated here from v1's reader
+  tab — one obvious home for calibration).

@@ -23,6 +23,7 @@ fun ReaderSettingsDialog(
     onDismissRequest: () -> Unit,
     onShowMenus: () -> Unit,
     onHideMenus: () -> Unit,
+    onOpenVoiceSettings: () -> Unit,
     screenModel: ReaderSettingsScreenModel,
 ) {
     val tabTitles = listOf(
@@ -64,7 +65,7 @@ fun ReaderSettingsDialog(
                     0 -> ReadingModePage(screenModel)
                     1 -> GeneralPage(screenModel)
                     2 -> ColorFilterPage(screenModel)
-                    3 -> ReadAloudPage(screenModel)
+                    3 -> ReadAloudPage(screenModel, onOpenVoiceSettings)
                 }
             }
         }

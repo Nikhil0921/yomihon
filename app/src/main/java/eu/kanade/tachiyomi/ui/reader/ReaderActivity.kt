@@ -463,6 +463,15 @@ class ReaderActivity : BaseActivity() {
                     onDismissRequest = onDismissRequest,
                     onShowMenus = { setMenuVisibility(true) },
                     onHideMenus = { setMenuVisibility(false) },
+                    onOpenVoiceSettings = {
+                        viewModel.closeDialog()
+                        startActivity(
+                            Intent(this@ReaderActivity, MainActivity::class.java).apply {
+                                action = Constants.SHORTCUT_VOICE_SETTINGS
+                                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                            },
+                        )
+                    },
                     screenModel = settingsScreenModel,
                 )
             }
@@ -877,6 +886,15 @@ class ReaderActivity : BaseActivity() {
                             onDismissRequest = onDismissRequest,
                             onShowMenus = { setMenuVisibility(true) },
                             onHideMenus = { setMenuVisibility(false) },
+                            onOpenVoiceSettings = {
+                                viewModel.closeDialog()
+                                startActivity(
+                                    Intent(this@ReaderActivity, MainActivity::class.java).apply {
+                                        action = Constants.SHORTCUT_VOICE_SETTINGS
+                                        addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                                    },
+                                )
+                            },
                             screenModel = settingsScreenModel,
                         )
                     }

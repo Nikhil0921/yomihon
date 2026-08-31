@@ -126,6 +126,7 @@ internal fun PreferenceItem(
                     icon = item.icon,
                     entries = item.entries,
                     onValueChange = { scope.launch { item.onValueChanged(it) } },
+                    searchable = item.searchable,
                 )
             }
             is Preference.PreferenceItem.MultiSelectListPreference<*> -> {

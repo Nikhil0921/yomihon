@@ -213,8 +213,8 @@ reader can listen hands-free.
 - Language availability preflight (Japanese required for JP content) with an
   actionable error if no voice is installed.
 - Speech rate (0.5–2.0, default 1.0) and pitch (default 1.0) settings applied live.
-- Voice selection follows the system TTS default in v1; explicit voice picker is
-  future work (see §5).
+- Voice selection follows the system TTS default in v1; explicit voice picker
+  landed in Phase 10A (see §6).
 
 **F5 — Reader integration**
 - Entry point(s) consistent with existing OCR entry points (bottom-bar icon
@@ -306,7 +306,8 @@ TTS v1 is production-ready when ALL of the following hold:
 - **TTS (v1)**: F1–F8 above.
 - **Future (explicitly out of v1 scope)**:
   - Foreground-service background playback + MediaSession + notification controls.
-  - Explicit voice picker UI; per-language voice memory.
+  - Explicit voice picker UI — **landed in Phase 10A** (see §6); per-language
+    voice memory still future.
   - Cloud TTS providers, local neural TTS engines (new `TtsEngine` impls).
   - On-image bbox highlighting of the currently spoken region.
   - Audio caching for high-latency cloud engines.
@@ -321,3 +322,78 @@ TTS v1 is production-ready when ALL of the following hold:
 - Karaoke-style word highlighting on images.
 - Translation or dubbing.
 - Recording/exporting audio.
+
+---
+
+## 6. Phase 10A — Advanced system TTS voice configuration
+
+**Status: IN_PROGRESS** (code complete, gates green 2026-08-30; device
+verification pending — not marked complete until the on-device pass runs).
+
+**Goal:** let users choose WHICH system TTS engine, voice, and language reads
+their manga, calibrate rate/pitch, and audition the result with a preview —
+while reader playback behavior stays identical to v1.
+
+### 6.1 Capabilities (implemented, Tasks 1–5)
+
+- **Engine discovery & selection**: installed engine list with labels +
+  system-default marker; persisted `pref_tts_engine_package` ("" = system
+  default); switching engines rebuilds the TTS instance on next initialize.
+- **Language / locale selection**: `pref_tts_language_tag` full-tag pref driving
+  two pickers (language = all distinct tags; locale = region variants filtered
+  to the selected language's prefix; locale row enabled only once a language is
+  chosen). Selecting a language clears the pinned voice.
+- **Voice selection**: per-engine voice list (`pref_tts_voice_name`), filtered
+  to the selected language; selecting a voice live re-applies it via an
+  initialize call on the running instance.
+- **Voice calibration**: rate + pitch sliders (50–200 %) reusing the single
+  global `pref_tts_speech_rate` / `pref_tts_pitch` pair from v1 — one pair for
+  all voices (deliberate; see 6.4).
+- **Preview**: plays a hardcoded sample ("Hello. This is a preview of the
+  selected reading voice.") with the CURRENT rate/pitch/voice; a second tap
+  stops it.
+- **Persistence + fallback chain**: three string prefs, default "" (= system
+  default voice). Pure `resolveVoiceSelection` fallback: selected voice still
+  valid → Voice; else selected language valid → Language; else SystemDefault
+  (engine's own default voice). Stale pref values (uninstalled engine, removed
+  voice) render their raw persisted value in the picker, never "null".
+- **Reset**: one action clears all three prefs + resets the engine package +
+  reloads; confirmation toast.
+- **Entry points**: Settings root row "Read aloud & voice" (after Reader,
+  VolumeUp icon); reader quick-settings Read aloud tab keeps playback toggles
+  minimal (rate slider + auto page turn/auto next chapter/keep-screen-on) and
+  links to the full screen via a deep-link (`SHORTCUT_VOICE_SETTINGS` intent →
+  `SettingsScreen(Destination.ReadAloud)`); screen registered in settings
+  search.
+
+### 6.2 User flow
+
+Settings → Read aloud & voice → (screen auto-initializes the TTS engine;
+failure shows a retry row) → pick engine → pick language → pick locale → pick
+voice → adjust rate/pitch → Preview row to audition → open reader → Read
+aloud; mid-session preference changes apply at the next pause/resume or
+playback step (engine re-reads fresh prefs on every initialize).
+
+### 6.3 Preview policy (approved resolution)
+
+- ONE shared engine instance for preview and reader narration; preview stops
+  any previous utterance first, then acquires focus and speaks the sample.
+- Reader narration always wins: the controller speaks with `QUEUE_FLUSH`, so
+  starting narration interrupts an in-flight preview.
+- An interrupted narration (e.g. preview fired during playback) pauses
+  honestly via the existing controller state machine — no fake "still
+  playing" state.
+- Preview applies the current rate/pitch/voice from screen state so it
+  auditions exactly what playback will sound like.
+
+### 6.4 Deferred to Phase 10B (backlog)
+
+- Per-voice rate/pitch profiles (rate/pitch stay one global pair; voice-
+  specific overrides only if a future need fits cleanly).
+- Cloud/neural TTS providers — requires credentials, billing/cost, network,
+  privacy, streaming/downloaded-audio, caching, and latency-management
+  design; new `TtsEngine` impls via Injekt swap, reader untouched.
+- Local neural engines; downloadable AI voices.
+- Expressive narration (emotion/prosody): needs provider SSML/prosody/emotion
+  controls — pitch/rate sliders are NOT expressive narration; never fake
+  emotion via random pitch.

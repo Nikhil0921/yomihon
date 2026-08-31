@@ -1,6 +1,7 @@
 package eu.kanade.presentation.more.settings.widget
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -9,6 +10,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -35,6 +37,7 @@ fun <T> ListPreferenceWidget(
     icon: ImageVector?,
     entries: Map<out T, String>,
     onValueChange: (T) -> Unit,
+    searchable: Boolean = false,
 ) {
     var isDialogShown by remember { mutableStateOf(false) }
 
@@ -46,29 +49,50 @@ fun <T> ListPreferenceWidget(
     )
 
     if (isDialogShown) {
+        var searchQuery by remember { mutableStateOf("") }
+        val filteredEntries = remember(searchQuery, entries) {
+            if (!searchable || searchQuery.isBlank()) {
+                entries
+            } else {
+                entries.filter { it.value.contains(searchQuery, ignoreCase = true) }
+            }
+        }
         AlertDialog(
             onDismissRequest = { isDialogShown = false },
             title = { Text(text = title) },
             text = {
-                Box {
-                    val state = rememberLazyListState()
-                    ScrollbarLazyColumn(state = state) {
-                        entries.forEach { current ->
-                            val isSelected = value == current.key
-                            item {
-                                DialogRow(
-                                    label = current.value,
-                                    isSelected = isSelected,
-                                    onSelected = {
-                                        onValueChange(current.key!!)
-                                        isDialogShown = false
-                                    },
-                                )
+                Column {
+                    if (searchable) {
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            singleLine = true,
+                            placeholder = { Text(text = stringResource(MR.strings.action_search)) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                        )
+                    }
+                    Box {
+                        val state = rememberLazyListState()
+                        ScrollbarLazyColumn(state = state) {
+                            filteredEntries.forEach { current ->
+                                val isSelected = value == current.key
+                                item {
+                                    DialogRow(
+                                        label = current.value,
+                                        isSelected = isSelected,
+                                        onSelected = {
+                                            onValueChange(current.key!!)
+                                            isDialogShown = false
+                                        },
+                                    )
+                                }
                             }
                         }
+                        if (state.canScrollBackward) HorizontalDivider(modifier = Modifier.align(Alignment.TopCenter))
+                        if (state.canScrollForward) HorizontalDivider(modifier = Modifier.align(Alignment.BottomCenter))
                     }
-                    if (state.canScrollBackward) HorizontalDivider(modifier = Modifier.align(Alignment.TopCenter))
-                    if (state.canScrollForward) HorizontalDivider(modifier = Modifier.align(Alignment.BottomCenter))
                 }
             },
             confirmButton = {

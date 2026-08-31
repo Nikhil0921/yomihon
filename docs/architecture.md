@@ -234,10 +234,55 @@ TtsPlaybackController              :app  ui/reader/tts/  (orchestration only)
 TtsEngine interface                :domain mihon/domain/tts/engine/TtsEngine.kt
 SentenceSegmenter / AdvancePolicy  :domain mihon/domain/tts/       (pure, unit-tested)
 TtsPreferences                     :domain mihon/domain/tts/service/TtsPreferences.kt
+TtsVoicePreferences + selection    :domain mihon/domain/tts/service/TtsVoicePreferences.kt
 AndroidTtsEngine                   :app  data/tts/AndroidTtsEngine.kt
   └─ android.speech.tts.TextToSpeech + AudioManager/AudioFocusRequest (framework)
+Read-aloud settings screen/model   :app  ui/setting/readaloud + presentation settings screen
 future: CloudTtsEngine / NeuralTtsEngine implement TtsEngine without touching reader
 ```
+
+Phase 10A additions to `TtsEngine` (voice configuration contracts):
+
+- `suspend getEngines(): List<TtsEngineInfo>` — installed engines
+  (`packageName`, `label`, `isSystemDefault`); empty when uninitialized.
+- `suspend getVoices(): List<TtsVoiceInfo>` — voices of the ACTIVE engine
+  (`name`, `languageTag`, `displayName`, `quality`, `latency`, `features`,
+  `networkRequired`); empty when uninitialized.
+- `setEnginePackage(pkg: String)` — engine for the NEXT `initialize`; "" =
+  system default. If currently initialized with a different package, the
+  implementation releases the instance so the next initialize rebuilds.
+
+`AndroidTtsEngine` config pipeline (Phase 10A):
+
+- Construction seeds `enginePackage` / `voiceName` / `languageTag` fields from
+  `TtsVoicePreferences`; `activeEnginePackage` snapshots the package a live
+  instance was actually built with. Engine creation is engine-package-aware
+  (3-arg `TextToSpeech(context, listener, pkg)` when pinned, 2-arg otherwise).
+- `setEnginePackage` compares against `activeEnginePackage` and `shutdown()`s
+  on mismatch → next `initialize()` rebuilds with the new engine. (It does
+  NOT re-read the engine pref inside applyVoiceConfig — that would mask the
+  mismatch; `activeEnginePackage` is the comparison source of truth.)
+- `initialize()` idempotent path re-applies voice config from FRESH prefs on
+  every call. The controller already calls `initialize()` on resume and each
+  playback step, so mid-session preference changes are picked up with ZERO
+  controller/ReaderViewModel changes.
+- `applyVoiceConfig` uses pure `resolveVoiceSelection` fallback:
+  Voice → `setVoice` (unavailable voice → DEBUG log, default stays);
+  Language → `setLanguage` (`LANG_MISSING_DATA`/`LANG_NOT_SUPPORTED` → DEBUG
+  log, default stays); SystemDefault → restore `engine.defaultVoice` (null →
+  DEBUG log, leave as-is). Voice/locale apply failures NEVER fail initialize.
+- `getEngines`/`getVoices` run on the Main context; return empty lists when
+  uninitialized. Speak/stop/shutdown/focus paths unchanged from Phase 9.
+
+Preview policy (single shared engine): the read-aloud settings preview and
+reader narration use the same `AndroidTtsEngine` singleton; preview calls
+`stop()` → `initialize()` → rate/pitch → `acquireFocus()` → `speak(sample)`;
+reader narration speaks with `QUEUE_FLUSH` and always wins; interrupted
+narration pauses honestly via the existing controller.
+
+Future-provider extensibility: cloud/neural engines are new `TtsEngine`
+implementations bound by an Injekt factory swap in `DomainModule`; playback
+controller and reader stay untouched.
 
 Design rules (binding):
 
@@ -338,12 +383,27 @@ yomihon/
 | `app/src/main/java/eu/kanade/tachiyomi/ui/reader/tts/TtsPlaybackController.kt` | Orchestration: text→segment→speak→advance loop, prefetch, arbitration |
 | `app/src/main/java/eu/kanade/presentation/reader/TtsPlaybackBar.kt` | Mini playback pill |
 | `app/src/main/java/eu/kanade/presentation/reader/settings/ReadAloudSettingsPage.kt` | Settings tab content |
+| `domain/src/main/java/mihon/domain/tts/service/TtsVoicePreferences.kt` | (10A) engine/voice/language string prefs + `reset()`; sealed `TtsVoiceSelection` + pure `resolveVoiceSelection` fallback |
+| `domain/src/test/java/mihon/domain/tts/service/TtsVoicePreferencesTest.kt` | (10A) selection fallback suite (5 cases) |
+| `app/src/main/java/eu/kanade/tachiyomi/ui/setting/readaloud/ReadAloudSettingsScreenModel.kt` | (10A) StateScreenModel: load/selection/preview/reset; initializes engine, feeds pickers |
+| `app/src/main/java/eu/kanade/presentation/more/settings/screen/SettingsReadAloudScreen.kt` | (10A) SearchableSettings screen: engine/language/locale/voice pickers, calibration, preview, advanced group |
 
-Modified files (integration points): `DomainModule.kt` (engine binding),
-`PreferenceModule.kt` (prefs binding), `ReaderViewModel.kt` (controller host,
+Modified files (integration points): `DomainModule.kt` (engine binding,
++ `TtsVoicePreferences` in 10A), `PreferenceModule.kt` (prefs binding, +
+`TtsVoicePreferences` factory in 10A), `ReaderViewModel.kt` (controller host,
 `ttsState`, new Events, stop-on-finish), `ReaderActivity.kt` (new event branches,
-bar rendering, onStop pause, keep-screen-on), `ReaderSettingsDialog.kt`
-(new tab), `ReaderBottomBar.kt` (entry icon), `i18n base strings.xml` (snake_case keys).
+bar rendering, onStop pause, keep-screen-on; 10A: both reader-settings dialog
+call sites gained the voice-settings deep-link), `ReaderSettingsDialog.kt`
+(new tab; 10A: `onOpenVoiceSettings` pass-through), `ReaderBottomBar.kt`
+(entry icon), `i18n base strings.xml` (snake_case keys; +18 TTS keys in 10A).
+Phase 10A also modified: `TtsEngine.kt` (+`getEngines`/`getVoices`/
+`setEnginePackage` + `TtsEngineInfo`/`TtsVoiceInfo`), `AndroidTtsEngine.kt`
+(voice-config pipeline, above), `SettingsMainScreen.kt` (root row after
+Reader), `SettingsScreen.kt` (`Destination.ReadAloud` id 4 + both fallback
+branches), `MainActivity.kt` (`SHORTCUT_VOICE_SETTINGS` intent case:
+popUntilRoot + push), `Constants.kt` (shortcut constant),
+`ReadAloudPage.kt` (pitch slider relocated to main settings; advanced-voice-
+settings nav row), `SettingsSearchScreen.kt` (screen registration).
 
 ---
 

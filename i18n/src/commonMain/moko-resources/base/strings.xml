@@ -1265,6 +1265,24 @@
     <string name="pref_tts_auto_page_turn">Turn pages automatically</string>
     <string name="pref_tts_auto_next_chapter">Continue to next chapter</string>
     <string name="pref_tts_keep_screen_on">Keep screen on while reading aloud</string>
+    <string name="pref_category_read_aloud">Read aloud and voice</string>
+    <string name="pref_read_aloud_summary">Text-to-speech engine, voices and preview</string>
+    <string name="tts_section_text_to_speech">Text to speech</string>
+    <string name="tts_section_voice_calibration">Voice calibration</string>
+    <string name="tts_section_advanced">Advanced</string>
+    <string name="tts_engine">TTS engine</string>
+    <string name="tts_voice">Voice</string>
+    <string name="tts_language">Language</string>
+    <string name="tts_locale">Locale</string>
+    <string name="tts_default_system_engine">Default system engine</string>
+    <string name="tts_engine_information">Engine information</string>
+    <string name="tts_available_voices">Available voices: %d</string>
+    <string name="tts_preview_voice">Preview voice</string>
+    <string name="tts_play_sample">Play sample</string>
+    <string name="tts_reset_voice_config">Reset voice configuration</string>
+    <string name="tts_config_reset">Voice configuration reset</string>
+    <string name="tts_voices_unavailable">No voices found. Install or enable a text-to-speech engine.</string>
+    <string name="tts_advanced_voice_settings">Advanced voice settings</string>
 
     <!-- Monetary support -->
     <string name="supportUsScreen.perks">Patrons get access to exclusive channels, with more perks to come.</string>

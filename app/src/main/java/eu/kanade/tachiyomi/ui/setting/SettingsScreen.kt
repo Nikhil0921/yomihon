@@ -16,6 +16,7 @@ import eu.kanade.presentation.more.settings.screen.SettingsAppearanceScreen
 import eu.kanade.presentation.more.settings.screen.SettingsDataScreen
 import eu.kanade.presentation.more.settings.screen.SettingsDictionaryScreen
 import eu.kanade.presentation.more.settings.screen.SettingsMainScreen
+import eu.kanade.presentation.more.settings.screen.SettingsReadAloudScreen
 import eu.kanade.presentation.more.settings.screen.SettingsTrackingScreen
 import eu.kanade.presentation.more.settings.screen.about.AboutScreen
 import eu.kanade.presentation.util.DefaultNavigatorScreenTransition
@@ -39,6 +40,7 @@ class SettingsScreen(
                     Destination.About.id -> AboutScreen
                     Destination.DataAndStorage.id -> SettingsDataScreen
                     Destination.Dictionary.id -> SettingsDictionaryScreen
+                    Destination.ReadAloud.id -> SettingsReadAloudScreen
                     Destination.Tracking.id -> SettingsTrackingScreen
                     else -> SettingsMainScreen
                 },
@@ -61,6 +63,7 @@ class SettingsScreen(
                     Destination.About.id -> AboutScreen
                     Destination.DataAndStorage.id -> SettingsDataScreen
                     Destination.Dictionary.id -> SettingsDictionaryScreen
+                    Destination.ReadAloud.id -> SettingsReadAloudScreen
                     Destination.Tracking.id -> SettingsTrackingScreen
                     else -> SettingsAppearanceScreen
                 },
@@ -87,5 +90,6 @@ class SettingsScreen(
         data object DataAndStorage : Destination(1)
         data object Dictionary : Destination(3)
         data object Tracking : Destination(2)
+        data object ReadAloud : Destination(4)
     }
 }

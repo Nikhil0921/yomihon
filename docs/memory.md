@@ -22,16 +22,13 @@ Untracked:      .opencode/ (generated agent/session state — REMOVED from git
 Primary goal:   Reliable Read-Aloud: English OCR → English system TTS →
                 correct progression (PRODUCT PIVOT 2026-08-25: English is the
                 primary v1 language; Japanese TTS moved to Phase 10.)
-Current phase:  Phase 9 COMPLETE (2026-08-29). Phase 8 device pass COMPLETE —
-                script steps 1–15 all executed + user-confirmed (2026-08-28
-                RUN4: steps 7–15; rate/pitch live + rotation
-                pause/resume-same-position confirmed by user). Phase 9 perf
-                passes + fixes landed; prefetch-DNS escalation fix (Finding
-                #4) FIXED + DEVICE-VERIFIED (wifi-killed test, committed
-                80deac5b8). LeakCanary pass 2026-08-28: FINDING #5 ~100MB reader
-                leak → 3-file fix set committed (5c7d2cc2c), gates green; leak
-                re-verify DONE 2026-08-29: 0 APPLICATION LEAKS (two sessions).
-                Battery measurement DONE 2026-08-29 (see battery block).
+Current phase:  Phase 10A COMPLETED (2026-08-31) — advanced system TTS
+                voice configuration, DEVICE-VERIFIED (USER CONFIRMED PASS,
+                build 0.5.0-8250) incl. voice-picker search follow-up.
+                ALL UNCOMMITTED awaiting user commit. Phase 9 COMPLETE
+                (0 APPLICATION LEAKS), battery measurement PASS. Phase 8
+                device pass COMPLETE (steps 1–15 executed + user-confirmed
+                2026-08-28 RUN4). All prior fix sets committed (see git log).
 Current status: Finding #1 FIXED+VERIFIED (22/22 advances, 0 timeouts, 1–5ms).
                 Finding #2 FIXED (timeout sets pageIndex=target; unexercised).
                 Finding #3 duplicate speech: USER DROPPED 2026-08-28, LOW
@@ -355,10 +352,28 @@ Verified: spotlessCheck + testDebugUnitTest + :app:assembleDebug GREEN
 ## In progress
 
 ```text
-Feature: NONE — Phase 9 COMPLETE (2026-08-29). All hardening items done:
-           leak fix device-verified (0 APPLICATION LEAKS), battery
-           measurement done (no post-exit drain). Only housekeeping left:
-           commit uncommitted set (import order + docs).
+Feature: Phase 10A advanced system TTS voice configuration — COMPLETE
+           (device-verified 2026-08-31), ALL UNCOMMITTED awaiting user commit.
+           Tasks 1-6 (domain prefs/resolver, TtsEngine contracts,
+           AndroidTtsEngine re-apply design, Read aloud & voice screen,
+           root entry + reader deep-link, docs) + Task 7 device pass
+           (USER CONFIRMED all manual checks PASS 2026-08-31) + voice-picker
+           SEARCH feature (user-requested follow-up: BasicListPreference
+           searchable flag → ListPreferenceWidget OutlinedTextField filter,
+           voice picker only; gates green, APK 0.5.0-8250 installed).
+           Evidence: .device-pass/tts-10a-test.log (571,082 lines, PIDs
+           14214/30339): advances 17→18 confirmed 1-2ms, pause/stop clean,
+           preview audio-focus request/abandon paired (08:51:53→56 cycle),
+           "TTS default voice restored name=en-IN-language" ×4 (SystemDefault
+           re-apply path device-proven), 0 FATAL exceptions, 0 sentence
+           failures, single TTS engine connection per session. Device engine
+           reality: Google Speech (com.google.android.tts) = only real
+           synthesis engine; SamsungTTS present as download-provider only
+           (no voices installed) — picker correctly lists real engines only.
+           Deferred to 10B: per-voice rate/pitch profiles, cloud/neural
+           providers, local neural engines, downloadable AI voices,
+           expressive speech.
+```
 
 Done: leak-fix set COMMITTED (5c7d2cc2c): ReaderViewModel.onCleared
       ttsEngine.onFocusEvent = null (detaches dead controller from singleton
@@ -641,9 +656,235 @@ BATTERY MEASUREMENT — PHASE 9 FINAL ITEM (2026-08-29, build 0.4.0-8241):
   Toast FrameLayout) triggers debug heap dumps mid-session; consider
   excluding android.widget.Toast in LeakCanary config if it bothers future
   device passes.
+
+[COMPLETED 2026-08-30 — Phase 10A Task 1, UNCOMMITTED (2 files)]
+- TtsVoicePreferences (:domain mihon.domain.tts.service) — engine package /
+  voice name / language tag string prefs (keys pref_tts_engine_package /
+  pref_tts_voice_name / pref_tts_language_tag, default "") + reset();
+  TtsVoiceSelection sealed interface (SystemDefault / Voice / Language) +
+  pure resolveVoiceSelection fallback: valid voice → Voice, else valid
+  language → Language, else SystemDefault. Consumes PreferenceStore
+  (precedent TtsPreferences.kt). Tasks 2/3/5 consume this.
+- TDD: TtsVoicePreferencesTest 5 cases — RED (unresolved reference,
+  compile fail as brief expected) → GREEN 5/5. Full :domain:testDebugUnitTest
+  green (all suites). spotlessCheck green (devcontainer JDK17, -Xmx4g).
+  NOTE: brief's bare docker cmd lacks -v yomihon-gradle-home/-v yomihon-
+  android-home mounts — wrapper re-downloads Gradle 9.6.1 each run and
+  times out; mount both volumes (memory 2026-08-24 directive stands).
+
+[COMPLETED 2026-08-30 — Phase 10A Task 3, UNCOMMITTED (3 files)]
+- AndroidTtsEngine implements extended TtsEngine interface (:app):
+  constructor gains TtsVoicePreferences; cached enginePackage/voiceName/
+  languageTag fields + activeEnginePackage (set at initialize); engine-
+  package-aware TextToSpeech creation (3-arg ctor (context, listener, pkg)
+  when pkg non-empty, else 2-arg); idempotent initialize path re-applies
+  voice config from fresh prefs BEFORE returning true (mid-session pref
+  changes land at next pause/resume with ZERO controller changes —
+  controller/ReaderViewModel untouched); applyVoiceConfig uses
+  resolveVoiceSelection (Voice → setVoice + DEBUG log; Language →
+  setLanguage + LANG_MISSING_DATA/LANG_NOT_SUPPORTED fallback log;
+  SystemDefault → no-op) — NEVER fails initialize; setEnginePackage
+  compares against activeEnginePackage, shutdown releases instance when
+  mismatch; getEngines/getVoices mapped to TtsEngineInfo/TtsVoiceInfo.
+- applyVoiceConfig re-reads ONLY voiceName/languageTag — NOT enginePackage
+  (deviation from brief §4: re-reading enginePackage would cache the new
+  value and make Task 5's setEnginePackage(newPkg) early-return, so a live
+  instance built with the OLD engine would never rebuild. activeEngine-
+  Package tracks creation-time package for the compare).
+- BRIEF API CORRECTIONS (brief assumed wrong SDK signatures): 3-arg
+  TextToSpeech ctor is (context, OnInitListener, enginePackage) — NOT
+  (context, pkg, listener); engine.defaultEngine returns String (package
+  name) — NOT EngineInfo; EngineInfo has name (pkg) + label: String (non-
+  null) — no packageName field. Verified via javap android-36 android.jar.
+- DI: PreferenceModule +TtsVoicePreferences factory (after TtsPreferences);
+  DomainModule AndroidTtsEngine(get<Application>(), get<TtsVoicePreferences>()).
+- Regression guard: speak/stop/shutdown/audio-focus/pendingUtterances/
+  onFocusEvent paths byte-identical (verified via git diff — none appear).
+- Gates GREEN 2026-08-30 (docker devcontainer JDK17, -Xmx4g, both volumes):
+  :app:compileDebugKotlin BUILD SUCCESSFUL 4m19s; spotlessCheck BUILD
+  SUCCESSFUL 35s; full testDebugUnitTest BUILD SUCCESSFUL 2m40s.
+  NO commit (per ruling).
+
+[COMPLETED 2026-08-30 — Phase 10A Task 4, UNCOMMITTED (4 files)]
+- ReadAloudSettingsScreenModel (:app ui/setting/readaloud): StateScreenModel
+  over ReadAloudSettingsState (@Immutable; isLoading/loadFailed/engines/
+  voices/selectedEnginePackage/selectedVoiceName/selectedLanguageTag/rate/
+  pitch/isPreviewPlaying). load() = engine.initialize() FIRST (empty lists
+  guard), false → loadFailed state; true → getEngines/getVoices + pref
+  reads into state. selectEngine guards pkg against loaded engines, writes
+  all three voice prefs (voice+language reset ""), engine.setEnginePackage,
+  reload. selectLanguage writes languageTag + clears voice pref (no engine
+  call — applied at next initialize). selectVoice writes voice pref +
+  engine.initialize() relaunch (re-apply on live instance). setRate/setPitch
+  write global TtsPreferences pair (controller collects live). preview() in
+  screenModelScope try/finally: stop → initialize → acquireFocus → speak
+  (hardcoded PREVIEW_TEXT, no i18n per ruling) → finally resets
+  isPreviewPlaying + abandonFocus + stop (scope-cancel safe). stopPreview()
+  = engine.stop() (speak returns → finally resets flag). resetVoiceConfig()
+  = voicePreferences.reset() + setEnginePackage("") + reload.
+- SettingsReadAloudScreen (SearchableSettings object, Anki pattern):
+  loading → CustomPreference spinner; loadFailed → InfoPreference
+  (tts_voices_unavailable) + retry TextPreference; 3 PreferenceGroups:
+  Text to speech (engine picker + Language + Locale + Voice pickers),
+  Voice calibration (rate/pitch SliderPreferences 50..200% reusing
+  pref_tts_speech_rate/pitch keys + preview TextPreference with small
+  CircularProgressIndicator widget while isPreviewPlaying), Advanced
+  (engine info TextPreference no onClick, Available voices InfoPreference
+  %d, Reset voice configuration + toast). Helpers private in screen file:
+  localeDisplayName (Locale.forLanguageTag + getDisplayName, blank→tag),
+  voiceLabel (name + " · high quality" q>=400 / " · low latency" l<=200 /
+  " · network" — API facts only), engineInfoSummary (label · voice count).
+- LANGUAGE/LOCALE RULING implemented (brief's binding resolution): ONE
+  persisted pref (ttsLanguageTag full-tag semantics). Language row: entries
+  = "" (Default system engine) + ALL distinct full tags sorted. Locale row:
+  "" + full tags filtered to selectedLanguageTag prefix, enabled only when
+  a language is selected; both rows write ttsLanguageTag via selectLanguage.
+  Bare-language entries exist only if engine reports them under bare tags.
+  Voice picker filter: exact tag match when selected tag contains '-',
+  prefix match for bare tag, all voices when empty. Stale-pref values not
+  in entries render raw tag/name via subtitleProvider { v, e -> e[v] ?: v }
+  (engine picker falls back to Default system engine label) — never "null".
+- i18n: 17 keys added to base strings.xml TTS block (pref_category_read_
+  aloud, pref_read_aloud_summary, tts_section_text_to_speech/
+  voice_calibration/advanced, tts_engine/voice/language/locale,
+  tts_default_system_engine, tts_engine_information, tts_available_voices
+  (%d), tts_preview_voice, tts_play_sample, tts_reset_voice_config,
+  tts_config_reset, tts_voices_unavailable). pref_read_aloud_summary
+  consumed by Task 5 (main-screen entry wiring is Task 5 scope).
+- SettingsSearchScreen settingScreens list: SettingsReadAloudScreen added
+  (after SettingsBrowseScreen).
+- Gates GREEN 2026-08-30 (docker devcontainer JDK17, -Xmx4g, both volumes):
+  :app:compileDebugKotlin BUILD SUCCESSFUL 2m57s (+2m25s re-run after
+  review fixes); spotlessCheck GREEN (one ktlint line-length fix via
+  spotlessApply); full testDebugUnitTest BUILD SUCCESSFUL (all suites).
+  NO commit (per ruling).
+- [FIX ROUND 1 2026-08-30 — review findings, UNCOMMITTED, same 2 code files]
+  Finding 1 (preview ignores rate/pitch): preview() now calls
+  engine.setSpeechRate(mutableState.value.rate) + setPitch(mutableState.value
+  .pitch) between initialize() and acquireFocus() — values read INSIDE launch
+  (latest state at execution time). Root cause: initialize() existing-engine
+  path only re-applies voice/language; engine rate/pitch fields ctor-time 1f.
+  Finding 2 (stale voice on reset/selectLanguage→default): applyVoiceConfig
+  SystemDefault branch no-op → now restores engine.defaultVoice via setVoice
+  (null defaultVoice → DEBUG log + leave, language NOT touched — SystemDefault
+  is engine's choice not device locale). Language branch unchanged — framework
+  doc: setLanguage sets default voice for that language (self-clearing).
+  Minor: preview() early-returns if isPreviewPlaying (double-click guard).
+  No AndroidTtsEngine ctor change (no second prefs dep). Gates GREEN:
+  compileDebugKotlin 2m28s / spotlessCheck 39s first-try / testDebugUnitTest
+  2m45s. Details: task-4-report.md "Fix round 1".
 ```
 
+```text
+[COMPLETED 2026-08-30 — Phase 10A Task 5, UNCOMMITTED (8 files)]
+- Settings root entry: SettingsMainScreen.getItems gains Item after Reader
+  (pref_category_read_aloud / pref_read_aloud_summary / Icons.AutoMirrored
+  .Outlined.VolumeUp → SettingsReadAloudScreen object). AutoMirrored icon
+  resolved at compile — fallback unused.
+- Deep-link plumbing: Constants.SHORTCUT_VOICE_SETTINGS =
+  "eu.kanade.tachiyomi.SHOW_VOICE_SETTINGS"; SettingsScreen.Destination
+  ReadAloud id 4 (0-3 taken) + BOTH when branches (phone SettingsMainScreen
+  fallback / tablet SettingsAppearanceScreen fallback) →
+  SettingsReadAloudScreen; MainActivity.handleIntentAction new case beside
+  ACTION_APPLICATION_PREFERENCES: popUntilRoot + push(SettingsScreen(
+  Destination.ReadAloud)) → null.
+- Reader tab minimal per spec PART 5: ReadAloudPage pitch SliderItem
+  REMOVED (relocates to main settings Voice Calibration; rate slider + 3
+  checkboxes kept); nav row TextPreferenceWidget(tts_advanced_voice_
+  settings) at bottom; signature + onOpenVoiceSettings callback.
+  ReaderSettingsDialog param after onHideMenus; tab order + dim-hack
+  currentPage==2 untouched. ReaderActivity BOTH dialog call sites
+  (phone L463 block + tablet L886 block): closeDialog() + startActivity
+  MainActivity action=SHORTCUT_VOICE_SETTINGS FLAG_ACTIVITY_CLEAR_TOP
+  (openMangaScreen precedent; no new imports). TtsPlaybackController +
+  ReaderViewModel ZERO-DIFF confirmed.
+- i18n: tts_advanced_voice_settings "Advanced voice settings" appended to
+  TTS block.
+- Gates GREEN 2026-08-30 (docker devcontainer JDK17, -Xmx4g, both volumes):
+  :app:compileDebugKotlin BUILD SUCCESSFUL 3m36s; spotlessCheck BUILD
+  SUCCESSFUL 46s first-try; full testDebugUnitTest BUILD SUCCESSFUL 2m57s
+  (all suites incl. TtsVoicePreferencesTest 5/5). NO commit (per ruling).
+  Full flow live: Settings root → Read aloud & voice ↔ reader quick
+  settings → deep-link. Report: .superpowers/sdd/2026-08-30-phase10a-
+  advanced-tts-voice-config/task-5-report.md.
 ```
+
+```text
+[COMPLETED 2026-08-30 — Phase 10A Task 6 (docs), UNCOMMITTED (5 docs files)]
+- Documented the Phase 10A implementation across the docs system (Task 7
+  device verification still PENDING — nothing marked complete):
+  - prd.md: new §6 Phase 10A section — capabilities (engine/language/locale/
+    voice pickers, calibration, preview, persistence, fallback chain, reset,
+    entry points), user flow, preview policy (single shared engine; preview
+    stops previous utterance; reader narration wins by QUEUE_FLUSH; honest
+    pause), §6.4 Phase 10B deferred list (per-voice rate/pitch profiles,
+    cloud/neural providers w/ credentials+cost+privacy+streaming+caching+
+    latency, local neural engines, downloadable AI voices, expressive speech
+    needs SSML/prosody/emotion — pitch/rate not expressive, no fake emotion).
+    §4 future list annotated: voice picker landed in 10A.
+  - architecture.md: §5 TtsEngine 10A contracts (getEngines/getVoices/
+    setEnginePackage + models); AndroidTtsEngine config pipeline (construction
+    seed, activeEnginePackage compare+shutdown on engine switch, initialize
+    re-applies FRESH prefs every call → zero controller changes for mid-
+    session pref pickup; applyVoiceConfig via resolveVoiceSelection, never
+    fails initialize); preview single-engine policy; future-provider Injekt
+    swap note. §7 tables: +3 new 10A files, integration-point list expanded.
+  - design.md: new §13 — 3 preference groups (Text to speech / Voice
+    calibration / Advanced), loading spinner (Anki pattern), failure+retry
+    state, voice metadata labels API-facts-only (quality≥400 high quality,
+    latency≤200 low latency, network marker), Locale.getDisplayName entries,
+    stale-pref raw-value subtitleProvider, reader tab minimal + nav row,
+    pitch relocated.
+  - phase.md: Phase 10A entry IN_PROGRESS (code complete, gates green,
+    device verification PENDING — completion gated on Task 7 + commit); old
+    Phase 10 block → Phase 10B with 10A-landed/10B-remaining note; pointer
+    block + dependency graph updated.
+  - memory.md: this record.
+- Gates: docs-only change — no Gradle run needed (spotless does not cover
+  docs/*.md; no code touched). No commit/stage (per ruling).
+- Phase 10A overall state: Tasks 1–5 code + Task 6 docs ALL UNCOMMITTED;
+  gates green per task reports (spotlessCheck / testDebugUnitTest /
+  :app:compileDebugKotlin; verifySqlDelightMigration NOT needed — no DB
+  change). Task 7 device verification NOT run.
+```
+
+```text
+[COMPLETED 2026-08-31 — Phase 10A Task 7 (device pass) + voice-picker search, UNCOMMITTED]
+- DEVICE VERIFICATION PASS (build 0.5.0-8250, SM_M066B, USER CONFIRMED):
+  Read-Aloud playback, language/locale selection, voice selection, voice
+  preview, speech rate, and all other tested functionality working. Manual
+  checks PASS per user report 2026-08-31.
+- Evidence collected: .device-pass/tts-10a-test.log (571,082 lines, PIDs
+  14214/30339, two sessions 06:37 + 08:51): page advances 17→18 confirmed
+  1–2ms with 0 timeouts; pause/stop cycles clean (phase=Paused/Idle);
+  preview audio-focus request/abandon PAIRED (08:51:53 request → 08:51:56
+  abandon); "TTS default voice restored name=en-IN-language" ×4 — the
+  SystemDefault re-apply branch (Task 4 fix round 1) proven on-device;
+  0 FATAL exceptions; 0 sentence failures; single "Connected to TTS engine"
+  per session (no duplicate TextToSpeech instances).
+- Device engine reality (user observation + log): only default system engine
+  + Google Speech Recognition & Synthesis appear in the picker; SamsungTTS
+  present on device as a download-provider only (log: "Provider found [4]
+  voices" but no synthesis service voices installed). Picker correctly lists
+  only real installed engines — dynamic discovery working as designed.
+- FOLLOW-UP FEATURE (user request, same session): voice-picker SEARCH —
+  hundreds of voices made scrolling painful. Implementation (3 files + 1
+  call-site):
+  - Preference.kt: BasicListPreference gains `searchable: Boolean = false`.
+  - PreferenceItem.kt: passes searchable through to ListPreferenceWidget.
+  - ListPreferenceWidget.kt: when searchable, OutlinedTextField (placeholder
+    = existing action_search MR key — zero new i18n) filters entries by
+    case-insensitive contains on entry labels; remember(searchQuery, entries)
+    memoizes the filtered map; list auto-shrinks as user types.
+  - SettingsReadAloudScreen.kt: voice picker passes searchable = true;
+    engine/language/locale pickers unchanged (small lists don't need it).
+  - Gates GREEN: spotlessCheck + :app:compileDebugKotlin + testDebugUnitTest
+    + :app:assembleDebug (3m51s / 3m28s, devcontainer JDK17 -Xmx4g). APK
+    0.5.0-8250 reinstalled on SM_M066B.
+- PHASE 10A COMPLETE. All work UNCOMMITTED awaiting user commit.
+```
+
+```text
 Deferred issues (LOW PRIORITY, revisit post-build):
   - #3b hands-off duplicate words/phrases: intermittent, manga-specific, never
     reproduced under instrumentation. To re-debug: re-add TTS-DBG logs (git history)
@@ -652,7 +893,8 @@ Deferred issues (LOW PRIORITY, revisit post-build):
     under different utterance ids) or Google-TTS engine audio quirk.
 
 Remaining:
-- Commit the small uncommitted set (ReaderActivity import order + docs).
+- Commit the Phase 10A change set (Tasks 1–7 + voice-picker search) after
+  user review — see "[COMPLETED 2026-08-31 — Phase 10A Task 7]" block.
 - (DONE 2026-08-29: Phase 9 COMPLETE — leak fix device-verified 0 APPLICATION
   LEAKS; battery measurement done: no post-exit drain, app fg CPU ~1mAh/min,
   screen dominates; evidence battery-sample.log + battery-tts-session.log +
@@ -673,19 +915,52 @@ Standing decision unchanged: prd script stays manual/interactive.
 
 ```text
 Current working files:
-- app .../ui/reader/ReaderActivity.kt (import order re-fixed via
-  spotlessApply after fd52a613a regression; UNCOMMITTED 2-line diff)
-- docs/memory.md + docs/phase.md (accuracy restoration after fd52a613a
-  reverted them to pre-leak-fix state; UNCOMMITTED)
-All fix sets COMMITTED: fff9583f0/872c55397/8cb320e7c (P0/P1+scroll),
-41200022e (z-order), be31edb71 (action logging + reportFailure),
-80deac5b8 (prefetch-DNS docs), 5c7d2cc2c (leak fix + LeakCanary core).
-TTS-DBG instrumentation removed; no active Finding #3 work.
+- Phase 10A set UNCOMMITTED (Tasks 1-6): TtsVoicePreferences (+test),
+  TtsEngine, AndroidTtsEngine, DomainModule, PreferenceModule,
+  SettingsReadAloudScreen (+screen model dir), SettingsSearchScreen,
+  SettingsMainScreen, Constants.kt, SettingsScreen.kt, MainActivity.kt,
+  ReaderSettingsDialog.kt, ReadAloudPage.kt, ReaderActivity.kt (both
+  dialog call sites), i18n base strings.xml (18 TTS keys), docs/* (Task 6
+  documentation updates: prd/architecture/design/phase/memory)
+- docs/memory.md (this session record)
+
+All fix sets prior to Phase 10A COMMITTED: fff9583f0/872c55397/8cb320e7c
+  (P0/P1+scroll), 41200022e (z-order), be31edb71 (action logging +
+  reportFailure), 80deac5b8 (prefetch-DNS docs), 5c7d2cc2c (leak fix +
+  LeakCanary core).
 ```
 
 ## Recently changed files
 
 ```text
+2026-08-30  docs/prd.md                                  Phase 10A T6: new §6 (capabilities,
+                                                        user flow, preview policy, fallback
+                                                        chain, 10B deferred list)
+2026-08-30  docs/architecture.md                        Phase 10A T6: §5 TtsEngine contracts +
+                                                        AndroidTtsEngine config pipeline +
+                                                        preview policy; §7 file tables
+2026-08-30  docs/design.md                              Phase 10A T6: new §13 settings screen
+                                                        spec (groups, states, metadata labels)
+2026-08-30  docs/phase.md                               Phase 10A T6: 10A entry IN_PROGRESS,
+                                                        Phase 10 → 10B backlog rework
+2026-08-30  app .../settings/screen/SettingsMainScreen.kt    Phase 10A T5: Read aloud row
+            (AutoMirrored VolumeUp) after Reader item
+2026-08-30  core/common/.../Constants.kt                    Phase 10A T5: SHORTCUT_VOICE_SETTINGS
+2026-08-30  app .../ui/setting/SettingsScreen.kt            Phase 10A T5: Destination.ReadAloud
+            id 4 + both when branches
+2026-08-30  app .../ui/main/MainActivity.kt                 Phase 10A T5: handleIntentAction
+            voice-settings deep-link case
+2026-08-30  app .../reader/settings/ReadAloudPage.kt        Phase 10A T5: pitch slider removed,
+            advanced-voice-settings nav row added
+2026-08-30  app .../reader/settings/ReaderSettingsDialog.kt  Phase 10A T5: onOpenVoiceSettings
+            param + pass-through
+2026-08-30  app .../ui/reader/ReaderActivity.kt             Phase 10A T5: both dialog call
+            sites deep-link to MainActivity
+2026-08-30  i18n base strings.xml                            Phase 10A T5: tts_advanced_voice_
+            settings key (T4's 17 keys also uncommitted)
+2026-08-30  app .../settings/screen/SettingsReadAloudScreen.kt + Phase 10A T4 (Task 4 report)
+            app .../ui/setting/readaloud/*
+2026-08-30  domain + app TtsVoicePreferences/TtsEngine/AndroidTtsEngine Phase 10A T1/T3
 2026-08-29  docs/memory.md, docs/phase.md             Accuracy restoration: fd52a613a docs
             commit had reverted memory/phase to pre-leak-fix state (stale
             repo hash, prefetch-fix marked unverified, Finding #5 records
@@ -965,22 +1240,16 @@ Injekt 91edab2317, JUnit5 6.1.1/Kotest 6.2.2/MockK 1.14.11).
 ## Testing status
 
 ```text
-Unit tests:        PASS (2026-08-29, full testDebugUnitTest, all modules — leak-fix set)
+Unit tests:        PASS (2026-08-30, full testDebugUnitTest — Phase 10A
+                    Tasks 1+3+4+5 set)
 Integration tests: none run (existing androidTest suites are device-gated/@Ignore)
 UI tests:          none exist in repo
-Device tests:      COMPLETE — Phase 8 script steps 1–15 all executed +
-                    user-confirmed (2026-08-28 RUN4 build 0.4.0-8238: steps 7–15
-                    PASS incl. user-confirmed rate/pitch live + rotation
-                    pause/resume-same-position). run2/run3 verified Finding #1
-                    (22/22 advances, 0 timeouts) + Finding #2. Finding #3
-                    deferred LOW PRIORITY. Finding #4 prefetch-DNS fixed
-                    + DEVICE-VERIFIED (logcat-prefetch-verify.log). Finding #5
-                    + DEVICE-VERIFIED 2026-08-29
-                    (leak-full.log: 0 application leaks, two sessions).
-                    Battery measurement DONE 2026-08-29 (PASS — no post-exit
-                    drain, app frozen post-exit, keep-screen-on scoped to
-                    reader visibility; see BATTERY MEASUREMENT block).
-                    Phase 9 COMPLETE.
+Device tests:      Phase 8 script COMPLETE (steps 1–15 executed +
+                     user-confirmed 2026-08-28). Phase 9 device items
+                     COMPLETE (leak re-verify 0 leaks; battery PASS).
+                     PENDING: Phase 10A Task 7 device verification of the
+                     voice-config flow (root row, deep-link, pickers, live
+                     apply, preview, reset, fallback) — NOT yet run.
 Lint:              spotlessCheck PASS (2026-08-29, after fd52a613a import-order
                     regression repaired via spotlessApply)
 Build:             :app:assembleDebug PASS (2026-08-29, 0.4.0-8241 = 5c7d2cc2c
@@ -1011,12 +1280,16 @@ Result:   ALL GREEN. v0.5.0 RELEASE PUBLISHED (tag v0.5.0 = 7e0d52697,
 ## Last verified test
 
 ```text
-Date:     2026-08-29
-Command:  ./gradlew spotlessCheck :app:compileDebugKotlin testDebugUnitTest
-          (docker devcontainer, JDK 17)
-Result:   BUILD SUCCESSFUL — leak-fix set (ReaderViewModel onFocusEvent=null,
-          ReaderActivity ioCoroutineScope cancel, LeakCanary core), recorded
-          in commit 5c7d2cc2c.
+Date:     2026-08-30
+Command:  ./gradlew :app:compileDebugKotlin spotlessCheck testDebugUnitTest
+          (docker devcontainer, JDK 17, -Xmx4g, both volumes) — last CODE
+          gates, run with Task 5 (Task 6 was docs-only, no Gradle needed)
+Result:   BUILD SUCCESSFUL — Phase 10A Task 5 (settings root entry +
+          Destination.ReadAloud id 4 + SHORTCUT_VOICE_SETTINGS deep-link +
+          minimal reader tab w/ pitch slider relocated + nav row); full
+          report in .superpowers/sdd/2026-08-30-phase10a-advanced-tts-
+          voice-config/task-5-report.md. Task 6 (docs) verified claims
+          against source files instead — no build input changed.
 ```
 
 ---
@@ -1024,63 +1297,55 @@ Result:   BUILD SUCCESSFUL — leak-fix set (ReaderViewModel onFocusEvent=null,
 ## Agent handoff
 
 ```text
-Last agent:                 ox-alpha (Phase 8 device pass + Phase 9 perf/hardening)
-Date:                       2026-08-29
-Task completed:             All fix sets now COMMITTED by user: P0/P1+scroll
-                            (fff9583f0/872c55397/8cb320e7c), z-order (41200022e),
-                            action logging + reportFailure (be31edb71),
-                            prefetch-DNS docs+verify (80deac5b8), leak fix +
-                            LeakCanary core (5c7d2cc2c). LeakCanary pass found
-                            FINDING #5: ~100MB retained after reader exit
-                            (engine onFocusEvent chain) → fixed in 5c7d2cc2c;
-                            memory profile captured (stable). This session:
-                            repaired fd52a613a docs regression (memory/phase
-                            reverted to pre-leak-fix state) + re-fixed
-                            ReaderActivity import order that broke
-                            spotlessCheck (spotlessApply; 2-line diff,
-                            UNCOMMITTED with docs edits).
-Current task:               DONE 2026-08-29 (Phase 9 COMPLETE):
-                            (a) leak-fix device re-verification — build
-                            0.4.0-8241, two reader TTS sessions + exits,
-                            LeakCanary analysis 19:40:16 → 0 APPLICATION LEAKS.
-                            Finding #5 CLOSED. (b) BATTERY MEASUREMENT — 23min
-                            realistic TTS session (3 chapters, 94 on-demand
-                            OCR scans, 58/58 advances confirmed, 5 chapter
-                            advances, ended by transient GLens 502) + short
-                            cached re-run; results: app fg CPU 25.4mAh/24m51s
-                            (~1mAh/min), screen dominates (84.5mAh of app's
-                            115mAh), ZERO post-exit app activity, no
-                            wakelocks after exit, app LMK-reaped at ~13min
-                            post-exit + cached-frozen at ~18min, screen-off
-                            app cost ~5mAh/41m ≈ noise. Device-wide draw
-                            during playback avg ~365mA (5000mAh → ~13h).
-                            VERDICT PASS. Evidence: .device-pass/
-                            battery-sample.log, battery-tts-session.log,
-                            batterystats-app.txt. Also this session: docs
-                            accuracy restoration + import-order repair.
-Next recommended task:      Commit small uncommitted set (ReaderActivity
-                            import order + docs) — awaiting user approval.
-                            Then Phase 9 fully closed; Phase 10 (Japanese
-                            TTS/voice calibration) gated on user PRD update
-                            + architecture review. If #3b returns: re-add
-                            TTS-DBG from git history + OCR bbox/overlap
-                            logging.
+Last agent:                 opencode (Phase 10A Task 6 — docs)
+Date:                       2026-08-30
+Task completed:             Task 6 of Phase 10A (SDD plan 2026-08-30-phase10a-
+                            advanced-tts-voice-config): documentation updates
+                            for the Tasks 1–5 implementation. prd.md new §6
+                            (capabilities, user flow, preview policy, fallback
+                            chain, 10B deferred list); architecture.md §5/§7
+                            extended (TtsEngine 10A contracts, AndroidTtsEngine
+                            config pipeline incl. initialize re-apply design +
+                            why zero controller changes, preview single-engine
+                            policy, Injekt future-provider swap); design.md new
+                            §13 (3 groups, loading/error states, API-facts-
+                            only metadata labels, Locale.getDisplayName, stale-
+                            pref raw-value display); phase.md Phase 10A entry
+                            IN_PROGRESS + old Phase 10 → 10B backlog rework;
+                            memory.md session record. Docs-only — no Gradle
+                            run needed (spotless does not cover docs/*.md).
+Current task:               NONE — Phase 10A Tasks 1-6 all landed UNCOMMITTED.
+Next recommended task:      Task 7: device verification of the 10A flow
+                            (settings root row, deep-link from reader
+                            dialog, engine/language/locale/voice pickers,
+                            live mid-session voice/rate/pitch changes via
+                            pause/resume, preview + stop-preview, reset,
+                            system-default fallback). Then user review +
+                            commit of the whole 10A set; phase.md flips to
+                            COMPLETED only after device pass recorded here.
 Files safe to modify:       docs/* ; app reader/tts/settings files ;
                             data OCR files ; i18n base strings.xml (snake_case only)
-Files currently worked on:  UNCOMMITTED: ReaderActivity.kt import order (2 lines,
-                            ktlint-required) + docs/memory.md + docs/phase.md
-                            (accuracy restoration). Compile-green, spotlessCheck
-                            green.
-Known risks:                TILE_CONCURRENCY=3 may trip Lens rate limits — watch
-                            HTTP 429/5xx in logs, drop constant if seen;
-                            advance-confirm timeouts (#8) FIXED+VERIFIED (moveToPage
-                            explicit onScrolled; 22/22 1–5ms run2);
+Files currently worked on:  UNCOMMITTED Phase 10A set: Tasks 1-6 files
+                            (TtsVoicePreferences + test, TtsEngine +
+                            AndroidTtsEngine, SettingsReadAloudScreen +
+                            screen model, SettingsSearchScreen, Task 5's
+                            8 files incl. Constants/MainActivity/
+                            SettingsScreen/SettingsMainScreen/ReaderActivity/
+                            ReaderSettingsDialog/ReadAloudPage/i18n, and
+                            Task 6's docs edits in prd/architecture/design/
+                            phase/memory).
+                            Compile-green, spotlessCheck green, tests green.
+Known risks:                Docs describe UNVERIFIED-on-device behavior —
+                            Task 7 must confirm pickers/live-apply/preview
+                            on hardware before any completion claim.
+                            Reader deep-link launches MainActivity with
+                            CLEAR_TOP — if MainActivity was already dead
+                            (reader-only session), fresh launch path still
+                            hits handleIntentAction via onNewIntent/new
+                            intent, same as SHORTCUT_MANGA precedent.
                             fd52a613a-class risk: doc commits accidentally
                             reverting newer docs — verify doc diffs against
-                            git log before pushing;
-                            CAPTURE: streaming `adb logcat` DIES on wireless-adb
-                            blip — use ON-DEVICE: adb shell "logcat -c; nohup logcat
-                            -v threadtime > /sdcard/tts-test.log 2>&1 &" then adb pull.
+                            git log before pushing.
 ```
 
 ---

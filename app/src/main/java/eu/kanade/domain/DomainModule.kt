@@ -84,6 +84,7 @@ import mihon.domain.panel.interactor.DetectPanels
 import mihon.domain.panel.repository.PanelDetectionRepository
 import mihon.domain.source.interactor.UpdateMangaFromRemote
 import mihon.domain.tts.engine.TtsEngine
+import mihon.domain.tts.service.TtsVoicePreferences
 import mihon.domain.upcoming.interactor.GetUpcomingManga
 import tachiyomi.data.category.CategoryRepositoryImpl
 import tachiyomi.data.chapter.ChapterRepositoryImpl
@@ -282,7 +283,7 @@ class DomainModule : InjektModule {
         addFactory { SearchDictionaryTerms(get(), get()) }
         addSingletonFactory<DictionaryAudioRepository> { DictionaryAudioRepositoryImpl(get<Application>(), get()) }
         addSingletonFactory<DictionaryAudioPlayer> { DictionaryAudioPlayerImpl() }
-        addSingletonFactory<TtsEngine> { AndroidTtsEngine(get<Application>()) }
+        addSingletonFactory<TtsEngine> { AndroidTtsEngine(get<Application>(), get<TtsVoicePreferences>()) }
 
         addSingletonFactory { AnkiDroidPreferences(get()) }
         addSingletonFactory<AnkiDroidRepository> { AnkiDroidRepositoryImpl(get<Application>(), get()) }
