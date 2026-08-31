@@ -10,6 +10,19 @@ The format is a modified version of [Keep a Changelog](https://keepachangelog.co
 - `Fixed` - for any bug fixes.
 - `Other` - for technical stuff.
 
+## [v0.5.1] - 2026-08-31
+
+### Added
+- Add advanced TTS voice configuration (Settings → Read aloud and voice): TTS engine
+  picker, language and locale pickers, and a searchable voice picker with
+  quality/latency/network indicators
+- Add voice preview ("Play sample") and reset-to-default voice configuration
+- Add deep-link from the reader's Read-Aloud tab to the full voice settings screen
+
+### Changed
+- Redesign the in-reader TTS playback bar as a floating pill: rounded, elevated,
+  width-constrained, and positioned to avoid overlapping the reader's bottom tray
+
 ## [v0.5.0] - 2026-08-30
 
 First release of this fork. This repository is a fork of [Yomihon](https://github.com/yomihon/yomihon)
