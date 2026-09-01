@@ -1,0 +1,104 @@
+CREATE TABLE ocr_exclusion_zones(
+    _id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    manga_id INTEGER NOT NULL,
+    source_id INTEGER NOT NULL,
+    chapter_id INTEGER,
+    page_index INTEGER,
+    scope TEXT NOT NULL,
+    left_norm REAL NOT NULL,
+    top_norm REAL NOT NULL,
+    right_norm REAL NOT NULL,
+    bottom_norm REAL NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY(manga_id) REFERENCES mangas (_id) ON DELETE CASCADE,
+    FOREIGN KEY(chapter_id) REFERENCES chapters (_id) ON DELETE CASCADE
+);
+CREATE INDEX ocr_exclusion_zones_manga_id_index ON ocr_exclusion_zones(manga_id);
+
+getAllZones:
+SELECT
+    oez._id,
+    oez.manga_id,
+    oez.source_id,
+    oez.chapter_id,
+    oez.page_index,
+    oez.scope,
+    oez.left_norm,
+    oez.top_norm,
+    oez.right_norm,
+    oez.bottom_norm,
+    oez.enabled,
+    oez.created_at
+FROM ocr_exclusion_zones oez;
+
+zonesForChapter:
+SELECT
+    oez._id,
+    oez.manga_id,
+    oez.source_id,
+    oez.chapter_id,
+    oez.page_index,
+    oez.scope,
+    oez.left_norm,
+    oez.top_norm,
+    oez.right_norm,
+    oez.bottom_norm,
+    oez.enabled,
+    oez.created_at
+FROM ocr_exclusion_zones oez
+WHERE oez.chapter_id = :chapterId
+  AND oez.enabled = 1;
+
+zonesForManga:
+SELECT
+    oez._id,
+    oez.manga_id,
+    oez.source_id,
+    oez.chapter_id,
+    oez.page_index,
+    oez.scope,
+    oez.left_norm,
+    oez.top_norm,
+    oez.right_norm,
+    oez.bottom_norm,
+    oez.enabled,
+    oez.created_at
+FROM ocr_exclusion_zones oez
+WHERE oez.manga_id = :mangaId;
+
+zonesForSource:
+SELECT
+    oez._id,
+    oez.manga_id,
+    oez.source_id,
+    oez.chapter_id,
+    oez.page_index,
+    oez.scope,
+    oez.left_norm,
+    oez.top_norm,
+    oez.right_norm,
+    oez.bottom_norm,
+    oez.enabled,
+    oez.created_at
+FROM ocr_exclusion_zones oez
+WHERE oez.source_id = :sourceId;
+
+insertZone:
+INSERT INTO ocr_exclusion_zones(
+    manga_id, source_id, chapter_id, page_index, scope,
+    left_norm, top_norm, right_norm, bottom_norm, enabled, created_at
+)
+VALUES(
+    :mangaId, :sourceId, :chapterId, :pageIndex, :scope,
+    :leftNorm, :topNorm, :rightNorm, :bottomNorm, :enabled, :createdAt
+);
+
+deleteZone:
+DELETE FROM ocr_exclusion_zones WHERE _id = :id;
+
+setEnabled:
+UPDATE ocr_exclusion_zones SET enabled = :enabled WHERE _id = :id;
+
+selectLastInsertedRowId:
+SELECT last_insert_rowid();

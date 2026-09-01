@@ -10,35 +10,21 @@
 ## Current project state
 
 ```text
-Project:        Yomihon fork (v0.5.0, vc26) — Android manga reader + OCR/language tooling
-Repo state:     branch main. v0.5.0 release prep DONE 2026-08-30: .opencode/
-                untracked + gitignored, README rewritten as honest fork identity,
-                CHANGELOG v0.5.0 entry, version bump 0.4.0/vc25 → 0.5.0/vc26,
-                Lens API key documented as inherited upstream compat. All prior
-                TTS fix sets committed (see git log). Do not amend user commits.
-Untracked:      .opencode/ (generated agent/session state — REMOVED from git
-                tracking 2026-08-30, now gitignored; never commit it again),
-                .device-pass/ (logcat evidence, gitignored)
-Primary goal:   Reliable Read-Aloud: English OCR → English system TTS →
-                correct progression (PRODUCT PIVOT 2026-08-25: English is the
-                primary v1 language; Japanese TTS moved to Phase 10.)
-Current phase:  Phase 10A COMPLETED (2026-08-31) — advanced system TTS
-                voice configuration, DEVICE-VERIFIED (USER CONFIRMED PASS,
-                build 0.5.0-8250) incl. voice-picker search follow-up.
-                ALL UNCOMMITTED awaiting user commit. Phase 9 COMPLETE
-                (0 APPLICATION LEAKS), battery measurement PASS. Phase 8
-                device pass COMPLETE (steps 1–15 executed + user-confirmed
-                2026-08-28 RUN4). All prior fix sets committed (see git log).
-Current status: Finding #1 FIXED+VERIFIED (22/22 advances, 0 timeouts, 1–5ms).
-                Finding #2 FIXED (timeout sets pageIndex=target; unexercised).
-                Finding #3 duplicate speech: USER DROPPED 2026-08-28, LOW
-                PRIORITY post-build (Deferred issues). Finding #4 prefetch-DNS
-                session-kill FIXED+VERIFIED 2026-08-28 (reportFailure gate).
-                Finding #5 ~100MB reader-exit leak FIXED+DEVICE-VERIFIED
-                2026-08-29 (0 leaks post-sessions; committed 5c7d2cc2c).
-TTS code:       Region-level auto-scroll (ScrollToRegion event), webtoon
-                confirm fix (explicit onScrolled in moveToPage), pause/resume
-                page-awareness, prefetch/rebuild dedup, user-nav debounce.
+Project:        Yomihon fork (v0.5.1, vc27) — Android manga reader + OCR/language tooling
+Repo state:     branch main @ b8858545a + UNCOMMITTED multi-phase feature set
+                (2026-09-01, see "[COMPLETED 2026-09-01 — Phases A–I]" block).
+                v0.5.1 RELEASE PUBLISHED 2026-08-31 (tag v0.5.1, 5 ABI APKs).
+Untracked:      .opencode/ + .device-pass/ (gitignored), .codegraph/ (index,
+                gitignored)
+Primary goal:   Multi-phase roadmap: intelligent speech cleanup, region
+                classification, OCR exclusion zones, voice profiles, 3x rate,
+                dictionary nav cleanup, Feed feature
+Current phase:  2026-09-01 session — Phases A–I implemented, all gates green
+                (spotlessCheck + testDebugUnitTest + verifySqlDelightMigration
+                + :app:assembleDebug), UNCOMMITTED, device pass NOT run.
+Current status: New DB migration 18.sqm verified; TTS regression surface
+                untouched (speak/advance/pause paths intact, pipeline only
+                filters regions before segmentation).
 ```
 
 ## Current objective
@@ -885,6 +871,126 @@ BATTERY MEASUREMENT — PHASE 9 FINAL ITEM (2026-08-29, build 0.4.0-8241):
 ```
 
 ```text
+[COMPLETED 2026-09-01 — Phases A–I multi-feature roadmap, UNCOMMITTED]
+
+Phase A — Intelligent speech cleanup (domain mihon.domain.tts.speech):
+- SpeechCleaner: punctuation-only skip (post-normalization so "WHAT?!?!?!" →
+  "WHAT?!" kept), conservative OCR-garbage detector (<40% letters over ≥4
+  chars drops symbol soup; never drops emphatic dialogue), excessive punct
+  normalization (runs ≥3 → 2 chars incl. full-width ！！？？), whitespace
+  collapse (bubble \n → space). SpeechCleanupOptions has per-feature toggles.
+- Tests: SpeechCleanerTest 9 cases.
+
+Phase B — Expression/language filtering:
+- SpeechRegionFilterConfig: speak-sfx/expressions/decorative/unknown toggles +
+  skipForeignScript + speechScript (LATIN/CJK — script-based not
+  language-name-based, stays multilingual).
+
+Phase C — Region classification:
+- SpeechRegionClassifier heuristics: blank/symbol-only → DECORATIVE; CJK
+  script on Latin page → DECORATIVE; wide-thin terminal-less → NARRATION;
+  short uppercase + emphasis → SOUND_EFFECT; uppercase interjection regex →
+  EXPRESSION; else DIALOGUE. OcrRegion untouched (no schema/confidence
+  exists — classifier designed for future metadata swap-in).
+- Tests: SpeechRegionClassifierTest 7 cases + SpeechRegionFilterTest +
+  SpeechPipelineTest.
+
+Pipeline wiring (TtsPlaybackController.acquireSentences):
+- result.regions → SpeechPipeline.toSpeakableSentences (classify → filter →
+  clean → segment). Cleanup BEFORE segmentation (punct runs normalize
+  first); post-segment punct-only slices dropped. Original OCR data
+  immutable (dictionary/tap-overlay/search see full regions).
+
+Phase D — OCR exclusion zones:
+- DB: 18.sqm + ocr_exclusion_zones.sq (manga_id FK CASCADE, chapter_id FK
+  CASCADE, source_id, page_index, scope TEXT, normalized REAL rect, enabled,
+  created_at). verifySqlDelightMigration GREEN.
+- Domain: OcrExclusionZone model, OcrExclusionScope {PAGE,CHAPTER,MANGA,
+  SOURCE}, repository + interactors (Get/Add/Delete/SetEnabled +
+  subscribeForManga/Source, awaitForChapter/awaitAll).
+- Matching: OcrExclusionMatcher (pure overlap test on normalized coords;
+  PAGE scope matches pageIndex only; enabled filter at query + matcher).
+  Applied ONLY in TtsPlaybackController (speech layer) — tap/dictionary
+  OCR intentionally unaffected (spec: exclusion vs speech-cleanup distinct).
+- Selection UI: reuse drag-select infra (SelectionAction.SaveExclusionZone);
+  captureExclusionZoneSelection resolves captures → bitmap dims → normalized
+  rect → Dialog.ExclusionZoneScope (page/chapter/manga/source choice) →
+  VM saveExclusionZone (launchNonCancellable). Manage sheet
+  (OcrExclusionZonesSheet) lists zones w/ enable toggle + delete.
+  Entry: Reader settings → Read aloud tab → "OCR & text recognition"
+  (enable toggle + add zone + manage). Pref gate
+  pref_tts_ocr_exclusions_enabled (default true) controls lookup.
+- Tests: OcrExclusionMatcherTest 5 cases (overlap, page-scope, cross-scope,
+  normalized-coords scaling).
+
+Phase G — Backup/restore:
+- Backup model +BackupOcrExclusionZone list @ProtoNumber(107) (additive proto
+  — old backups compatible, unknown fields survive).
+- Creator: OcrExclusionZonesBackupCreator gated on options.appSettings.
+  Restore: OcrExclusionZoneRestorer — dedupe (same manga/chapter/page/rect),
+  skip zones w/ invalid scope name, per-zone try/catch (FK miss → logged skip,
+  no restore abort). All new prefs (pref_tts_*, pref_dictionary_reader_*,
+  pref_feed_items, pref_tts_voice_profiles) auto-included via
+  PreferenceBackupCreator (plain keys, no __PRIVATE_ prefix).
+
+Phase E — Voice profiles:
+- TtsVoiceProfile @Serializable {id,name,enginePackage,voiceName,languageTag,
+  rate,pitch}; stored as JSON in one pref (pref_tts_voice_profiles) via
+  getObjectFromString; active id pref (pref_tts_active_voice_profile).
+- ReadAloudSettingsScreenModel: saveVoiceProfile (snapshot current config),
+  deleteVoiceProfile, applyVoiceProfile (writes component prefs + rate/pitch
+  + engine.setEnginePackage + reload). UI: "Voice profiles" group in
+  SettingsReadAloudScreen — rows w/ apply + delete icon, save row w/ name
+  dialog (default name "N% · voice").
+
+Phase F — 3x speech rate:
+- Rate slider ranges 50..300 (reader tab + main settings). Engine-side no
+  clamp (Android TTS accepts float; framework clamps internally per engine).
+- TtsPlaybackBar: speed chip ("1x") + DropdownMenu (0.5/0.75/1/1.25/1.5/
+  1.75/2/2.5/3) → writes ttsSpeechRate pref → controller live collector
+  applies to engine (same path as Phase 10A rate/pitch).
+
+Phase H — Dictionary navigation cleanup:
+- AUDIT RESULT: bottom-nav DictionaryTab (word lookup) vs More→Dictionaries
+  (SettingsDictionaryScreen: import/manager/popup-style) = DIFFERENT
+  features, no merge. Lookup tab moved: DictionaryTab DELETED →
+  DictionaryLookupScreen (Voyager Screen, same DictionarySearchScreenModel
+  content) opened from More tab "Dictionary" row (MenuBook icon) above the
+  "Dictionaries" manager row.
+- Dictionary interaction settings (SettingsDictionaryScreen, "Dictionary
+  style" group): reader tap lookup toggle (pref_dictionary_reader_tap_lookup,
+  default ON — gates shouldHandleCachedOcrRegionTaps) + auto-search toggle
+  (pref_dictionary_reader_auto_search, default ON — gates OcrResultOverlay
+  initial LaunchedEffect search; off = popup opens with query filled, user
+  searches manually). Manual long-press OCR lookup unaffected.
+
+Phase I — Feed:
+- FeedTab replaces DictionaryTab in bottom nav (HomeScreen TABS + Tab.Feed;
+  Dictionary Tab sealed member replaced). Label "Feed", Icons.Outlined.Feed.
+- Model: FeedItem @Serializable {sourceId, listing POPULAR/LATEST, enabled};
+  FeedPreferences (JSON pref pref_feed_items — auto-backed-up).
+- FeedScreenModel: GetEnabledSources (stub-filtered) for picker; per enabled
+  feed fetch page 1 via source.getPopularManga/getLatestUpdates(1) →
+  toDomainManga → NetworkToLocalManga (GlobalSearch fan-out precedent,
+  async per feed, per-feed result state). Feeds reactive via pref changes().
+- FeedScreen: LazyVerticalGrid, per-feed header (source name, listing label,
+  up/down reorder, enable switch, delete) + MangaComfortableGridItem grid
+  → MangaScreen(id, true). Add dialog: source list (supportsLatest gates
+  Latest listing) + listing choice. Empty state w/ add CTA.
+
+GATES GREEN 2026-09-01 (devcontainer JDK17, -Xmx4g, both volumes):
+  spotlessApply → spotlessCheck + testDebugUnitTest +
+  verifySqlDelightMigration + :app:assembleDebug ALL BUILD SUCCESSFUL.
+  NOT run: device pass, release build, restore round-trip test.
+
+Follow-ups (deliberately deferred, ponytail):
+- Feed: no prefetch/paging (page 1 per feed only); no per-feed refresh
+  control; source-uninstalled state shows error text.
+- Exclusion zone rect visualization on-page (currently list-only coords).
+- Speech classifier ML upgrade path = swap classify() internals only.
+```
+
+```text
 Deferred issues (LOW PRIORITY, revisit post-build):
   - #3b hands-off duplicate words/phrases: intermittent, manga-specific, never
     reproduced under instrumentation. To re-debug: re-add TTS-DBG logs (git history)
@@ -893,8 +999,10 @@ Deferred issues (LOW PRIORITY, revisit post-build):
     under different utterance ids) or Google-TTS engine audio quirk.
 
 Remaining:
-- Commit the Phase 10A change set (Tasks 1–7 + voice-picker search) after
-  user review — see "[COMPLETED 2026-08-31 — Phase 10A Task 7]" block.
+- User review + commit of the 2026-09-01 Phases A–I change set.
+- Device pass of the new features (speech cleanup behavior, exclusion-zone
+  selection on manga+webtoon, speed popup, profiles, Feed tab, dictionary
+  More-tab relocation).
 - (DONE 2026-08-29: Phase 9 COMPLETE — leak fix device-verified 0 APPLICATION
   LEAKS; battery measurement done: no post-exit drain, app fg CPU ~1mAh/min,
   screen dominates; evidence battery-sample.log + battery-tts-session.log +
@@ -1266,15 +1374,13 @@ Environment: devcontainer image vsc-yomihon-e24e3bd7… (JDK 17) via docker on h
 ## Last verified build
 
 ```text
-Date:     2026-08-30
-Command:  ./gradlew spotlessApply spotlessCheck testDebugUnitTest, then
-          :app:assembleRelease -Pinclude-telemetry -Penable-updater
-          (docker devcontainer JDK17, -Xmx4g, both volumes)
-Result:   ALL GREEN. v0.5.0 RELEASE PUBLISHED (tag v0.5.0 = 7e0d52697,
-          GitHub release with arm64+universal APKs, both verified
-          versionCode=26 versionName="0.5.0" via output-metadata.json).
-          Updater GITHUB_REPO now points at Nikhil0921/yomihon (was
-          upstream — would have offered upstream releases to fork users).
+Date:     2026-09-01
+Command:  ./gradlew spotlessCheck testDebugUnitTest verifySqlDelightMigration
+          :app:assembleDebug (docker devcontainer JDK17, -Xmx4g, both volumes)
+Result:   ALL GREEN — Phases A–I feature set (speech cleanup/classification,
+          OCR exclusion zones + 18.sqm migration, backup @107, voice profiles,
+          3x rate + speed popup, dictionary nav cleanup + interaction prefs,
+          Feed tab). UNCOMMITTED; device pass pending.
 ```
 
 ## Last verified test
@@ -1297,55 +1403,41 @@ Result:   BUILD SUCCESSFUL — Phase 10A Task 5 (settings root entry +
 ## Agent handoff
 
 ```text
-Last agent:                 opencode (Phase 10A Task 6 — docs)
-Date:                       2026-08-30
-Task completed:             Task 6 of Phase 10A (SDD plan 2026-08-30-phase10a-
-                            advanced-tts-voice-config): documentation updates
-                            for the Tasks 1–5 implementation. prd.md new §6
-                            (capabilities, user flow, preview policy, fallback
-                            chain, 10B deferred list); architecture.md §5/§7
-                            extended (TtsEngine 10A contracts, AndroidTtsEngine
-                            config pipeline incl. initialize re-apply design +
-                            why zero controller changes, preview single-engine
-                            policy, Injekt future-provider swap); design.md new
-                            §13 (3 groups, loading/error states, API-facts-
-                            only metadata labels, Locale.getDisplayName, stale-
-                            pref raw-value display); phase.md Phase 10A entry
-                            IN_PROGRESS + old Phase 10 → 10B backlog rework;
-                            memory.md session record. Docs-only — no Gradle
-                            run needed (spotless does not cover docs/*.md).
-Current task:               NONE — Phase 10A Tasks 1-6 all landed UNCOMMITTED.
-Next recommended task:      Task 7: device verification of the 10A flow
-                            (settings root row, deep-link from reader
-                            dialog, engine/language/locale/voice pickers,
-                            live mid-session voice/rate/pitch changes via
-                            pause/resume, preview + stop-preview, reset,
-                            system-default fallback). Then user review +
-                            commit of the whole 10A set; phase.md flips to
-                            COMPLETED only after device pass recorded here.
-Files safe to modify:       docs/* ; app reader/tts/settings files ;
-                            data OCR files ; i18n base strings.xml (snake_case only)
-Files currently worked on:  UNCOMMITTED Phase 10A set: Tasks 1-6 files
-                            (TtsVoicePreferences + test, TtsEngine +
-                            AndroidTtsEngine, SettingsReadAloudScreen +
-                            screen model, SettingsSearchScreen, Task 5's
-                            8 files incl. Constants/MainActivity/
-                            SettingsScreen/SettingsMainScreen/ReaderActivity/
-                            ReaderSettingsDialog/ReadAloudPage/i18n, and
-                            Task 6's docs edits in prd/architecture/design/
-                            phase/memory).
-                            Compile-green, spotlessCheck green, tests green.
-Known risks:                Docs describe UNVERIFIED-on-device behavior —
-                            Task 7 must confirm pickers/live-apply/preview
-                            on hardware before any completion claim.
-                            Reader deep-link launches MainActivity with
-                            CLEAR_TOP — if MainActivity was already dead
-                            (reader-only session), fresh launch path still
-                            hits handleIntentAction via onNewIntent/new
-                            intent, same as SHORTCUT_MANGA precedent.
-                            fd52a613a-class risk: doc commits accidentally
-                            reverting newer docs — verify doc diffs against
-                            git log before pushing.
+Last agent:                 opencode (2026-09-01 — Phases A–I multi-feature
+                            roadmap)
+Date:                       2026-09-01
+Task completed:             Speech cleanup + region classification/expression
+                            filtering (domain mihon.domain.tts.speech, wired at
+                            TtsPlaybackController.acquireSentences); OCR
+                            exclusion zones (18.sqm + repo/interactors +
+                            drag-select UI + scope dialog + manage sheet +
+                            matcher tests); backup/restore for zones (@107 +
+                            creator/restorer, dedupe + FK-safe skips); voice
+                            profiles (JSON pref + settings group); 3x rate +
+                            speed dropdown in TTSPlaybackBar; dictionary nav
+                            cleanup (DictionaryTab → DictionaryLookupScreen in
+                            More tab; tap-lookup + auto-search prefs); Feed
+                            tab (FeedTab/ScreenModel/Screen + FeedPreferences).
+Current task:               NONE — awaiting user review + commit + device pass.
+Next recommended task:      Device pass script: (1) read-aloud on cached
+                            manga — verify SFX/decorative skipped, dialogue
+                            intact incl. "..." cases; (2) add exclusion zone
+                            on provider banner (webtoon + pager) — verify
+                            normalized rect scales after resolution change;
+                            (3) speed popup 0.5–3x live; (4) profile
+                            save/apply/persist-after-restart; (5) Feed add/
+                            reorder/delete + restart persistence; (6)
+                            dictionary More-tab lookup + auto-search off;
+                            (7) backup create/restore round-trip w/ zones.
+Files safe to modify:       docs/* ; app reader/tts/settings/feed/dictionary ;
+                            data OCR/backup files ; i18n base strings.xml
+Known risks:                Speech classifier heuristics tuned on English
+                            manga conventions — non-Latin primary speech
+                            requires pref_tts_speech_script=CJK setting;
+                            Feed fetches are one network page per feed on
+                            every tab open (no cache); exclusion UI uses
+                            bitmap decode for dims (one-shot, acceptable);
+                            restore dedupe is exact-rect match only.
 ```
 
 ---

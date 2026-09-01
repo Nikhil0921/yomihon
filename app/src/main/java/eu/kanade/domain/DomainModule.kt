@@ -46,6 +46,7 @@ import mihon.data.dictionary.HoshiDictionaryStore
 import mihon.data.dictionary.LegacyDictionaryArchiveBuilder
 import mihon.data.extension.repository.ExtensionStoreRepositoryImpl
 import mihon.data.extension.service.ExtensionStoreService
+import mihon.data.ocr.OcrExclusionZoneRepositoryImpl
 import mihon.data.ocr.OcrRepositoryImpl
 import mihon.data.panel.PanelDetectionRepositoryImpl
 import mihon.domain.ankidroid.interactor.AddDictionaryCard
@@ -71,14 +72,19 @@ import mihon.domain.extension.interactor.RemoveExtensionStore
 import mihon.domain.extension.interactor.UpdateExtensionStores
 import mihon.domain.extension.repository.ExtensionStoreRepository
 import mihon.domain.migration.usecases.MigrateMangaUseCase
+import mihon.domain.ocr.interactor.AddOcrExclusionZone
 import mihon.domain.ocr.interactor.ClearCachedChapterOcr
 import mihon.domain.ocr.interactor.ClearOcrCache
+import mihon.domain.ocr.interactor.DeleteOcrExclusionZone
 import mihon.domain.ocr.interactor.GetCachedChapterIdsOcr
 import mihon.domain.ocr.interactor.GetCachedPageOcr
 import mihon.domain.ocr.interactor.GetOcrCacheSize
+import mihon.domain.ocr.interactor.GetOcrExclusionZones
 import mihon.domain.ocr.interactor.OcrProcessor
 import mihon.domain.ocr.interactor.ScanPageOcr
+import mihon.domain.ocr.interactor.SetOcrExclusionZoneEnabled
 import mihon.domain.ocr.interactor.WithOcrScanSession
+import mihon.domain.ocr.repository.OcrExclusionZoneRepository
 import mihon.domain.ocr.repository.OcrRepository
 import mihon.domain.panel.interactor.DetectPanels
 import mihon.domain.panel.repository.PanelDetectionRepository
@@ -295,6 +301,15 @@ class DomainModule : InjektModule {
                 context = get<Application>(),
             )
         }
+        addSingletonFactory<OcrExclusionZoneRepository> {
+            OcrExclusionZoneRepositoryImpl(
+                database = get(),
+            )
+        }
+        addFactory { GetOcrExclusionZones(get()) }
+        addFactory { AddOcrExclusionZone(get()) }
+        addFactory { DeleteOcrExclusionZone(get()) }
+        addFactory { SetOcrExclusionZoneEnabled(get()) }
         addSingletonFactory { OcrScanStore(get<Application>(), get()) }
         addSingletonFactory<OcrPageSourceGateway> { OcrPageSourceGatewayImpl(get<Application>(), get(), get()) }
         addSingletonFactory { OcrPageSourceResolver(get(), get(), get()) }

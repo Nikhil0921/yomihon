@@ -45,4 +45,16 @@ class DictionaryPreferences(
         key = "pref_dictionary_ocr_result_dim_background",
         defaultValue = false,
     )
+
+    /** Tap-on-OCR-region dictionary lookup while reading. */
+    fun readerTapLookupEnabled() = preferenceStore.getBoolean(
+        key = "pref_dictionary_reader_tap_lookup",
+        defaultValue = true,
+    )
+
+    /** Search automatically when the reader dictionary result opens; off = manual search only. */
+    fun readerAutoSearchEnabled() = preferenceStore.getBoolean(
+        key = "pref_dictionary_reader_auto_search",
+        defaultValue = true,
+    )
 }

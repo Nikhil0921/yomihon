@@ -72,6 +72,8 @@ import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.dictionary.DictionaryPreferences
 import eu.kanade.domain.dictionary.OcrResultPresentation
 import eu.kanade.presentation.reader.DisplayRefreshHost
+import eu.kanade.presentation.reader.ExclusionZoneScopeDialog
+import eu.kanade.presentation.reader.OcrExclusionZonesSheet
 import eu.kanade.presentation.reader.OcrLoadingIndicator
 import eu.kanade.presentation.reader.OcrResultOverlay
 import eu.kanade.presentation.reader.OcrResultPopupSettings
@@ -123,6 +125,7 @@ import eu.kanade.tachiyomi.util.system.openInBrowser
 import eu.kanade.tachiyomi.util.system.toShareIntent
 import eu.kanade.tachiyomi.util.system.toast
 import eu.kanade.tachiyomi.util.view.setComposeContent
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
@@ -203,6 +206,7 @@ class ReaderActivity : BaseActivity() {
     private var activeOcrOverlaySession by mutableStateOf<ActiveOcrOverlaySession?>(null)
     private var selectionAction: SelectionAction = SelectionAction.ProcessOcr
     private var isTapExitEnabled = false
+    private var showExclusionZonesSheet by mutableStateOf(false)
 
     // Height (px) of the bottom reader tray incl. nav-bar insets; 0 when hidden.
     private var bottomTrayHeightPx by mutableStateOf(0)
@@ -231,6 +235,7 @@ class ReaderActivity : BaseActivity() {
 
     private sealed interface SelectionAction {
         data object ProcessOcr : SelectionAction
+        data object SaveExclusionZone : SelectionAction
 
         data class ExportImageToAnki(val terms: List<DictionaryTerm>) : SelectionAction
     }
@@ -472,6 +477,14 @@ class ReaderActivity : BaseActivity() {
                             },
                         )
                     },
+                    onAddExclusionZone = {
+                        viewModel.closeDialog()
+                        enterExclusionZoneSelectionMode()
+                    },
+                    onManageExclusionZones = {
+                        viewModel.closeDialog()
+                        showExclusionZonesSheet = true
+                    },
                     screenModel = settingsScreenModel,
                 )
             }
@@ -503,6 +516,12 @@ class ReaderActivity : BaseActivity() {
                     onSetAsCover = viewModel::setAsCover,
                     onShare = viewModel::shareImage,
                     onSave = viewModel::saveImage,
+                )
+            }
+            is ReaderViewModel.Dialog.ExclusionZoneScope -> {
+                ExclusionZoneScopeDialog(
+                    onDismissRequest = onDismissRequest,
+                    onScopeSelected = viewModel::saveExclusionZone,
                 )
             }
             is ReaderViewModel.Dialog.OcrResult, null -> {}
@@ -693,6 +712,7 @@ class ReaderActivity : BaseActivity() {
                     settingsScreenModel.ioCoroutineScope.cancel()
                 }
             }
+            val speechRatePref by settingsScreenModel.ttsPreferences.ttsSpeechRate().collectAsState()
 
             // Initialize dictionary search model
             LaunchedEffect(Unit) {
@@ -822,6 +842,9 @@ class ReaderActivity : BaseActivity() {
                         onCancel = ::exitOcrMode,
                         instructionText = when (selectionAction) {
                             SelectionAction.ProcessOcr -> AnnotatedString(stringResource(MR.strings.ocr_select_region))
+                            SelectionAction.SaveExclusionZone -> AnnotatedString(
+                                stringResource(MR.strings.ocr_exclusion_select_region),
+                            )
                             is SelectionAction.ExportImageToAnki -> AnnotatedString(
                                 stringResource(MR.strings.anki_select_image_region),
                             )
@@ -853,6 +876,8 @@ class ReaderActivity : BaseActivity() {
                 )
                 TtsPlaybackBar(
                     state = state.ttsState,
+                    speechRate = speechRatePref,
+                    onSetSpeechRate = { viewModel.setReadAloudRate(it) },
                     onTogglePlayPause = viewModel::toggleReadAloudPlayPause,
                     onNextSentence = viewModel::nextReadAloudSentence,
                     onPreviousSentence = viewModel::previousReadAloudSentence,
@@ -862,6 +887,15 @@ class ReaderActivity : BaseActivity() {
                         .align(Alignment.BottomCenter)
                         .offset { IntOffset(x = 0, y = -pillClearancePx) },
                 )
+
+                if (showExclusionZonesSheet) {
+                    OcrExclusionZonesSheet(
+                        zones = state.exclusionZones,
+                        onDismissRequest = { showExclusionZonesSheet = false },
+                        onToggleEnabled = viewModel::setExclusionZoneEnabled,
+                        onDelete = viewModel::deleteExclusionZone,
+                    )
+                }
 
                 val onDismissRequest = viewModel::closeDialog
                 val onDismissOcrResult = ::dismissActiveOcrOverlaySession
@@ -894,6 +928,14 @@ class ReaderActivity : BaseActivity() {
                                         addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
                                     },
                                 )
+                            },
+                            onAddExclusionZone = {
+                                viewModel.closeDialog()
+                                enterExclusionZoneSelectionMode()
+                            },
+                            onManageExclusionZones = {
+                                viewModel.closeDialog()
+                                showExclusionZonesSheet = true
                             },
                             screenModel = settingsScreenModel,
                         )
@@ -928,6 +970,12 @@ class ReaderActivity : BaseActivity() {
                             onSave = viewModel::saveImage,
                         )
                     }
+                    is ReaderViewModel.Dialog.ExclusionZoneScope -> {
+                        ExclusionZoneScopeDialog(
+                            onDismissRequest = onDismissRequest,
+                            onScopeSelected = viewModel::saveExclusionZone,
+                        )
+                    }
                     is ReaderViewModel.Dialog.OcrResult -> {
                         val searchState by dictionarySearchScreenModel.state.collectAsState()
                         LaunchedEffect(activeOcrOverlaySession?.selection, searchState.results?.highlightRange) {
@@ -960,6 +1008,7 @@ class ReaderActivity : BaseActivity() {
                                 toast(MR.strings.action_copy_to_clipboard)
                             },
                             searchState = searchState,
+                            autoSearchEnabled = dictionaryPreferences.readerAutoSearchEnabled().get(),
                             onQueryChange = dictionarySearchScreenModel::updateQuery,
                             onSearch = dictionarySearchScreenModel::search,
                             onTermGroupClick = { terms ->
@@ -1289,8 +1338,62 @@ class ReaderActivity : BaseActivity() {
     ) {
         when (val action = selectionAction) {
             SelectionAction.ProcessOcr -> captureRegionForOcr(rect)
+            SelectionAction.SaveExclusionZone -> captureExclusionZoneSelection(rect)
             is SelectionAction.ExportImageToAnki -> captureRegionForAnkiExport(rect, action.terms)
         }
+    }
+
+    /**
+     * Resolves the drag selection against the current viewer into normalized
+     * image coordinates, then asks the ViewModel to open the scope dialog.
+     */
+    private fun captureExclusionZoneSelection(rect: android.graphics.RectF) {
+        lifecycleScope.launchIO {
+            try {
+                val captures = resolveSelectionCaptures(rect)
+                val capture = captures.firstOrNull() ?: error("No page under exclusion selection")
+                val pageInput = capture.bitmapSource?.selectionPageInput()
+                    ?: error("Exclusion selection page input unavailable")
+                val bitmap = pageInput.openBitmap() ?: error("Exclusion selection bitmap unavailable")
+                try {
+                    val normalized = withUIContext {
+                        val sourceRect = capture.sourceRect
+                        if (sourceRect.width() <= 0 || sourceRect.height() <= 0) {
+                            error("Exclusion selection resolved to an empty region")
+                        }
+                        android.graphics.RectF(
+                            (sourceRect.left / bitmap.width.toFloat()).coerceIn(0f, 1f),
+                            (sourceRect.top / bitmap.height.toFloat()).coerceIn(0f, 1f),
+                            (sourceRect.right / bitmap.width.toFloat()).coerceIn(0f, 1f),
+                            (sourceRect.bottom / bitmap.height.toFloat()).coerceIn(0f, 1f),
+                        )
+                    }
+                    viewModel.openExclusionZoneScopeDialog(
+                        pageIndex = capture.page.index,
+                        left = normalized.left,
+                        top = normalized.top,
+                        right = normalized.right,
+                        bottom = normalized.bottom,
+                    )
+                } finally {
+                    if (!bitmap.isRecycled) bitmap.recycle()
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR, e) { "Failed to resolve exclusion zone selection" }
+                withUIContext {
+                    exitOcrMode()
+                    toast(MR.strings.error_ocr_image_fail)
+                }
+            }
+        }
+    }
+
+    /** Reader settings entry point: enters region-selection mode for OCR exclusion zones. */
+    private fun enterExclusionZoneSelectionMode() {
+        selectionAction = SelectionAction.SaveExclusionZone
+        enterSelectionMode()
     }
 
     private fun captureRegionForAnkiExport(
@@ -1441,7 +1544,7 @@ class ReaderActivity : BaseActivity() {
     }
 
     fun shouldHandleCachedOcrRegionTaps(): Boolean {
-        return true
+        return dictionaryPreferences.readerTapLookupEnabled().get()
     }
 
     fun hasActiveOcrOverlaySession(): Boolean {

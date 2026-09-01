@@ -10,6 +10,7 @@ import mihon.domain.tts.engine.TtsEngineInfo
 import mihon.domain.tts.engine.TtsVoiceInfo
 import mihon.domain.tts.service.TtsPreferences
 import mihon.domain.tts.service.TtsVoicePreferences
+import mihon.domain.tts.service.TtsVoiceProfile
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -31,6 +32,8 @@ class ReadAloudSettingsScreenModel(
         val rate: Float = 1f,
         val pitch: Float = 1f,
         val isPreviewPlaying: Boolean = false,
+        val voiceProfiles: List<TtsVoiceProfile> = emptyList(),
+        val activeVoiceProfileId: String = "",
     )
 
     fun load() {
@@ -53,6 +56,8 @@ class ReadAloudSettingsScreenModel(
                     selectedLanguageTag = voicePreferences.ttsLanguageTag().get(),
                     rate = ttsPreferences.ttsSpeechRate().get(),
                     pitch = ttsPreferences.ttsPitch().get(),
+                    voiceProfiles = voicePreferences.ttsVoiceProfiles().get(),
+                    activeVoiceProfileId = voicePreferences.ttsActiveVoiceProfileId().get(),
                 )
             }
         }
@@ -115,6 +120,44 @@ class ReadAloudSettingsScreenModel(
     fun resetVoiceConfig() {
         voicePreferences.reset()
         engine.setEnginePackage("")
+        load()
+    }
+
+    /** Persists the current engine/voice/language/rate/pitch as a named profile. */
+    fun saveVoiceProfile(name: String) {
+        val current = state.value
+        val profile = TtsVoiceProfile(
+            name = name,
+            enginePackage = current.selectedEnginePackage,
+            voiceName = current.selectedVoiceName,
+            languageTag = current.selectedLanguageTag,
+            rate = current.rate,
+            pitch = current.pitch,
+        )
+        val profiles = voicePreferences.ttsVoiceProfiles().get() + profile
+        voicePreferences.ttsVoiceProfiles().set(profiles)
+        mutableState.update { it.copy(voiceProfiles = profiles) }
+    }
+
+    fun deleteVoiceProfile(profileId: String) {
+        val profiles = voicePreferences.ttsVoiceProfiles().get().filterNot { it.id == profileId }
+        voicePreferences.ttsVoiceProfiles().set(profiles)
+        if (voicePreferences.ttsActiveVoiceProfileId().get() == profileId) {
+            voicePreferences.ttsActiveVoiceProfileId().set("")
+        }
+        mutableState.update { it.copy(voiceProfiles = profiles, activeVoiceProfileId = "") }
+    }
+
+    /** Applies a stored profile to the live engine and the individual preferences. */
+    fun applyVoiceProfile(profileId: String) {
+        val profile = voicePreferences.ttsVoiceProfiles().get().firstOrNull { it.id == profileId } ?: return
+        voicePreferences.ttsActiveVoiceProfileId().set(profileId)
+        voicePreferences.ttsEnginePackage().set(profile.enginePackage)
+        voicePreferences.ttsVoiceName().set(profile.voiceName)
+        voicePreferences.ttsLanguageTag().set(profile.languageTag)
+        ttsPreferences.ttsSpeechRate().set(profile.rate)
+        ttsPreferences.ttsPitch().set(profile.pitch)
+        engine.setEnginePackage(profile.enginePackage)
         load()
     }
 

@@ -24,6 +24,7 @@ import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.ocr.OcrQueueStatus
 import eu.kanade.tachiyomi.data.ocr.OcrScanManager
 import eu.kanade.tachiyomi.ui.category.CategoryScreen
+import eu.kanade.tachiyomi.ui.dictionary.DictionaryLookupScreen
 import eu.kanade.tachiyomi.ui.download.DownloadQueueScreen
 import eu.kanade.tachiyomi.ui.download.OcrQueueScreen
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
@@ -77,6 +78,7 @@ data object MoreTab : Tab {
             onClickStats = { navigator.push(StatsScreen()) },
             onClickDataAndStorage = { navigator.push(SettingsScreen(SettingsScreen.Destination.DataAndStorage)) },
             onClickDictionary = { navigator.push(SettingsScreen(SettingsScreen.Destination.Dictionary)) },
+            onClickDictionaryLookup = { navigator.push(DictionaryLookupScreen) },
             onClickSettings = { navigator.push(SettingsScreen()) },
             onClickSupport = { navigator.push(SupportUsScreen()) },
             onClickAbout = { navigator.push(SettingsScreen(SettingsScreen.Destination.About)) },

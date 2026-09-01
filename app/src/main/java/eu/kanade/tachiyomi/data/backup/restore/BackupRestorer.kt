@@ -7,12 +7,14 @@ import eu.kanade.tachiyomi.data.backup.BackupNotifier
 import eu.kanade.tachiyomi.data.backup.models.BackupCategory
 import eu.kanade.tachiyomi.data.backup.models.BackupExtensionStore
 import eu.kanade.tachiyomi.data.backup.models.BackupManga
+import eu.kanade.tachiyomi.data.backup.models.BackupOcrExclusionZone
 import eu.kanade.tachiyomi.data.backup.models.BackupPreference
 import eu.kanade.tachiyomi.data.backup.models.BackupSavedSearch
 import eu.kanade.tachiyomi.data.backup.models.BackupSourcePreferences
 import eu.kanade.tachiyomi.data.backup.restore.restorers.CategoriesRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.ExtensionStoreRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.MangaRestorer
+import eu.kanade.tachiyomi.data.backup.restore.restorers.OcrExclusionZoneRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.PreferenceRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.SavedSearchRestorer
 import eu.kanade.tachiyomi.data.download.DownloadCache
@@ -47,6 +49,7 @@ class BackupRestorer(
     private val categoriesRestorer: CategoriesRestorer = CategoriesRestorer(),
     private val preferenceRestorer: PreferenceRestorer = PreferenceRestorer(context),
     private val extensionStoreRestorer: ExtensionStoreRestorer = ExtensionStoreRestorer(),
+    private val ocrExclusionZoneRestorer: OcrExclusionZoneRestorer = OcrExclusionZoneRestorer(),
     private val mangaRestorer: MangaRestorer = MangaRestorer(),
     private val savedSearchRestorer: SavedSearchRestorer = SavedSearchRestorer(),
 ) {
@@ -122,6 +125,7 @@ class BackupRestorer(
             }
             if (options.appSettings) {
                 restoreAppPreferences(backup.backupPreferences, backup.backupCategories.takeIf { options.categories })
+                restoreOcrExclusionZones(backup.backupOcrExclusionZones)
             }
             if (options.sourceSettings) {
                 restoreSourcePreferences(backup.backupSourcePreferences)
@@ -199,6 +203,25 @@ class BackupRestorer(
             preferences,
             categories,
         )
+
+        val progress = restoreProgress.incrementAndFetch()
+        notifier.showRestoreProgress(
+            context.stringResource(MR.strings.app_settings),
+            progress,
+            restoreAmount,
+            isSync,
+        )
+    }
+
+    private fun CoroutineScope.restoreOcrExclusionZones(
+        zones: List<BackupOcrExclusionZone>,
+    ) = launch {
+        ensureActive()
+        try {
+            ocrExclusionZoneRestorer.restoreZones(zones)
+        } catch (e: Exception) {
+            errors.add(Date() to "Error restoring OCR exclusion zones: ${e.message}")
+        }
 
         val progress = restoreProgress.incrementAndFetch()
         notifier.showRestoreProgress(

@@ -582,6 +582,16 @@ private fun rememberOcrResultPreferences(
             },
         ),
         Preference.PreferenceItem.SwitchPreference(
+            preference = dictionaryPreferences.readerTapLookupEnabled(),
+            title = stringResource(MR.strings.pref_dictionary_reader_tap_lookup),
+            subtitle = stringResource(MR.strings.pref_dictionary_reader_tap_lookup_summary),
+        ),
+        Preference.PreferenceItem.SwitchPreference(
+            preference = dictionaryPreferences.readerAutoSearchEnabled(),
+            title = stringResource(MR.strings.pref_dictionary_reader_auto_search),
+            subtitle = stringResource(MR.strings.pref_dictionary_reader_auto_search_summary),
+        ),
+        Preference.PreferenceItem.SwitchPreference(
             preference = dictionaryPreferences.ocrResultDimBackground(),
             title = stringResource(MR.strings.pref_dictionary_ocr_result_dim_background),
             subtitle = stringResource(MR.strings.pref_dictionary_ocr_result_dim_background_summary),

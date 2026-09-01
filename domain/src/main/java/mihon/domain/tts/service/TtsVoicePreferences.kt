@@ -1,6 +1,21 @@
 package mihon.domain.tts.service
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
 import tachiyomi.core.common.preference.PreferenceStore
+import java.util.UUID
+
+@Serializable
+data class TtsVoiceProfile(
+    val id: String = UUID.randomUUID().toString(),
+    val name: String,
+    val enginePackage: String = "",
+    val voiceName: String = "",
+    val languageTag: String = "",
+    val rate: Float = 1f,
+    val pitch: Float = 1f,
+)
 
 class TtsVoicePreferences(private val preferenceStore: PreferenceStore) {
 
@@ -10,10 +25,26 @@ class TtsVoicePreferences(private val preferenceStore: PreferenceStore) {
 
     fun ttsLanguageTag() = preferenceStore.getString("pref_tts_language_tag", "")
 
+    fun ttsVoiceProfiles() = preferenceStore.getObjectFromString(
+        "pref_tts_voice_profiles",
+        emptyList(),
+        { profiles -> profileJson.encodeToString(ListSerializer(TtsVoiceProfile.serializer()), profiles) },
+        { raw ->
+            runCatching { profileJson.decodeFromString(ListSerializer(TtsVoiceProfile.serializer()), raw) }
+                .getOrDefault(emptyList())
+        },
+    )
+
+    fun ttsActiveVoiceProfileId() = preferenceStore.getString("pref_tts_active_voice_profile", "")
+
     fun reset() {
         ttsEnginePackage().set("")
         ttsVoiceName().set("")
         ttsLanguageTag().set("")
+    }
+
+    private companion object {
+        val profileJson = Json { ignoreUnknownKeys = true }
     }
 }
 

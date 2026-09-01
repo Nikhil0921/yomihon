@@ -69,10 +69,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import logcat.LogPriority
 import mihon.domain.ocr.exception.OcrException
+import mihon.domain.ocr.interactor.AddOcrExclusionZone
+import mihon.domain.ocr.interactor.DeleteOcrExclusionZone
 import mihon.domain.ocr.interactor.GetCachedPageOcr
+import mihon.domain.ocr.interactor.GetOcrExclusionZones
 import mihon.domain.ocr.interactor.OcrProcessor
 import mihon.domain.ocr.interactor.ScanPageOcr
+import mihon.domain.ocr.interactor.SetOcrExclusionZoneEnabled
 import mihon.domain.ocr.interactor.WithOcrScanSession
+import mihon.domain.ocr.model.OcrExclusionScope
+import mihon.domain.ocr.model.OcrExclusionZone
 import mihon.domain.ocr.model.flattenOcrTextForQuery
 import mihon.domain.ocr.repository.OcrRepository
 import mihon.domain.panel.repository.PanelDetectionRepository
@@ -179,6 +185,10 @@ class ReaderViewModel @JvmOverloads constructor(
     private val scanPageOcr: ScanPageOcr by injectLazy()
     private val withOcrScanSession: WithOcrScanSession by injectLazy()
     private val pageSourceResolver: OcrPageSourceResolver by injectLazy()
+    private val getOcrExclusionZones: GetOcrExclusionZones by injectLazy()
+    private val addOcrExclusionZone: AddOcrExclusionZone by injectLazy()
+    private val deleteOcrExclusionZone: DeleteOcrExclusionZone by injectLazy()
+    private val setOcrExclusionZoneEnabled: SetOcrExclusionZoneEnabled by injectLazy()
 
     private var ttsControllerInstance: TtsPlaybackController? = null
     private val ttsController: TtsPlaybackController
@@ -196,6 +206,7 @@ class ReaderViewModel @JvmOverloads constructor(
             scanPageOcr = scanPageOcr,
             withOcrScanSession = withOcrScanSession,
             pageSourceResolver = pageSourceResolver,
+            getExclusionZones = getOcrExclusionZones,
             provideContext = ::buildTtsChapterContext,
         )
         viewModelScope.launch {
@@ -403,6 +414,11 @@ class ReaderViewModel @JvmOverloads constructor(
         ttsController.togglePlayPause()
     }
 
+    /** Writes the speech-rate preference; the controller's live collector applies it to the engine. */
+    fun setReadAloudRate(rate: Float) {
+        ttsPreferences.ttsSpeechRate().set(rate)
+    }
+
     /** Pauses playback if active; safe no-op otherwise. Used from Activity.onStop. */
     fun pauseReadAloud() {
         ttsControllerInstance?.pause()
@@ -447,6 +463,7 @@ class ReaderViewModel @JvmOverloads constructor(
                 if (manga != null) {
                     sourceManager.isInitialized.first { it }
                     mutableState.update { it.copy(manga = manga) }
+                    subscribeExclusionZones()
                     if (chapterId == -1L) chapterId = initialChapterId
 
                     val context = Injekt.get<Application>()
@@ -1011,6 +1028,60 @@ class ReaderViewModel @JvmOverloads constructor(
         mutableState.update { it.copy(ocrSelectionMode = false) }
     }
 
+    /** Opens the scope dialog for a freshly drag-selected exclusion region. */
+    fun openExclusionZoneScopeDialog(
+        pageIndex: Int,
+        left: Float,
+        top: Float,
+        right: Float,
+        bottom: Float,
+    ) {
+        mutableState.update {
+            it.copy(
+                dialog = Dialog.ExclusionZoneScope(pageIndex, left, top, right, bottom),
+                exclusionZonePending = PendingExclusionZone(pageIndex, left, top, right, bottom),
+            )
+        }
+    }
+
+    /** Saves the pending exclusion region with the chosen scope. */
+    fun saveExclusionZone(scope: OcrExclusionScope) {
+        val pending = state.value.exclusionZonePending ?: return
+        val manga = manga ?: return
+        val chapter = state.value.currentChapter?.chapter?.id ?: return
+        viewModelScope.launchNonCancellable {
+            addOcrExclusionZone.await(
+                mangaId = manga.id,
+                sourceId = manga.source,
+                chapterId = chapter,
+                pageIndex = if (scope == OcrExclusionScope.PAGE) pending.pageIndex else null,
+                scope = scope,
+                leftNorm = pending.left,
+                topNorm = pending.top,
+                rightNorm = pending.right,
+                bottomNorm = pending.bottom,
+            )
+        }
+        mutableState.update { it.copy(dialog = null, exclusionZonePending = null) }
+    }
+
+    fun deleteExclusionZone(id: Long) {
+        viewModelScope.launchNonCancellable { deleteOcrExclusionZone.await(id) }
+    }
+
+    fun setExclusionZoneEnabled(id: Long, enabled: Boolean) {
+        viewModelScope.launchNonCancellable { setOcrExclusionZoneEnabled.await(id, enabled) }
+    }
+
+    private fun subscribeExclusionZones() {
+        val mangaId = manga?.id ?: return
+        viewModelScope.launch {
+            getOcrExclusionZones.subscribeForManga(mangaId).collect { zones ->
+                mutableState.update { it.copy(exclusionZones = zones) }
+            }
+        }
+    }
+
     fun processOcrRegion(bitmap: Bitmap) {
         viewModelScope.launchIO {
             mutableState.update { it.copy(isProcessingOcr = true, ocrSelectionMode = false) }
@@ -1226,6 +1297,8 @@ class ReaderViewModel @JvmOverloads constructor(
         val ocrSelectionMode: Boolean = false,
         val isProcessingOcr: Boolean = false,
         val ttsState: TtsPlaybackState = TtsPlaybackState(),
+        val exclusionZonePending: PendingExclusionZone? = null,
+        val exclusionZones: List<OcrExclusionZone> = emptyList(),
         @IntRange(from = -100, to = 100) val brightnessOverlayValue: Int = 0,
     ) {
         val currentChapter: ReaderChapter?
@@ -1246,7 +1319,22 @@ class ReaderViewModel @JvmOverloads constructor(
             val origin: OcrResultOrigin,
             val initialSearchText: String,
         ) : Dialog
+        data class ExclusionZoneScope(
+            val pageIndex: Int,
+            val left: Float,
+            val top: Float,
+            val right: Float,
+            val bottom: Float,
+        ) : Dialog
     }
+
+    data class PendingExclusionZone(
+        val pageIndex: Int,
+        val left: Float,
+        val top: Float,
+        val right: Float,
+        val bottom: Float,
+    )
 
     enum class OcrResultOrigin {
         CachedPageTap,

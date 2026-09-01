@@ -8,6 +8,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -24,12 +26,18 @@ import androidx.compose.material.icons.outlined.SkipNext
 import androidx.compose.material.icons.outlined.SkipPrevious
 import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,9 +52,17 @@ import tachiyomi.presentation.core.i18n.stringResource
 
 private val pillShape = RoundedCornerShape(28.dp)
 
+/** Video-player-style speed choices for the read-aloud pill. */
+val SPEED_CHOICES = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f)
+
+private fun formatSpeed(rate: Float): String =
+    if (rate == rate.toInt().toFloat()) "${rate.toInt()}" else "$rate"
+
 @Composable
 fun TtsPlaybackBar(
     state: TtsPlaybackState,
+    speechRate: Float,
+    onSetSpeechRate: (Float) -> Unit,
     onTogglePlayPause: () -> Unit,
     onNextSentence: () -> Unit,
     onPreviousSentence: () -> Unit,
@@ -103,6 +119,8 @@ fun TtsPlaybackBar(
                 else -> {
                     PlaybackContent(
                         state = state,
+                        speechRate = speechRate,
+                        onSetSpeechRate = onSetSpeechRate,
                         onTogglePlayPause = onTogglePlayPause,
                         onNextSentence = onNextSentence,
                         onPreviousSentence = onPreviousSentence,
@@ -117,12 +135,15 @@ fun TtsPlaybackBar(
 @Composable
 private fun PlaybackContent(
     state: TtsPlaybackState,
+    speechRate: Float,
+    onSetSpeechRate: (Float) -> Unit,
     onTogglePlayPause: () -> Unit,
     onNextSentence: () -> Unit,
     onPreviousSentence: () -> Unit,
     onStop: () -> Unit,
 ) {
     val playing = state.phase == TtsPhase.Playing || state.phase == TtsPhase.LoadingPage
+    var speedMenuExpanded by remember { mutableStateOf(false) }
     Row(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -179,6 +200,39 @@ private fun PlaybackContent(
                 imageVector = Icons.Outlined.SkipNext,
                 contentDescription = stringResource(MR.strings.tts_action_next_sentence),
             )
+        }
+        Box {
+            IconButton(onClick = { speedMenuExpanded = true }) {
+                Text(
+                    text = "${formatSpeed(speechRate)}x",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            DropdownMenu(
+                expanded = speedMenuExpanded,
+                onDismissRequest = { speedMenuExpanded = false },
+            ) {
+                SPEED_CHOICES.forEach { speed ->
+                    DropdownMenuItem(
+                        text = { Text("${formatSpeed(speed)}x") },
+                        onClick = {
+                            speedMenuExpanded = false
+                            onSetSpeechRate(speed)
+                        },
+                        trailingIcon = if (speed == speechRate) {
+                            {
+                                Icon(
+                                    imageVector = Icons.Outlined.Check,
+                                    contentDescription = null,
+                                )
+                            }
+                        } else {
+                            null
+                        },
+                    )
+                }
+            }
         }
         IconButton(onClick = onStop) {
             Icon(

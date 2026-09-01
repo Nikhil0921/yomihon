@@ -34,12 +34,15 @@ fun OcrResultOverlay(
     onSearch: (String) -> Unit,
     onTermGroupClick: (List<DictionaryTerm>) -> Unit,
     onPlayAudioClick: (List<DictionaryTerm>) -> Unit,
+    autoSearchEnabled: Boolean = true,
 ) {
     BackHandler(onBack = onDismissRequest)
     LaunchedEffect(queryText, initialSearchText) {
         if (queryText.isNotBlank()) {
             onQueryChange(queryText)
-            onSearch(initialSearchText)
+            if (autoSearchEnabled) {
+                onSearch(initialSearchText)
+            }
         }
     }
 

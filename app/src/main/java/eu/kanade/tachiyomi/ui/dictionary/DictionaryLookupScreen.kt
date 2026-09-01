@@ -1,45 +1,27 @@
 package eu.kanade.tachiyomi.ui.dictionary
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.LibraryBooks
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import cafe.adriel.voyager.core.model.rememberScreenModel
+import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
-import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import cafe.adriel.voyager.navigator.tab.TabOptions
 import eu.kanade.presentation.dictionary.DictionarySearchScreen
-import eu.kanade.presentation.util.Tab
-import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import kotlinx.coroutines.flow.collectLatest
-import tachiyomi.i18n.MR
-import tachiyomi.presentation.core.i18n.stringResource
 
-data object DictionaryTab : Tab {
-
-    override val options: TabOptions
-        @Composable
-        get() {
-            return TabOptions(
-                index = 5u,
-                title = stringResource(MR.strings.label_dictionary),
-                icon = rememberVectorPainter(Icons.AutoMirrored.Outlined.LibraryBooks),
-            )
-        }
-
-    override suspend fun onReselect(navigator: Navigator) {
-        // Could add functionality here if needed
-    }
+/**
+ * Word-lookup screen (moved from the bottom navigation tab). The dictionaries
+ * manager remains under Settings → Dictionaries.
+ */
+data object DictionaryLookupScreen : Screen {
 
     @Composable
     override fun Content() {
@@ -99,10 +81,6 @@ data object DictionaryTab : Tab {
                     }
                 }
             }
-        }
-
-        LaunchedEffect(Unit) {
-            (context as? MainActivity)?.ready = true
         }
     }
 }

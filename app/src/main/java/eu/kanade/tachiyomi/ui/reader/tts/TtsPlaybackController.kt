@@ -19,15 +19,18 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import logcat.LogPriority
 import mihon.domain.ocr.interactor.GetCachedPageOcr
+import mihon.domain.ocr.interactor.GetOcrExclusionZones
 import mihon.domain.ocr.interactor.ScanPageOcr
 import mihon.domain.ocr.interactor.WithOcrScanSession
+import mihon.domain.ocr.model.applyExclusions
 import mihon.domain.tts.TtsAdvanceAction
 import mihon.domain.tts.TtsAdvancePolicy
 import mihon.domain.tts.TtsSentence
 import mihon.domain.tts.engine.TtsEngine
 import mihon.domain.tts.engine.TtsFocusEvent
 import mihon.domain.tts.service.TtsPreferences
-import mihon.domain.tts.toTtsSentences
+import mihon.domain.tts.speech.SpeechClassificationConfig
+import mihon.domain.tts.speech.SpeechPipeline
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.chapter.model.Chapter
@@ -87,6 +90,7 @@ internal class TtsPlaybackController(
     private val scanPageOcr: ScanPageOcr,
     private val withOcrScanSession: WithOcrScanSession,
     private val pageSourceResolver: OcrPageSourceResolver,
+    private val getExclusionZones: GetOcrExclusionZones,
 
     /**
      * Supplies a context for the CURRENTLY ACTIVE chapter. Re-queried on every queue
@@ -454,7 +458,25 @@ internal class TtsPlaybackController(
             "TTS OCR ${if (cached != null) "cache hit" else "cache miss"} chapter=${ctx.chapter.id} page=$pageIndex"
         }
         val result = cached ?: scanOnDemand(ctx, pageIndex) ?: return@withIOContext null
-        val sentences = result.regions.toTtsSentences()
+        val zones = if (preferences.ttsOcrExclusionsEnabled().get()) {
+            try {
+                getExclusionZones.awaitForChapter(ctx.chapter.id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logcat(LogPriority.WARN, e) { "TTS exclusion zone lookup failed; speaking all regions" }
+                emptyList()
+            }
+        } else {
+            emptyList()
+        }
+        val regions = result.regions.applyExclusions(zones, pageIndex)
+        val sentences = SpeechPipeline.toSpeakableSentences(
+            regions = regions,
+            classificationConfig = SpeechClassificationConfig(),
+            filterConfig = preferences.speechRegionFilterConfig(),
+            cleanupOptions = preferences.speechCleanupOptions(),
+        )
         val acquireMs = SystemClock.elapsedRealtime() - acquireStartedAt
         logcat(LogPriority.DEBUG) {
             "TTS page=$pageIndex segmented sentences=${sentences.size} regions=${result.regions.size} " +

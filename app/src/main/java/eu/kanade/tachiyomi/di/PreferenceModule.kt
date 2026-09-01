@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.di
 import android.app.Application
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.dictionary.DictionaryPreferences
+import eu.kanade.domain.feed.service.FeedPreferences
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.track.service.TrackPreferences
 import eu.kanade.domain.ui.UiPreferences
@@ -65,6 +66,9 @@ class PreferenceModule(val app: Application) : InjektModule {
         }
         addSingletonFactory {
             TtsVoicePreferences(get())
+        }
+        addSingletonFactory {
+            FeedPreferences(get())
         }
         addSingletonFactory {
             TrackPreferences(get())
