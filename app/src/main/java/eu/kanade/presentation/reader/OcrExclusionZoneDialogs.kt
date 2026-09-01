@@ -9,15 +9,21 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.icerock.moko.resources.StringResource
 import eu.kanade.presentation.components.AdaptiveSheet
+import mihon.domain.ocr.model.OcrExclusionMatchType
 import mihon.domain.ocr.model.OcrExclusionScope
 import mihon.domain.ocr.model.OcrExclusionZone
 import tachiyomi.i18n.MR
@@ -25,24 +31,58 @@ import tachiyomi.presentation.core.i18n.stringResource
 
 /**
  * Scope chooser shown after the user drag-selects an OCR exclusion region.
+ * Wider-than-page scopes create a combined rule: the rectangle only suppresses
+ * regions that also contain the entered text.
  */
 @Composable
 fun ExclusionZoneScopeDialog(
     onDismissRequest: () -> Unit,
-    onScopeSelected: (OcrExclusionScope) -> Unit,
+    onScopeSelected: (OcrExclusionScope, String?) -> Unit,
 ) {
+    var selectedScope by remember { mutableStateOf<OcrExclusionScope?>(null) }
+    var matchText by remember { mutableStateOf("") }
+    val chosen = selectedScope
+
     AlertDialog(
         onDismissRequest = onDismissRequest,
         title = { Text(stringResource(MR.strings.ocr_exclusion_scope_title)) },
         text = {
             Column {
-                scopeOption(MR.strings.ocr_exclusion_scope_page, OcrExclusionScope.PAGE, onScopeSelected)
-                scopeOption(MR.strings.ocr_exclusion_scope_chapter, OcrExclusionScope.CHAPTER, onScopeSelected)
-                scopeOption(MR.strings.ocr_exclusion_scope_manga, OcrExclusionScope.MANGA, onScopeSelected)
-                scopeOption(MR.strings.ocr_exclusion_scope_source, OcrExclusionScope.SOURCE, onScopeSelected)
+                scopeOption(MR.strings.ocr_exclusion_scope_page, OcrExclusionScope.PAGE) {
+                    onScopeSelected(OcrExclusionScope.PAGE, null)
+                }
+                scopeOption(MR.strings.ocr_exclusion_scope_chapter, OcrExclusionScope.CHAPTER) {
+                    selectedScope = OcrExclusionScope.CHAPTER
+                }
+                scopeOption(MR.strings.ocr_exclusion_scope_manga, OcrExclusionScope.MANGA) {
+                    selectedScope = OcrExclusionScope.MANGA
+                }
+                scopeOption(MR.strings.ocr_exclusion_scope_source, OcrExclusionScope.SOURCE) {
+                    selectedScope = OcrExclusionScope.SOURCE
+                }
+                if (chosen != null && chosen != OcrExclusionScope.PAGE) {
+                    OutlinedTextField(
+                        value = matchText,
+                        onValueChange = { matchText = it },
+                        label = { Text(stringResource(MR.strings.ocr_exclusion_match_text_label)) },
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp),
+                    )
+                }
             }
         },
-        confirmButton = {},
+        confirmButton = {
+            if (chosen != null && chosen != OcrExclusionScope.PAGE) {
+                TextButton(
+                    onClick = { onScopeSelected(chosen, matchText) },
+                    enabled = matchText.isNotBlank(),
+                ) {
+                    Text(stringResource(MR.strings.action_save))
+                }
+            }
+        },
         dismissButton = {
             TextButton(onClick = onDismissRequest) {
                 Text(stringResource(MR.strings.action_cancel))
@@ -55,11 +95,11 @@ fun ExclusionZoneScopeDialog(
 private fun scopeOption(
     labelRes: StringResource,
     scope: OcrExclusionScope,
-    onScopeSelected: (OcrExclusionScope) -> Unit,
+    onClick: () -> Unit,
 ) {
     ListItem(
         headlineContent = { Text(stringResource(labelRes)) },
-        modifier = Modifier.clickable { onScopeSelected(scope) },
+        modifier = Modifier.clickable { onClick() },
     )
 }
 
@@ -95,12 +135,29 @@ fun OcrExclusionZonesSheet(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text(scopeLabel(zone.scope), style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            text = "${zone.boundingBox.left}, ${zone.boundingBox.top} — " +
-                                "${zone.boundingBox.right}, ${zone.boundingBox.bottom}",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
+                        Text(ruleTypeLabel(zone), style = MaterialTheme.typography.bodyMedium)
+                        zone.matchText?.let { text ->
+                            Text(
+                                text = text,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        if (zone.matchType != OcrExclusionMatchType.WORD &&
+                            zone.matchType != OcrExclusionMatchType.PHRASE
+                        ) {
+                            Text(
+                                text = "${zone.boundingBox.left}, ${zone.boundingBox.top} — " +
+                                    "${zone.boundingBox.right}, ${zone.boundingBox.bottom}",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        if (isLegacyZone(zone)) {
+                            Text(
+                                text = stringResource(MR.strings.ocr_exclusion_type_legacy),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                     Switch(
                         checked = zone.enabled,
@@ -116,10 +173,14 @@ fun OcrExclusionZonesSheet(
     }
 }
 
+/** Legacy pre-redesign rows: rectangle rules wider than a single page are dormant. */
+private fun isLegacyZone(zone: OcrExclusionZone): Boolean =
+    zone.matchType == OcrExclusionMatchType.ZONE && zone.scope != OcrExclusionScope.PAGE
+
 @Composable
-private fun scopeLabel(scope: OcrExclusionScope): String = when (scope) {
-    OcrExclusionScope.PAGE -> stringResource(MR.strings.ocr_exclusion_scope_page)
-    OcrExclusionScope.CHAPTER -> stringResource(MR.strings.ocr_exclusion_scope_chapter)
-    OcrExclusionScope.MANGA -> stringResource(MR.strings.ocr_exclusion_scope_manga)
-    OcrExclusionScope.SOURCE -> stringResource(MR.strings.ocr_exclusion_scope_source)
+private fun ruleTypeLabel(zone: OcrExclusionZone): String = when (zone.matchType) {
+    OcrExclusionMatchType.ZONE -> stringResource(MR.strings.ocr_exclusion_type_zone)
+    OcrExclusionMatchType.WORD -> stringResource(MR.strings.ocr_exclusion_type_word)
+    OcrExclusionMatchType.PHRASE -> stringResource(MR.strings.ocr_exclusion_type_phrase)
+    OcrExclusionMatchType.COMBINED -> stringResource(MR.strings.ocr_exclusion_type_combined)
 }

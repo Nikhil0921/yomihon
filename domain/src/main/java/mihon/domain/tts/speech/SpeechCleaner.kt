@@ -9,6 +9,7 @@ data class SpeechCleanupOptions(
     val skipPunctuationOnly: Boolean = true,
     val skipOcrGarbage: Boolean = true,
     val normalizeExcessivePunctuation: Boolean = true,
+    val ellipsisToPause: Boolean = true,
 )
 
 object SpeechCleaner {
@@ -22,12 +23,22 @@ object SpeechCleaner {
     private val WHITESPACE_RUN = Regex("\\s+")
 
     /**
+     * Dot runs and the ellipsis char become a comma pause so voices stop
+     * reading "dot dot dot". Standalone runs are still dropped by the
+     * punctuation-only skip that runs after this step.
+     */
+    private val ELLIPSIS_RUN = Regex("\\.{2,}|…")
+
+    /**
      * Returns the text to speak for a region, or null when the region should be
      * skipped entirely. Null-safe ordering: punctuation-only skip runs AFTER
      * normalization so "WHAT?!?!?!" is first reduced to "WHAT?!" and kept.
      */
     fun cleanRegionForSpeech(text: String, options: SpeechCleanupOptions): String? {
         var cleaned = WHITESPACE_RUN.replace(text.trim(), " ")
+        if (options.ellipsisToPause) {
+            cleaned = ELLIPSIS_RUN.replace(cleaned, ", ")
+        }
         if (options.normalizeExcessivePunctuation) {
             cleaned = EXCESSIVE_PUNCTUATION.replace(cleaned) { it.value.take(2) }
         }

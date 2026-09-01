@@ -76,6 +76,8 @@ fun ReaderAppBars(
     onClickSettings: () -> Unit,
     onClickOcr: () -> Unit,
     onClickReadAloud: () -> Unit,
+    showOcrButton: Boolean = true,
+    showReadAloudButton: Boolean = true,
     onBottomTrayHeightChanged: ((Int) -> Unit)? = null,
 ) {
     val backgroundColor = MaterialTheme.colorScheme
@@ -181,6 +183,8 @@ fun ReaderAppBars(
                     onClickSettings = onClickSettings,
                     onClickOcr = onClickOcr,
                     onClickReadAloud = onClickReadAloud,
+                    showOcrButton = showOcrButton,
+                    showReadAloudButton = showReadAloudButton,
                 )
             }
         }

@@ -764,6 +764,8 @@ class ReaderActivity : BaseActivity() {
 
                 val cropBorderPaged by readerPreferences.cropBorders.collectAsState()
                 val cropBorderWebtoon by readerPreferences.cropBordersWebtoon.collectAsState()
+                val showOcrButton by readerPreferences.ocrTextSelectionEnabled.collectAsState()
+                val showReadAloudButton by readerPreferences.readAloudButtonEnabled.collectAsState()
                 val readingMode = ReadingMode.fromPreference(
                     viewModel.getMangaReadingMode(resolveDefault = false),
                 )
@@ -833,6 +835,8 @@ class ReaderActivity : BaseActivity() {
                     onClickSettings = viewModel::openSettingsDialog,
                     onClickOcr = ::enterOcrMode,
                     onClickReadAloud = viewModel::startReadAloud,
+                    showOcrButton = showOcrButton,
+                    showReadAloudButton = showReadAloudButton,
                     onBottomTrayHeightChanged = { bottomTrayHeightPx = it },
                 )
 
@@ -1061,6 +1065,8 @@ class ReaderActivity : BaseActivity() {
 
         val cropBorderPaged by readerPreferences.cropBorders.collectAsState()
         val cropBorderWebtoon by readerPreferences.cropBordersWebtoon.collectAsState()
+        val showOcrButton by readerPreferences.ocrTextSelectionEnabled.collectAsState()
+        val showReadAloudButton by readerPreferences.readAloudButtonEnabled.collectAsState()
         val isPagerType = ReadingMode.isPagerType(viewModel.getMangaReadingMode())
         val cropEnabled = if (isPagerType) cropBorderPaged else cropBorderWebtoon
 
@@ -1126,6 +1132,8 @@ class ReaderActivity : BaseActivity() {
             onClickSettings = viewModel::openSettingsDialog,
             onClickOcr = ::enterOcrMode,
             onClickReadAloud = viewModel::startReadAloud,
+            showOcrButton = showOcrButton,
+            showReadAloudButton = showReadAloudButton,
             onBottomTrayHeightChanged = { bottomTrayHeightPx = it },
         )
     }

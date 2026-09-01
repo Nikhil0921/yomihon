@@ -1,6 +1,7 @@
 package mihon.domain.ocr.interactor
 
 import kotlinx.coroutines.flow.Flow
+import mihon.domain.ocr.model.OcrExclusionMatchType
 import mihon.domain.ocr.model.OcrExclusionScope
 import mihon.domain.ocr.model.OcrExclusionZone
 import mihon.domain.ocr.repository.OcrExclusionZoneRepository
@@ -14,8 +15,13 @@ class GetOcrExclusionZones(
     fun subscribeForSource(sourceId: Long): Flow<List<OcrExclusionZone>> =
         repository.subscribeZonesForSource(sourceId)
 
+    fun subscribeAll(): Flow<List<OcrExclusionZone>> = repository.subscribeAll()
+
     suspend fun awaitForChapter(chapterId: Long): List<OcrExclusionZone> =
         repository.getZonesForChapter(chapterId)
+
+    suspend fun awaitForSpeech(mangaId: Long, sourceId: Long, chapterId: Long): List<OcrExclusionZone> =
+        repository.getZonesForSpeech(mangaId, sourceId, chapterId)
 
     suspend fun awaitAll(): List<OcrExclusionZone> = repository.getAll()
 }
@@ -33,9 +39,14 @@ class AddOcrExclusionZone(
         topNorm: Float,
         rightNorm: Float,
         bottomNorm: Float,
+        matchType: OcrExclusionMatchType = OcrExclusionMatchType.ZONE,
+        matchText: String? = null,
+        ruleName: String? = null,
+        enabled: Boolean = true,
     ): Long = repository.insert(
         mangaId, sourceId, chapterId, pageIndex, scope,
         leftNorm, topNorm, rightNorm, bottomNorm,
+        matchType, matchText, ruleName, enabled,
     )
 }
 

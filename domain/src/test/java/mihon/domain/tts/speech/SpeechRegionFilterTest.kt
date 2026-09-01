@@ -118,7 +118,7 @@ class SpeechPipelineTest {
             filterConfig,
             cleanup,
         )
-        sentences.map { it.text } shouldContainExactly listOf("I don't know...")
+        sentences.map { it.text } shouldContainExactly listOf("I don't know,")
     }
 
     @Test

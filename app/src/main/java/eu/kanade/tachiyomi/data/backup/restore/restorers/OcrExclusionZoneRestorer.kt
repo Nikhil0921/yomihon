@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.data.backup.restore.restorers
 
 import eu.kanade.tachiyomi.data.backup.models.BackupOcrExclusionZone
+import eu.kanade.tachiyomi.data.backup.models.exclusionMatchType
 import eu.kanade.tachiyomi.data.backup.models.exclusionScope
 import logcat.LogPriority
 import mihon.domain.ocr.interactor.AddOcrExclusionZone
@@ -11,9 +12,9 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 /**
- * Restores OCR exclusion zones. Zones referencing manga missing from the local
- * database are skipped (mangaId FK would fail); duplicates (same manga, scope,
- * chapter, page and rectangle) are not re-inserted.
+ * Restores OCR exclusion rules. Rules referencing chapters missing from the
+ * local database are skipped (chapterId FK would fail); duplicates (same
+ * identity fields: ids, scope, type, text and rectangle) are not re-inserted.
  */
 class OcrExclusionZoneRestorer(
     private val getOcrExclusionZones: GetOcrExclusionZones = Injekt.get(),
@@ -28,6 +29,7 @@ class OcrExclusionZoneRestorer(
         }
         for (zone in zones) {
             val scope = zone.exclusionScope ?: continue
+            val matchType = zone.exclusionMatchType ?: continue
             if (existing.any { it.duplicates(zone) }) continue
             try {
                 addOcrExclusionZone.await(
@@ -40,9 +42,13 @@ class OcrExclusionZoneRestorer(
                     topNorm = zone.topNorm,
                     rightNorm = zone.rightNorm,
                     bottomNorm = zone.bottomNorm,
+                    matchType = matchType,
+                    matchText = zone.matchText,
+                    ruleName = zone.ruleName,
+                    enabled = zone.enabled,
                 )
             } catch (e: Exception) {
-                // FK violations (restored manga/chapter missing) skip that zone.
+                // FK violations (restored chapter missing) skip that zone.
                 logcat(LogPriority.WARN, e) {
                     "Skipped OCR exclusion zone for missing manga=${zone.mangaId}"
                 }
@@ -52,8 +58,12 @@ class OcrExclusionZoneRestorer(
 
     private fun OcrExclusionZone.duplicates(other: BackupOcrExclusionZone): Boolean =
         mangaId == other.mangaId &&
+            sourceId == other.sourceId &&
             chapterId == other.chapterId &&
             pageIndex == other.pageIndex &&
+            scope == other.exclusionScope &&
+            matchType == other.exclusionMatchType &&
+            matchText == other.matchText &&
             boundingBox.left == other.leftNorm &&
             boundingBox.top == other.topNorm &&
             boundingBox.right == other.rightNorm &&

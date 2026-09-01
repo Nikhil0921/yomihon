@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import mihon.domain.ocr.model.OcrBoundingBox
+import mihon.domain.ocr.model.OcrExclusionMatchType
 import mihon.domain.ocr.model.OcrExclusionScope
 import mihon.domain.ocr.model.OcrExclusionZone
 import mihon.domain.ocr.repository.OcrExclusionZoneRepository
@@ -21,6 +22,12 @@ class OcrExclusionZoneRepositoryImpl(
         withContext(Dispatchers.IO) {
             database.ocr_exclusion_zonesQueries.getAllZones(::zoneMapper).awaitAsList()
         }
+
+    override fun subscribeAll(): Flow<List<OcrExclusionZone>> =
+        database.ocr_exclusion_zonesQueries
+            .getAllZones(::zoneMapper)
+            .asFlow()
+            .mapToList(Dispatchers.IO)
 
     override fun subscribeZonesForManga(mangaId: Long): Flow<List<OcrExclusionZone>> =
         database.ocr_exclusion_zonesQueries
@@ -39,6 +46,16 @@ class OcrExclusionZoneRepositoryImpl(
             database.ocr_exclusion_zonesQueries.zonesForChapter(chapterId, ::zoneMapper).awaitAsList()
         }
 
+    override suspend fun getZonesForSpeech(
+        mangaId: Long,
+        sourceId: Long,
+        chapterId: Long,
+    ): List<OcrExclusionZone> = withContext(Dispatchers.IO) {
+        database.ocr_exclusion_zonesQueries
+            .zonesForSpeech(mangaId, sourceId, chapterId, ::zoneMapper)
+            .awaitAsList()
+    }
+
     override suspend fun insert(
         mangaId: Long,
         sourceId: Long,
@@ -49,6 +66,10 @@ class OcrExclusionZoneRepositoryImpl(
         topNorm: Float,
         rightNorm: Float,
         bottomNorm: Float,
+        matchType: OcrExclusionMatchType,
+        matchText: String?,
+        ruleName: String?,
+        enabled: Boolean,
     ): Long = withContext(Dispatchers.IO) {
         database.ocr_exclusion_zonesQueries.transaction {
             database.ocr_exclusion_zonesQueries.insertZone(
@@ -61,8 +82,11 @@ class OcrExclusionZoneRepositoryImpl(
                 topNorm = topNorm.toDouble(),
                 rightNorm = rightNorm.toDouble(),
                 bottomNorm = bottomNorm.toDouble(),
-                enabled = 1L,
+                enabled = if (enabled) 1L else 0L,
                 createdAt = System.currentTimeMillis(),
+                matchText = matchText,
+                matchType = matchType.name,
+                ruleName = ruleName,
             )
         }
         database.ocr_exclusion_zonesQueries.selectLastInsertedRowId().awaitAsOne()
@@ -93,13 +117,16 @@ class OcrExclusionZoneRepositoryImpl(
         bottomNorm: Double,
         enabled: Long,
         createdAt: Long,
+        matchText: String?,
+        matchType: String,
+        ruleName: String?,
     ): OcrExclusionZone = OcrExclusionZone(
         id = _id,
         mangaId = mangaId,
         sourceId = sourceId,
         chapterId = chapterId,
         pageIndex = pageIndex?.toInt(),
-        scope = OcrExclusionScope.valueOf(scope),
+        scope = runCatching { OcrExclusionScope.valueOf(scope) }.getOrDefault(OcrExclusionScope.PAGE),
         boundingBox = OcrBoundingBox(
             left = leftNorm.toFloat(),
             top = topNorm.toFloat(),
@@ -108,5 +135,8 @@ class OcrExclusionZoneRepositoryImpl(
         ),
         enabled = enabled != 0L,
         createdAt = createdAt,
+        matchType = runCatching { OcrExclusionMatchType.valueOf(matchType) }.getOrDefault(OcrExclusionMatchType.ZONE),
+        matchText = matchText,
+        ruleName = ruleName,
     )
 }

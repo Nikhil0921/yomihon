@@ -26,6 +26,8 @@ class TtsPreferences(
 
     fun ttsNormalizePunctuation() = preferenceStore.getBoolean("pref_tts_normalize_punctuation", true)
 
+    fun ttsEllipsisToPause() = preferenceStore.getBoolean("pref_tts_ellipsis_to_pause", true)
+
     // --- Region classification / spoken types (Phases B & C) ---
 
     fun ttsOcrExclusionsEnabled() = preferenceStore.getBoolean("pref_tts_ocr_exclusions_enabled", true)
@@ -43,6 +45,7 @@ class TtsPreferences(
         skipPunctuationOnly = ttsSkipPunctuationOnly().get(),
         skipOcrGarbage = ttsSkipOcrGarbage().get(),
         normalizeExcessivePunctuation = ttsNormalizePunctuation().get(),
+        ellipsisToPause = ttsEllipsisToPause().get(),
     )
 
     fun speechRegionFilterConfig(): SpeechRegionFilterConfig {

@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ChromeReaderMode
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
+import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.CollectionsBookmark
 import androidx.compose.material.icons.outlined.Explore
@@ -201,6 +202,12 @@ object SettingsMainScreen : Screen() {
             subtitleRes = MR.strings.pref_read_aloud_summary,
             icon = Icons.AutoMirrored.Outlined.VolumeUp,
             screen = SettingsReadAloudScreen,
+        ),
+        Item(
+            titleRes = MR.strings.ocr_exclusions_screen_title,
+            subtitleRes = MR.strings.ocr_exclusions_summary,
+            icon = Icons.Outlined.Block,
+            screen = SettingsOcrExclusionsScreen,
         ),
         Item(
             titleRes = MR.strings.pref_category_downloads,

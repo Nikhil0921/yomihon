@@ -11,7 +11,9 @@ CREATE TABLE ocr_exclusion_zones(
     bottom_norm REAL NOT NULL,
     enabled INTEGER NOT NULL DEFAULT 1,
     created_at INTEGER NOT NULL,
-    FOREIGN KEY(manga_id) REFERENCES mangas (_id) ON DELETE CASCADE,
+    match_text TEXT,
+    match_type TEXT NOT NULL DEFAULT 'ZONE',
+    rule_name TEXT,
     FOREIGN KEY(chapter_id) REFERENCES chapters (_id) ON DELETE CASCADE
 );
 CREATE INDEX ocr_exclusion_zones_manga_id_index ON ocr_exclusion_zones(manga_id);
@@ -29,7 +31,10 @@ SELECT
     oez.right_norm,
     oez.bottom_norm,
     oez.enabled,
-    oez.created_at
+    oez.created_at,
+    oez.match_text,
+    oez.match_type,
+    oez.rule_name
 FROM ocr_exclusion_zones oez;
 
 zonesForChapter:
@@ -45,10 +50,39 @@ SELECT
     oez.right_norm,
     oez.bottom_norm,
     oez.enabled,
-    oez.created_at
+    oez.created_at,
+    oez.match_text,
+    oez.match_type,
+    oez.rule_name
 FROM ocr_exclusion_zones oez
 WHERE oez.chapter_id = :chapterId
   AND oez.enabled = 1;
+
+zonesForSpeech:
+SELECT
+    oez._id,
+    oez.manga_id,
+    oez.source_id,
+    oez.chapter_id,
+    oez.page_index,
+    oez.scope,
+    oez.left_norm,
+    oez.top_norm,
+    oez.right_norm,
+    oez.bottom_norm,
+    oez.enabled,
+    oez.created_at,
+    oez.match_text,
+    oez.match_type,
+    oez.rule_name
+FROM ocr_exclusion_zones oez
+WHERE oez.enabled = 1
+  AND (
+    oez.match_type IN ('WORD', 'PHRASE')
+    OR oez.manga_id = :mangaId
+    OR oez.source_id = :sourceId
+    OR oez.chapter_id = :chapterId
+  );
 
 zonesForManga:
 SELECT
@@ -63,7 +97,10 @@ SELECT
     oez.right_norm,
     oez.bottom_norm,
     oez.enabled,
-    oez.created_at
+    oez.created_at,
+    oez.match_text,
+    oez.match_type,
+    oez.rule_name
 FROM ocr_exclusion_zones oez
 WHERE oez.manga_id = :mangaId;
 
@@ -80,18 +117,23 @@ SELECT
     oez.right_norm,
     oez.bottom_norm,
     oez.enabled,
-    oez.created_at
+    oez.created_at,
+    oez.match_text,
+    oez.match_type,
+    oez.rule_name
 FROM ocr_exclusion_zones oez
 WHERE oez.source_id = :sourceId;
 
 insertZone:
 INSERT INTO ocr_exclusion_zones(
     manga_id, source_id, chapter_id, page_index, scope,
-    left_norm, top_norm, right_norm, bottom_norm, enabled, created_at
+    left_norm, top_norm, right_norm, bottom_norm, enabled, created_at,
+    match_text, match_type, rule_name
 )
 VALUES(
     :mangaId, :sourceId, :chapterId, :pageIndex, :scope,
-    :leftNorm, :topNorm, :rightNorm, :bottomNorm, :enabled, :createdAt
+    :leftNorm, :topNorm, :rightNorm, :bottomNorm, :enabled, :createdAt,
+    :matchText, :matchType, :ruleName
 );
 
 deleteZone:

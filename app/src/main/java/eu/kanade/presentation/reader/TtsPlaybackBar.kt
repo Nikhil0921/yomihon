@@ -110,7 +110,14 @@ fun TtsPlaybackBar(
                             ),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
                         )
+                        IconButton(onClick = onStop) {
+                            Icon(
+                                imageVector = Icons.Outlined.Stop,
+                                contentDescription = stringResource(MR.strings.tts_action_stop),
+                            )
+                        }
                     }
                 }
                 TtsPhase.Error -> {

@@ -160,6 +160,10 @@ class ReaderPreferences(
 
     val longTapOcr: Preference<Boolean> = preferenceStore.getBoolean("reader_long_tap_ocr", true)
 
+    val ocrTextSelectionEnabled: Preference<Boolean> = preferenceStore.getBoolean("reader_ocr_text_selection", true)
+
+    val readAloudButtonEnabled: Preference<Boolean> = preferenceStore.getBoolean("reader_read_aloud_button", true)
+
     val readWithVolumeKeys: Preference<Boolean> = preferenceStore.getBoolean("reader_volume_keys", false)
 
     val readWithVolumeKeysInverted: Preference<Boolean> = preferenceStore.getBoolean(

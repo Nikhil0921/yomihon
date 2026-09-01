@@ -77,6 +77,7 @@ import mihon.domain.ocr.interactor.OcrProcessor
 import mihon.domain.ocr.interactor.ScanPageOcr
 import mihon.domain.ocr.interactor.SetOcrExclusionZoneEnabled
 import mihon.domain.ocr.interactor.WithOcrScanSession
+import mihon.domain.ocr.model.OcrExclusionMatchType
 import mihon.domain.ocr.model.OcrExclusionScope
 import mihon.domain.ocr.model.OcrExclusionZone
 import mihon.domain.ocr.model.flattenOcrTextForQuery
@@ -1044,22 +1045,32 @@ class ReaderViewModel @JvmOverloads constructor(
         }
     }
 
-    /** Saves the pending exclusion region with the chosen scope. */
-    fun saveExclusionZone(scope: OcrExclusionScope) {
+    /** Saves the pending exclusion region; combined scopes require non-blank match text. */
+    fun saveExclusionZone(scope: OcrExclusionScope, matchText: String? = null) {
         val pending = state.value.exclusionZonePending ?: return
         val manga = manga ?: return
         val chapter = state.value.currentChapter?.chapter?.id ?: return
+        val combined = scope != OcrExclusionScope.PAGE
+        val text = if (combined) matchText?.trim().orEmpty() else null
+        if (combined && text.isNullOrEmpty()) return
+        val matchType = if (combined) OcrExclusionMatchType.COMBINED else OcrExclusionMatchType.ZONE
+        val scopedChapterId = when (scope) {
+            OcrExclusionScope.MANGA, OcrExclusionScope.SOURCE -> null
+            else -> chapter
+        }
         viewModelScope.launchNonCancellable {
             addOcrExclusionZone.await(
                 mangaId = manga.id,
                 sourceId = manga.source,
-                chapterId = chapter,
-                pageIndex = if (scope == OcrExclusionScope.PAGE) pending.pageIndex else null,
+                chapterId = scopedChapterId,
+                pageIndex = pending.pageIndex,
                 scope = scope,
                 leftNorm = pending.left,
                 topNorm = pending.top,
                 rightNorm = pending.right,
                 bottomNorm = pending.bottom,
+                matchType = matchType,
+                matchText = text,
             )
         }
         mutableState.update { it.copy(dialog = null, exclusionZonePending = null) }

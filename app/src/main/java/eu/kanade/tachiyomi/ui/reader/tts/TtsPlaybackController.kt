@@ -22,6 +22,7 @@ import mihon.domain.ocr.interactor.GetCachedPageOcr
 import mihon.domain.ocr.interactor.GetOcrExclusionZones
 import mihon.domain.ocr.interactor.ScanPageOcr
 import mihon.domain.ocr.interactor.WithOcrScanSession
+import mihon.domain.ocr.model.ExclusionMatchContext
 import mihon.domain.ocr.model.applyExclusions
 import mihon.domain.tts.TtsAdvanceAction
 import mihon.domain.tts.TtsAdvancePolicy
@@ -35,6 +36,7 @@ import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.manga.model.Manga
+import java.util.concurrent.atomic.AtomicLong
 
 enum class TtsPhase {
     Idle,
@@ -133,11 +135,14 @@ internal class TtsPlaybackController(
 
     private var prefetchJob: Job? = null
 
-    /** Page currently being prefetched; guards against redundant cancel/restart. */
-    private var prefetchPageIndex = -1
+    /** Pages covered by the current/last prefetch job; guards redundant cancel/restart. */
+    private var prefetchPages: IntRange? = null
 
     /** ElapsedRealtime marker set in [start]; first successful acquire logs startup latency. */
     private var sessionStartedAtElapsed = 0L
+
+    /** Monotonic dispatch counter making every utterance id unique per relaunch. */
+    private val dispatchCounter = AtomicLong()
 
     init {
         engine.onFocusEvent = { event ->
@@ -179,6 +184,9 @@ internal class TtsPlaybackController(
         val pageIndex = mutableState.value.pageIndex
         logcat(LogPriority.DEBUG) { "TTS resume page=$pageIndex sentence=$resumeIndex" }
         playbackJob?.cancel()
+        if (mutableState.value.phase == TtsPhase.Playing || mutableState.value.phase == TtsPhase.LoadingPage) {
+            engine.stop()
+        }
         playbackJob = scope.launch {
             if (engine.initialize()) {
                 engine.acquireFocus()
@@ -282,6 +290,7 @@ internal class TtsPlaybackController(
         playbackJob?.cancel()
         prefetchJob?.cancel()
         prefetchJob = null
+        prefetchPages = null
         engine.stop()
         paused = false
         val ctx = provideContext()
@@ -321,7 +330,16 @@ internal class TtsPlaybackController(
             }
 
             queue = sentences
-            if (sentenceIndex >= sentences.size) sentenceIndex = 0
+            if (sentenceIndex >= sentences.size) {
+                // Resume landed after the page's last utterance (resumeIndex already
+                // points past it): continue with the page advance instead of
+                // re-speaking the page from the start.
+                resumeIndex = 0
+                if (!advanceFromPolicy(ctx, pageIndex, pageHasText = true)) return
+                pageIndex = mutableState.value.pageIndex
+                sentenceIndex = 0
+                continue
+            }
             schedulePrefetch(ctx, pageIndex + 1)
 
             var utteranceRetries = 0
@@ -340,10 +358,22 @@ internal class TtsPlaybackController(
                         sentenceText = sentence.text,
                     )
                 }
+                // Mid-page escalation: at high rates the initial N-page lookahead may
+                // finish before the page ends; re-arm once at the page's midpoint.
+                if (sentenceIndex == sentences.size / 2 &&
+                    preferences.ttsSpeechRate().get() >= 2f
+                ) {
+                    schedulePrefetch(ctx, pageIndex + 1)
+                }
+                val id = utteranceId(pageIndex, sentenceIndex)
+                logcat(LogPriority.DEBUG) {
+                    "TTS dispatch id=$id page=$pageIndex sentence=$sentenceIndex " +
+                        "textLen=${sentence.text.length} textHash=${sentence.text.hashCode()}"
+                }
                 val spoke = try {
                     // Auto-scroll to the sentence's region before speaking (webtoon sync)
                     eventChannel.send(TtsEvent.ScrollToRegion(pageIndex, sentence.boundingBox))
-                    engine.speak(utteranceId(pageIndex, sentenceIndex), sentence.text)
+                    engine.speak(id, sentence.text)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -363,17 +393,20 @@ internal class TtsPlaybackController(
                     if (utteranceRetries == 0) {
                         utteranceRetries++
                         logcat(LogPriority.WARN) {
-                            "TTS sentence ${utteranceId(pageIndex, sentenceIndex)} failed; retrying once"
+                            "TTS sentence $id failed; retrying once"
                         }
                         continue
                     }
                     logcat(LogPriority.ERROR) {
-                        "TTS sentence ${utteranceId(pageIndex, sentenceIndex)} failed twice; pausing"
+                        "TTS sentence $id failed twice; pausing"
                     }
                     paused = true
                     mutableState.update { it.copy(phase = TtsPhase.Paused) }
                     return
                 }
+                // Point resume at the NEXT unheard sentence before any suspension, so
+                // a pause between utterances resumes after (not re-speaking) this one.
+                resumeIndex = sentenceIndex + 1
                 utteranceRetries = 0
                 sentenceIndex++
             }
@@ -460,7 +493,7 @@ internal class TtsPlaybackController(
         val result = cached ?: scanOnDemand(ctx, pageIndex) ?: return@withIOContext null
         val zones = if (preferences.ttsOcrExclusionsEnabled().get()) {
             try {
-                getExclusionZones.awaitForChapter(ctx.chapter.id)
+                getExclusionZones.awaitForSpeech(ctx.manga.id, ctx.manga.source, ctx.chapter.id)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -470,9 +503,23 @@ internal class TtsPlaybackController(
         } else {
             emptyList()
         }
-        val regions = result.regions.applyExclusions(zones, pageIndex)
+        val regions = result.regions.applyExclusions(
+            zones,
+            ExclusionMatchContext(
+                mangaId = ctx.manga.id,
+                sourceId = ctx.manga.source,
+                chapterId = ctx.chapter.id,
+                pageIndex = pageIndex,
+            ),
+        )
+        val dedupedRegions = SpeechPipeline.dedupeOverlappingDuplicates(regions)
+        if (dedupedRegions.size < regions.size) {
+            logcat(LogPriority.DEBUG) {
+                "TTS page=$pageIndex dedup dropped=${regions.size - dedupedRegions.size} regions"
+            }
+        }
         val sentences = SpeechPipeline.toSpeakableSentences(
-            regions = regions,
+            regions = dedupedRegions,
             classificationConfig = SpeechClassificationConfig(),
             filterConfig = preferences.speechRegionFilterConfig(),
             cleanupOptions = preferences.speechCleanupOptions(),
@@ -522,41 +569,57 @@ internal class TtsPlaybackController(
         null
     }
 
-    private fun schedulePrefetch(ctx: TtsChapterContext, pageIndex: Int) {
-        if (pageIndex >= ctx.totalPages) return
-        // Guard: skip if this exact page is already being prefetched.
-        if (pageIndex == prefetchPageIndex && prefetchJob?.isActive == true) {
+    /** Prefetch lookahead depth by speech rate: faster speech needs more runway. */
+    private fun prefetchDepth(): Int {
+        val rate = preferences.ttsSpeechRate().get()
+        return when {
+            rate >= 2.5f -> MAX_PREFETCH_DEPTH
+            rate >= 1.5f -> 2
+            else -> 1
+        }
+    }
+
+    private fun schedulePrefetch(ctx: TtsChapterContext, startPageIndex: Int) {
+        if (startPageIndex >= ctx.totalPages) return
+        val targetPages = startPageIndex until minOf(startPageIndex + prefetchDepth(), ctx.totalPages)
+        // Guard: skip if these exact pages are already being prefetched.
+        if (targetPages.isEmpty() || (prefetchPages == targetPages && prefetchJob?.isActive == true)) {
             return
         }
-        prefetchPageIndex = pageIndex
+        prefetchPages = targetPages
         prefetchJob?.cancel()
         prefetchJob = scope.launch {
-            logcat(LogPriority.DEBUG) { "TTS prefetch start page=$pageIndex" }
-            val cached = try {
-                getCachedPageOcr.await(ctx.chapter.id, pageIndex)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                null
+            logcat(LogPriority.DEBUG) {
+                "TTS prefetch start pages=${targetPages.first}..${targetPages.last} " +
+                    "rate=${preferences.ttsSpeechRate().get()}"
             }
-            if (cached != null) {
-                logcat(LogPriority.DEBUG) { "TTS prefetch cache hit page=$pageIndex" }
-                return@launch
-            }
-            try {
-                // Best-effort: failures must not kill the session; the main loop
-                // re-scans and reports its own errors when it reaches this page.
-                val scanned = scanOnDemand(ctx, pageIndex, reportFailure = false)
-                if (scanned != null) {
-                    logcat(LogPriority.DEBUG) { "TTS prefetch complete page=$pageIndex" }
-                } else {
-                    logcat(LogPriority.DEBUG) { "TTS prefetch scan failed page=$pageIndex (best-effort)" }
+            for (page in targetPages) {
+                val cached = try {
+                    getCachedPageOcr.await(ctx.chapter.id, page)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    null
                 }
-            } catch (e: CancellationException) {
-                logcat(LogPriority.DEBUG) { "TTS prefetch cancelled page=$pageIndex" }
-                throw e
-            } catch (_: Exception) {
-                // Prefetch is best-effort; the main loop reports its own failures.
+                if (cached != null) {
+                    logcat(LogPriority.DEBUG) { "TTS prefetch cache hit page=$page" }
+                    continue
+                }
+                try {
+                    // Best-effort: failures must not kill the session; the main loop
+                    // re-scans and reports its own errors when it reaches this page.
+                    val scanned = scanOnDemand(ctx, page, reportFailure = false)
+                    if (scanned != null) {
+                        logcat(LogPriority.DEBUG) { "TTS prefetch complete page=$page" }
+                    } else {
+                        logcat(LogPriority.DEBUG) { "TTS prefetch scan failed page=$page (best-effort)" }
+                    }
+                } catch (e: CancellationException) {
+                    logcat(LogPriority.DEBUG) { "TTS prefetch cancelled page=$page" }
+                    throw e
+                } catch (_: Exception) {
+                    // Prefetch is best-effort; the main loop reports its own failures.
+                }
             }
         }
     }
@@ -614,7 +677,7 @@ internal class TtsPlaybackController(
         playbackJob = null
         prefetchJob?.cancel()
         prefetchJob = null
-        prefetchPageIndex = -1
+        prefetchPages = null
         lastRebuildPageIndex = -1
         pendingAdvance = null
         paused = false
@@ -636,10 +699,12 @@ internal class TtsPlaybackController(
         mutableState.update { it.copy(phase = TtsPhase.Error, error = error) }
     }
 
-    private fun utteranceId(pageIndex: Int, sentenceIndex: Int) = "p${pageIndex}_s$sentenceIndex"
+    private fun utteranceId(pageIndex: Int, sentenceIndex: Int): String =
+        "p${pageIndex}_s${sentenceIndex}_c${dispatchCounter.getAndIncrement()}"
 
     private companion object {
         const val ADVANCE_CONFIRM_TIMEOUT_MS = 10_000L
         const val RESUME_POLL_MS = 100L
+        const val MAX_PREFETCH_DEPTH = 3
     }
 }

@@ -119,7 +119,9 @@ no new image/audio libraries.
 - Never duplicate OCR or reader logic — call interactors/activity APIs.
 - Lifecycle-safe: pause on Activity onStop; shutdown in finish/onCleared paths;
   no callbacks after teardown; failures must never crash the reader.
-- Queues bounded: one page's sentence list at a time; prefetch limited to N+1.
+- Queues bounded: one page's sentence list at a time; prefetch bounded to at
+  most 3 pages ahead, depth speed-aware (1 at <1.5x, 2 at 1.5-2.5x, 3 at
+  ≥2.5x), one OCR scan in flight at a time.
 - No audio caching in v1 (system TTS latency is tens of ms).
 - Future engines must be addable without modifying reader logic
   (interface + Injekt binding swap).

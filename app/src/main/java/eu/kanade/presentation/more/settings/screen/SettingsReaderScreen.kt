@@ -439,6 +439,14 @@ object SettingsReaderScreen : SearchableSettings {
                     enabled = readWithLongTap,
                 ),
                 Preference.PreferenceItem.SwitchPreference(
+                    preference = readerPreferences.ocrTextSelectionEnabled,
+                    title = stringResource(MR.strings.pref_reader_ocr_text_selection),
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = readerPreferences.readAloudButtonEnabled,
+                    title = stringResource(MR.strings.pref_reader_read_aloud_button),
+                ),
+                Preference.PreferenceItem.SwitchPreference(
                     preference = readerPreferences.folderPerManga,
                     title = stringResource(MR.strings.pref_create_folder_per_manga),
                     subtitle = stringResource(MR.strings.pref_create_folder_per_manga_summary),

@@ -871,6 +871,39 @@ BATTERY MEASUREMENT — PHASE 9 FINAL ITEM (2026-08-29, build 0.4.0-8241):
 ```
 
 ```text
+[COMPLETED 2026-09-01 — Speed-adaptive Read-Aloud OCR prefetch, UNCOMMITTED]
+- Problem: hardcoded N+1 prefetch had zero margin at high speech rates.
+  Measured: Glens scan p50 8.1s / p90 16.7s / max 31s vs page speech time
+  ~10-17s at 3x. Cache hits 9ms (irrelevant).
+- TtsPlaybackController.kt (only code file):
+  - prefetchPageIndex → prefetchPages: IntRange? (pages covered by
+    current/last prefetch job).
+  - prefetchDepth(): rate <1.5x → 1, 1.5-2.5x → 2, ≥2.5x → 3
+    (MAX_PREFETCH_DEPTH=3 const). Depth read at schedule time — mid-session
+    rate changes pick up naturally.
+  - schedulePrefetch: targetPages = start until min(start+depth, totalPages)
+    (auto-clamped at chapter end); same-pages+active-job skip guard; ONE
+    coroutine iterating pages SEQUENTIALLY (per-page cache check via
+    getCachedPageOcr → scanOnDemand reportFailure=false; CE rethrow; other
+    exceptions logged/no-op). No new parallelism — respects serialized
+    PrioritizedTaskQueue, single in-flight repo scan.
+  - Mid-page escalation: sentence loop at sentenceIndex == size/2 with
+    rate ≥ 2f calls schedulePrefetch(page+1) — no-op via guards when
+    already covered. No new state.
+  - Cancellation: rebuildQueueForUserNavigation + resetSession now also
+    null prefetchPages (old code left stale prefetchPageIndex — was safe
+    via isActive check but inconsistent).
+  - Prefetch start log now includes pages range + rate.
+  - resumeIndex semantics, dispatch-counter ids, exclusion awaitForSpeech
+    untouched.
+- rules.md §6: prefetch line updated to 3-page bounded, speed-aware depth.
+- Gates NOT run (per task instruction). ktlint 120-col verified by awk.
+- Device verify pending: 3x playback of Glens-style tall strips should show
+  "TTS prefetch start pages=N..N+2 rate=3.0" with no mid-playback OCR
+  LoadingPage gaps.
+```
+
+```text
 [COMPLETED 2026-09-01 — Phases A–I multi-feature roadmap, UNCOMMITTED]
 
 Phase A — Intelligent speech cleanup (domain mihon.domain.tts.speech):
@@ -991,18 +1024,281 @@ Follow-ups (deliberately deferred, ponytail):
 ```
 
 ```text
+[COMPLETED 2026-09-01 — OCR exclusion system redesign, UNCOMMITTED]
+
+Rule model (single ocr_exclusion_zones table, preserved):
+- match_type ∈ {ZONE, WORD, PHRASE, COMBINED} + match_text + rule_name columns.
+- ZONE: pure rect, scope PAGE only for new rules (chapterId+pageIndex match).
+  Legacy CHAPTER/MANGA/SOURCE ZONE rows (page_index NULL): DORMANT in matcher
+  (rect was drawn on one page; blind application was the bug), visible+deletable
+  with "legacy" hint in manage UI. Data preserved.
+- WORD: global standalone-token match (Unicode isLetterOrDigit tokens,
+  case-insensitive; "ion" ≠ "combination").
+- PHRASE: global normalized substring (case-insensitive, \s+→space collapse).
+- COMBINED: rect overlap AND phrase match within scope (PAGE=chapter+page,
+  CHAPTER=any page of chapter, MANGA, SOURCE). Location+text = safe wide scope.
+
+Migration 19.sqm (verifySqlDelightMigration NOT yet run — user runs it):
+- Full table rebuild: drops manga_id FK (global WORD/PHRASE rules need
+  manga_id=0 which would violate old FK), keeps chapter_id FK CASCADE,
+  adds match_text/match_type/rule_name in same column order as .sq.
+- UPDATE chapter_id=NULL for legacy MANGA/SOURCE rows (chapter-delete cascade
+  used to destroy them — bug 3 fix). .sq mirror-updated identically.
+
+Matcher (OcrExclusionMatcher.kt): new ExclusionMatchContext(mangaId, sourceId,
+chapterId, pageIndex) API; applyExclusions(zones, context). PAGE zone now also
+requires chapterId match (was page-only). Enabled check at matcher + query.
+
+Repository/interactors: +subscribeAll, +getZonesForSpeech(mangaId, sourceId,
+chapterId) = enabled AND (text rules OR manga/chapter/source match); insert
+gains matchType/matchText/ruleName/enabled (enabled was hardcoded 1 — restorer
+bug 5 fix). Controller acquireSentences → awaitForSpeech + context call.
+
+Reader save flow (bug 2/3 fix): scope dialog now offers PAGE (pure zone) or
+CHAPTER/MANGA/SOURCE (COMBINED; required non-blank match text, Save disabled
+while blank; AlertDialog + OutlinedTextField, same Dialog.ExclusionZoneScope
+entry so both ReaderActivity when-branches unchanged). saveExclusionZone:
+MANGA/SOURCE → chapter_id NULL (no cascade); pageIndex always stored.
+
+New Settings → OCR exclusions screen (SettingsOcrExclusionsScreen, plain
+Voyager Screen per DictionaryScreen pattern — not searchable): words/phrases/
+zones sections, add-word/add-phrase AlertDialogs, per-row switch+delete,
+rule hint, legacy marker. ScreenModel: SettingsOcrExclusionsScreenModel
+(StateScreenModel over subscribeAll). Entry: SettingsMainScreen row after
+Read aloud (Icons.Outlined.Block) + Destination.OcrExclusions id 5 + both
+SettingsScreen when branches. Reader manage sheet stays manga-scoped
+(subscribeForManga) + type labels + legacy hint.
+
+Backup/restore: BackupOcrExclusionZone +@ProtoNumber(11/12/13) matchType
+(default "ZONE")/matchText/ruleName — old backups decode. Restorer: dedupe
+now compares scope+matchType+matchText too (scope-omission bug fixed),
+unknown matchType skipped, enabled round-trips via new insert param.
+
+i18n (base only): 17 new keys (ocr_exclusions_screen_title, _summary,
+_type_zone/word/phrase/combined/_legacy, _section_words/phrases/zones,
+_add_word/_add_phrase, _match_text_label, _rule_hint, _invalid_text, _empty).
+
+Tests: OcrExclusionMatcherTest rewritten — 13 cases (page-zone page+chapter
+match, other-page survive, non-overlap, WORD standalone/case/unicode,
+PHRASE whitespace/case/substring, COMBINED chapter any-page + rect/text
+required + wrong scope kept, COMBINED manga/source, legacy dormant all
+scopes, disabled, any-match, normalized coords).
+
+GATES NOT RUN (host gradle forbidden this session; user runs gates later).
+```
+
+```text
+[COMPLETED 2026-09-01 — TTS duplicate-speech fix set (4 root causes), UNCOMMITTED]
+
+Root causes treated as established facts (user-confirmed investigation):
+OCR seam duplicates surviving IoU<0.45 + resumeIndex race + utterance-id
+collision + old-job stop() flushing new utterance.
+
+1. Domain text-dedup (mihon.domain.tts.speech/SpeechPipeline.kt):
+   - dedupeOverlappingDuplicates(regions) inserted BEFORE segmentation in
+     toSpeakableSentences: drops later regions whose normalized text
+     (trim + \s+→space + lowercase) EXACTLY duplicates an earlier kept region
+     AND strictly overlaps its bbox (AABB, boxesOverlap helper). Duplicate
+     text in disjoint bubbles survives (legitimate). Hoisted key regex.
+   - New pure fns: boxesOverlap(a,b), boundingBoxIoU(a,b) (normalized floats).
+   - Benefits ALL engines; GlensOcrEngine untouched (per plan).
+2. resumeIndex race (TtsPlaybackController.runPlayback):
+   - resumeIndex=sentenceIndex stays ONLY at pre-dispatch (pause DURING
+     speech re-speaks current sentence = desired).
+   - After spoke==true: resumeIndex=sentenceIndex+1 BEFORE suspension points
+     → pause between utterances resumes at NEXT (never re-speaks completed).
+   - sentenceIndex>=sentences.size on (re)entry now advances the page instead
+     of resetting to 0 (fixes pause-in-advance-window re-speaking whole page).
+   - stepBy resumeIndex=newIndex kept consistent.
+3. Utterance-id collision: utteranceId now appends monotonic per-controller
+   AtomicLong dispatch counter ("p${page}_s${sentence}_c${n}") — unique per
+   dispatch, page/sentence still traceable. Engine-side finally now removes
+   pendingUtterances entry only when identity matches (===) ITS completion —
+   stale zombie dispatch can't unhook a newer dispatch's callback.
+4. Zombie stop() flush: resume() now calls engine.stop() after
+   playbackJob?.cancel() when phase was Playing/LoadingPage (old job could
+   have in-flight utterance). rebuildQueueForUserNavigation + stepBy already
+   called engine.stop(); pause() calls its own. engine.stop() idempotent.
+5. Traceability logs (no text content, rules §7): "TTS dispatch id=...
+   textLen=... textHash=..." at speak dispatch; "TTS page=N dedup dropped=X
+   regions" (only when X>0) in acquireSentences (dedup applied there once,
+     pipeline stays dedup-free at call site).
+6. Tests: SpeechPipelineDedupTest 9 cases (dup+overlap→later dropped /
+   dup+disjoint→kept / different-text+overlap→kept / case+whitespace dup→
+   dropped / triple→first kept / empty unchanged / pipeline single-sentence
+   / IoU identical=1 / IoU disjoint=0). 9/9 GREEN.
+
+DEVIATIONS from brief (all flagged, user-WIP interactions):
+- Brief's line numbers were stale: on-disk controller had evolved (phase A–I
+  + exclusion redesign landed uncommitted). Verified every hunk against
+  CURRENT source before editing; exclusion code now uses
+  ExclusionMatchContext/awaitForSpeech — acquireSentences dedup log
+  adapted to that shape.
+- User's uncommitted exclusion-zone WIP had a COMPILE BREAK blocking all
+  gates: OcrExclusionMatcher.kt:30 called zone.matchesRegion(...) but fn
+  is top-level matchesRegion(zone,...). Fixed (one word, no semantic
+  change). Also fixed: ReaderViewModel.kt:1055 (text:String? null-check
+  → isNullOrEmpty guard), SettingsOcrExclusionsScreenModel.kt (missing
+  kotlinx.coroutines.launch import).
+- User WIP spotless violations (continuation indents) hand-applied per
+  ktlint's exact output: OcrExclusionMatcher.kt (2 hunks),
+  ReaderActivity.kt (ExclusionZoneScopeDialog arg indent).
+- User WIP SpeechCleaner tests had 2 WRONG expectations contradicting their
+  own impl/docs: "..." with ellipsisToPause=false → null (their own
+  doc: punctuation-only skip drops standalone runs), and pipeline slice
+  "I don't know," (segmenter trims slices by design, memory 2026-08-25).
+  Expectations corrected; no production code changed for these two.
+- Resumed resumeIndex=size fallthrough: NOT in brief; required to avoid
+  re-speaking whole page when pause lands between last utterance and page
+  advance. advanceFromPolicy path preserves auto-turn arbitration.
+
+GATES GREEN 2026-09-01 (devcontainer JDK17, -Xmx4g, both volumes):
+  spotlessCheck + testDebugUnitTest BUILD SUCCESSFUL in 2m 30s (173 domain
+  tests + all suites; DedupTest 9/9). :domain:compileReleaseKotlin +
+  :app:compileDebugKotlin BUILD SUCCESSFUL 4m 7s. verifySqlDelightMigration
+  NOT needed (no DB change). NOT run: assembleDebug, device pass.
+
+Files edited: SpeechPipeline.kt; SpeechPipelineDedupTest.kt (new);
+  TtsPlaybackController.kt; AndroidTtsEngine.kt;
+  OcrExclusionMatcher.kt (WIP compile+ktlint fix);
+  ReaderViewModel.kt (WIP null-check fix);
+  SettingsOcrExclusionsScreenModel.kt (WIP import fix);
+  ReaderActivity.kt (WIP ktlint indent);
+  SpeechCleanerTest.kt + SpeechRegionFilterTest.kt (WIP expectation fix).
+Deferred issue #3b (hands-off duplicate speech) → addressed by this set;
+device re-verify on affected manga still pending.
+```
+
+```text
+[COMPLETED 2026-09-01 — Reader UI polish set (Issues 5/6/8), UNCOMMITTED]
+
+Feature 1 (Issue 5) — Stop button during Preparing/LoadingPage:
+- TtsPlaybackBar.kt Preparing/LoadingPage branch: status Text gained
+  Modifier.weight(1f) + trailing Stop IconButton (Icons.Outlined.Stop, reuses
+  tts_action_stop key, same pattern as PlaybackContent/ErrorContent stop) wired
+  to existing onStop. UI-only; ReaderActivity onStop wiring untouched.
+
+Feature 2 (Issue 6) — OCR drag-select toggle:
+- ReaderPreferences: ocrTextSelectionEnabled ("reader_ocr_text_selection",
+  default true, Controls region beside longTapOcr).
+- ReaderBottomBar: showOcrButton param (default true) wraps DocumentScanner
+  IconButton. Chain: ReaderActivity (both call sites, collectAsState) →
+  ReaderAppBars (param + forward) → ReaderBottomBar.
+- Long-press OCR path (longTapOcr pref) untouched. enterOcrMode NOT gated —
+  exclusion-zone flow shares enterSelectionMode with its own SelectionAction.
+
+Feature 3 (Issue 8) — Read Aloud button toggle (same pattern):
+- ReaderPreferences: readAloudButtonEnabled ("reader_read_aloud_button",
+  default true). ReaderBottomBar showReadAloudButton param wraps
+  RecordVoiceOver IconButton. Wired identically at both call sites.
+- Settings: SettingsReaderScreen getActionsGroup gains both SwitchPreferences
+  after longTapOcr row. Core actions (mode/orientation/crop/settings) always
+  visible.
+
+i18n (base only): pref_reader_ocr_text_selection, pref_reader_read_aloud_button
+(2 new keys; stop reuses existing tts_action_stop).
+
+GATES NOT RUN (host gradle forbidden this session; user runs gates later).
+Files: TtsPlaybackBar.kt, ReaderBottomBar.kt, ReaderAppBars.kt,
+ReaderActivity.kt, ReaderPreferences.kt, SettingsReaderScreen.kt,
+i18n base strings.xml.
+```
+
+```text
+[COMPLETED 2026-09-01 — POST-DEVICE-TEST AUDIT SET (session: repeated speech +
+exclusion redesign + adaptive prefetch + stop-during-prepare + reader prefs +
+toolbar toggles + ellipsis pause), UNCOMMITTED — ALL GATES GREEN]
+
+Session flow: evidence collection (5 parallel explore agents, full audit of
+TTS pipeline/OCR exclusions/prefetch/minibar/toolbar/settings/backup) →
+root-cause report → implementation via 4 parallel agents + orchestrator edits
+→ verification. No fresh device logs existed for the reported test pass
+(newest .device-pass log = tts-10a-test.log 2026-08-31); evidence = source +
+prior logs. Root causes established in code, not guessed.
+
+Issue 2 (repeated speech) — 4 root causes, all fixed:
+- OCR seam/text duplicates (primary): domain text-dedup (see dedup block
+  below) + traceability logs.
+- resumeIndex race: fixed (see dedup block).
+- utterance-id collision: unique per-dispatch ids (see dedup block).
+- zombie stop() flush: resume() engine.stop() guard (see dedup block).
+
+Issue 1 (ellipsis "dot dot dot"): SpeechCleaner ellipsisToPause option —
+dot-runs (2+) and "…" → ", " spoken pause, toggleable
+(pref_tts_ellipsis_to_pause default true, checkbox in Read aloud reader tab,
+key pref_tts_ellipsis_to_pause). SpeechCleanerTest +2 cases; SpeechRegionFilterTest
+pipeline expectation updated ("I don't know," — segmenter trims slices).
+
+Issue 3 (OCR exclusion redesign): full redesign (see exclusion-redesign
+block above) — ZONE/WORD/PHRASE/COMBINED match types, 19.sqm table rebuild
+(drops manga_id FK, adds match_text/match_type/rule_name, legacy MANGA/
+SOURCE chapter_id→NULL), matcher ExclusionMatchContext API, scope dialog
+combined-rule text requirement, Settings→OCR exclusions screen, backup
+proto 11/12/13 + restorer dedupe/enabled fixes.
+
+Issue 4 (high-speed prefetch): speed-adaptive depth (see prefetch block).
+
+Issue 5 (stop during Preparing/LoadingPage): TtsPlaybackBar spinner branch
+gains trailing Stop IconButton (Icons.Outlined.Stop, tts_action_stop) —
+stop() was fully functional controller-side; pure UI gap.
+
+Issue 6 (OCR drag-select toggle): reader_ocr_text_selection pref (default
+true) → showOcrButton param chain ReaderActivity→ReaderAppBars→
+ReaderBottomBar; SettingsReaderScreen Actions group SwitchPreference.
+Long-press path (longTapOcr) untouched — separate mechanism.
+
+Issue 7 (dictionary popup toggle): ALREADY EXISTING —
+pref_dictionary_reader_tap_lookup gates shouldHandleCachedOcrRegionTaps
+(PHASE H, Settings→Dictionary). Regression-verified only, no change needed.
+
+Issue 8 (toolbar customization): reader_read_aloud_button pref (default
+true) → showReadAloudButton chain, same pattern as Issue 6. Core actions
+(mode/orientation/crop/settings) always visible. No drag-drop ordering.
+
+Issue 9 (dictionary in More): untouched per directive.
+Issue 10 (Feed): untouched per directive.
+
+GATES GREEN 2026-09-01 (devcontainer JDK17, -Xmx4g, both volumes, run by
+ORCHESTRATOR directly, all four):
+  spotlessCheck BUILD SUCCESSFUL 42s;
+  testDebugUnitTest + verifySqlDelightMigration BUILD SUCCESSFUL 4m9s
+    (19.sqm validated vs .sq schema; new suites green: OcrExclusionMatcherTest
+    14/14, SpeechCleanerTest 11/11, SpeechPipelineDedupTest 9/9);
+  :app:assembleDebug BUILD SUCCESSFUL 3m52s.
+NOT run: device pass (user), assembleRelease.
+
+Device-pass checklist for user (from audit task spec):
+1. Speech cleanup incl. "..." pause + dialogue preservation.
+2. Repeated-speech: multiple chapters/pages, hands-off; look for
+   "TTS dispatch id=... textHash=" + "dedup dropped=" logs; zero repeats.
+3. OCR exclusions: page zone; chapter/manga/source COMBINED (text required);
+   word "ion" vs "combination"; phrase; legacy dormant rows visible.
+4. High-speed 1x/2x/2.5x/3x: "TTS prefetch start pages=N..N+2 rate=3.0";
+   stalls bounded; no LoadingPage gaps at 3x on cached pages.
+5. Stop during Preparing/LoadingPage: bar now shows Stop; cancel clean;
+   next session starts fresh.
+6. OCR selection toggle OFF → button gone.
+7. Dictionary popup: toggle OFF → no popups/no "No dictionary is enabled".
+8. Toolbar customization: toggles hide/show optional buttons.
+9. Backup/restore round-trip: voice profile + word + phrase + zone +
+   combined rule all survive; disabled rules stay disabled.
+```
+
 Deferred issues (LOW PRIORITY, revisit post-build):
   - #3b hands-off duplicate words/phrases: intermittent, manga-specific, never
-    reproduced under instrumentation. To re-debug: re-add TTS-DBG logs (git history)
-    + log per-sentence bounding box to catch duplicate/overlapping OCR regions;
-    reproduce on the affected manga. Hypotheses: OCR overlapping regions (same text
-    under different utterance ids) or Google-TTS engine audio quirk.
+    reproduced under instrumentation. ADDRESSED 2026-09-01 by the duplicate-
+    speech fix set (domain text-dedup + resumeIndex race + unique utterance
+    ids + zombie-stop guard); device re-verify on the affected manga is the
+    remaining confirmation step.
 
 Remaining:
-- User review + commit of the 2026-09-01 Phases A–I change set.
+- User review + commit: 2026-09-01 Phases A–I change set is COMMITTED
+  (c70e32252); the 2026-09-01 POST-DEVICE-TEST AUDIT SET (this session)
+  is UNCOMMITTED awaiting user commit.
 - Device pass of the new features (speech cleanup behavior, exclusion-zone
   selection on manga+webtoon, speed popup, profiles, Feed tab, dictionary
-  More-tab relocation).
+  More-tab relocation) + this session's audit checklist (9 items, listed
+  in the audit-set block above).
 - (DONE 2026-08-29: Phase 9 COMPLETE — leak fix device-verified 0 APPLICATION
   LEAKS; battery measurement done: no post-exit drain, app fg CPU ~1mAh/min,
   screen dominates; evidence battery-sample.log + battery-tts-session.log +
@@ -1348,18 +1644,19 @@ Injekt 91edab2317, JUnit5 6.1.1/Kotest 6.2.2/MockK 1.14.11).
 ## Testing status
 
 ```text
-Unit tests:        PASS (2026-08-30, full testDebugUnitTest — Phase 10A
-                    Tasks 1+3+4+5 set)
+Unit tests:        PASS (2026-09-01, full testDebugUnitTest — post-device-test
+                    audit set: dedup + exclusion-redesign + ellipsis + prefetch;
+                    new suites OcrExclusionMatcherTest 14/14, SpeechCleanerTest
+                    11/11, SpeechPipelineDedupTest 9/9)
 Integration tests: none run (existing androidTest suites are device-gated/@Ignore)
 UI tests:          none exist in repo
 Device tests:      Phase 8 script COMPLETE (steps 1–15 executed +
-                     user-confirmed 2026-08-28). Phase 9 device items
-                     COMPLETE (leak re-verify 0 leaks; battery PASS).
-                     PENDING: Phase 10A Task 7 device verification of the
-                     voice-config flow (root row, deep-link, pickers, live
-                     apply, preview, reset, fallback) — NOT yet run.
-Lint:              spotlessCheck PASS (2026-08-29, after fd52a613a import-order
-                    regression repaired via spotlessApply)
+                      user-confirmed 2026-08-28). Phase 9 device items
+                      COMPLETE (leak re-verify 0 leaks; battery PASS).
+                      Phase 10A Task 7 COMPLETE (user-confirmed 2026-08-31).
+                      PENDING: post-device-test audit set device pass
+                      (9-item checklist in the audit-set block).
+Lint:              spotlessCheck PASS (2026-09-01, audit set)
 Build:             :app:assembleDebug PASS (2026-08-29, 0.4.0-8241 = 5c7d2cc2c
                     installed on SM_M066B)
 Baseline (pre-TTS expectations): CI order = spotlessCheck → testDebugUnitTest →
@@ -1374,28 +1671,27 @@ Environment: devcontainer image vsc-yomihon-e24e3bd7… (JDK 17) via docker on h
 ## Last verified build
 
 ```text
-Date:     2026-09-01
+Date:     2026-09-01 (post-device-test audit set, run by orchestrator)
 Command:  ./gradlew spotlessCheck testDebugUnitTest verifySqlDelightMigration
           :app:assembleDebug (docker devcontainer JDK17, -Xmx4g, both volumes)
-Result:   ALL GREEN — Phases A–I feature set (speech cleanup/classification,
-          OCR exclusion zones + 18.sqm migration, backup @107, voice profiles,
-          3x rate + speed popup, dictionary nav cleanup + interaction prefs,
-          Feed tab). UNCOMMITTED; device pass pending.
+Result:   ALL GREEN — spotlessCheck 42s; testDebugUnitTest + verifySqlDelight-
+          Migration 4m9s (19.sqm validated); :app:assembleDebug 3m52s.
+          Audit set: repeated-speech fixes (dedup/resumeIndex/utterance ids/
+          zombie-stop), OCR exclusion redesign (ZONE/WORD/PHRASE/COMBINED +
+          19.sqm), speed-adaptive prefetch, stop-during-prepare, reader
+          toggles, ellipsis pause. UNCOMMITTED; device pass pending.
 ```
 
 ## Last verified test
 
 ```text
-Date:     2026-08-30
-Command:  ./gradlew :app:compileDebugKotlin spotlessCheck testDebugUnitTest
-          (docker devcontainer, JDK 17, -Xmx4g, both volumes) — last CODE
-          gates, run with Task 5 (Task 6 was docs-only, no Gradle needed)
-Result:   BUILD SUCCESSFUL — Phase 10A Task 5 (settings root entry +
-          Destination.ReadAloud id 4 + SHORTCUT_VOICE_SETTINGS deep-link +
-          minimal reader tab w/ pitch slider relocated + nav row); full
-          report in .superpowers/sdd/2026-08-30-phase10a-advanced-tts-
-          voice-config/task-5-report.md. Task 6 (docs) verified claims
-          against source files instead — no build input changed.
+Date:     2026-09-01 (post-device-test audit set)
+Command:  ./gradlew testDebugUnitTest (docker devcontainer, JDK 17, -Xmx4g,
+          both volumes)
+Result:   BUILD SUCCESSFUL — full suite green incl. new OcrExclusionMatcherTest
+          14/14 (word-boundary/case/unicode, phrase, combined scopes, legacy
+          dormant, disabled), SpeechCleanerTest 11/11 (ellipsis→pause cases),
+          SpeechPipelineDedupTest 9/9 (overlap-dedup, disjoint survival, IoU).
 ```
 
 ---
@@ -1403,41 +1699,51 @@ Result:   BUILD SUCCESSFUL — Phase 10A Task 5 (settings root entry +
 ## Agent handoff
 
 ```text
-Last agent:                 opencode (2026-09-01 — Phases A–I multi-feature
-                            roadmap)
+Last agent:                 opencode (2026-09-01 — post-device-test audit:
+                            repeated speech + OCR exclusion redesign +
+                            adaptive prefetch + stop-during-prepare + reader
+                            interaction prefs/toolbar toggles + ellipsis pause)
 Date:                       2026-09-01
-Task completed:             Speech cleanup + region classification/expression
-                            filtering (domain mihon.domain.tts.speech, wired at
-                            TtsPlaybackController.acquireSentences); OCR
-                            exclusion zones (18.sqm + repo/interactors +
-                            drag-select UI + scope dialog + manage sheet +
-                            matcher tests); backup/restore for zones (@107 +
-                            creator/restorer, dedupe + FK-safe skips); voice
-                            profiles (JSON pref + settings group); 3x rate +
-                            speed dropdown in TTSPlaybackBar; dictionary nav
-                            cleanup (DictionaryTab → DictionaryLookupScreen in
-                            More tab; tap-lookup + auto-search prefs); Feed
-                            tab (FeedTab/ScreenModel/Screen + FeedPreferences).
+Task completed:             Evidence-first audit of the 10 reported device
+                            issues (5 explore agents), root-cause report,
+                            then implementation. Issue 2 repeated speech: 4
+                            root causes fixed (domain text-dedup before
+                            segmentation; resumeIndex post-completion
+                            maintenance; unique per-dispatch utterance ids +
+                            identity-checked engine remove; resume() zombie-
+                            stop guard). Issue 3: OCR exclusion system
+                            redesigned (ZONE/WORD/PHRASE/COMBINED; 19.sqm
+                            table rebuild dropping manga_id FK; legacy wide-
+                            scope zones dormant but preserved; Settings→OCR
+                            exclusions screen; backup proto 11/12/13 +
+                            restorer dedupe/enabled fixes). Issue 4: speed-
+                            adaptive prefetch depth 1/2/3 by rate + mid-page
+                            re-arm. Issue 5: Stop button in Preparing/
+                            LoadingPage. Issue 6/8: reader_ocr_text_selection
+                            + reader_read_aloud_button toggles gating
+                            bottom-bar buttons. Issue 7: verified ALREADY
+                            EXISTING (pref_dictionary_reader_tap_lookup).
+                            Issue 1: ellipsisToPause cleanup option.
+                            Issues 9/10 untouched per directive.
 Current task:               NONE — awaiting user review + commit + device pass.
-Next recommended task:      Device pass script: (1) read-aloud on cached
-                            manga — verify SFX/decorative skipped, dialogue
-                            intact incl. "..." cases; (2) add exclusion zone
-                            on provider banner (webtoon + pager) — verify
-                            normalized rect scales after resolution change;
-                            (3) speed popup 0.5–3x live; (4) profile
-                            save/apply/persist-after-restart; (5) Feed add/
-                            reorder/delete + restart persistence; (6)
-                            dictionary More-tab lookup + auto-search off;
-                            (7) backup create/restore round-trip w/ zones.
+Next recommended task:      Run the 9-item device-pass checklist (audit-set
+                            block): repeated-speech re-verify on affected
+                            manga (unique _c dispatch ids + dedup dropped=X
+                            in logcat), exclusion scopes/word/phrase/combined,
+                            1x-3x prefetch stalls, stop-during-prepare, both
+                            toolbar toggles, backup/restore round-trip.
 Files safe to modify:       docs/* ; app reader/tts/settings/feed/dictionary ;
                             data OCR/backup files ; i18n base strings.xml
-Known risks:                Speech classifier heuristics tuned on English
-                            manga conventions — non-Latin primary speech
-                            requires pref_tts_speech_script=CJK setting;
-                            Feed fetches are one network page per feed on
-                            every tab open (no cache); exclusion UI uses
-                            bitmap decode for dims (one-shot, acceptable);
-                            restore dedupe is exact-rect match only.
+Known risks:                Dedup requires EXACT normalized-text match +
+                            box overlap — OCR fragments with differing text
+                            in overlapping boxes still survive (intended);
+                            legacy wide-scope zones are DORMANT (visible in
+                            manage UI w/ legacy hint, deletable) — user must
+                            re-create as combined rules if they want the old
+                            effect; remote-OCR latency at 3x on uncached tall
+                            strips can still stall (physical limit, documented
+                            — prefetch depth 3 is the mitigation); WORD/PHRASE
+                            rules are GLOBAL across all manga by design.
 ```
 
 ---

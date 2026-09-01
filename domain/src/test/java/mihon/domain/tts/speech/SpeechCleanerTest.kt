@@ -25,10 +25,23 @@ class SpeechCleanerTest {
 
     @Test
     fun `meaningful dialogue with punctuation is kept intact`() {
-        SpeechCleaner.cleanRegionForSpeech("I don't know...", options) shouldBe "I don't know..."
         SpeechCleaner.cleanRegionForSpeech("What?!", options) shouldBe "What?!"
         SpeechCleaner.cleanRegionForSpeech("Hello.", options) shouldBe "Hello."
         SpeechCleaner.cleanRegionForSpeech("Wait, what? No way.", options) shouldBe "Wait, what? No way."
+    }
+
+    @Test
+    fun `ellipsis becomes a spoken pause`() {
+        SpeechCleaner.cleanRegionForSpeech("I don't know...", options) shouldBe "I don't know, "
+        SpeechCleaner.cleanRegionForSpeech("Wait… what?", options) shouldBe "Wait,  what?"
+        SpeechCleaner.cleanRegionForSpeech("done…", options) shouldBe "done, "
+    }
+
+    @Test
+    fun `ellipsis pause can be disabled`() {
+        val off = SpeechCleanupOptions(ellipsisToPause = false)
+        SpeechCleaner.cleanRegionForSpeech("I don't know...", off) shouldBe "I don't know..."
+        SpeechCleaner.cleanRegionForSpeech("...", off) shouldBe null
     }
 
     @Test
@@ -59,7 +72,8 @@ class SpeechCleanerTest {
     @Test
     fun `punctuation-only skip can be disabled`() {
         val off = SpeechCleanupOptions(skipPunctuationOnly = false)
-        SpeechCleaner.cleanRegionForSpeech("...", off) shouldBe "..."
+        // ellipsisToPause still fires first: "..." -> ", "
+        SpeechCleaner.cleanRegionForSpeech("...", off) shouldBe ", "
         SpeechCleaner.cleanRegionForSpeech("***", off) shouldBe "***"
     }
 

@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.data.backup.models
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoNumber
+import mihon.domain.ocr.model.OcrExclusionMatchType
 import mihon.domain.ocr.model.OcrExclusionScope
 import mihon.domain.ocr.model.OcrExclusionZone
 
@@ -17,6 +18,9 @@ class BackupOcrExclusionZone(
     @ProtoNumber(8) var rightNorm: Float,
     @ProtoNumber(9) var bottomNorm: Float,
     @ProtoNumber(10) var enabled: Boolean,
+    @ProtoNumber(11) var matchType: String = "ZONE",
+    @ProtoNumber(12) var matchText: String? = null,
+    @ProtoNumber(13) var ruleName: String? = null,
 )
 
 val backupOcrExclusionZoneMapper = { zone: OcrExclusionZone ->
@@ -31,8 +35,14 @@ val backupOcrExclusionZoneMapper = { zone: OcrExclusionZone ->
         rightNorm = zone.boundingBox.right,
         bottomNorm = zone.boundingBox.bottom,
         enabled = zone.enabled,
+        matchType = zone.matchType.name,
+        matchText = zone.matchText,
+        ruleName = zone.ruleName,
     )
 }
 
 val BackupOcrExclusionZone.exclusionScope: OcrExclusionScope?
     get() = runCatching { OcrExclusionScope.valueOf(scope) }.getOrNull()
+
+val BackupOcrExclusionZone.exclusionMatchType: OcrExclusionMatchType?
+    get() = runCatching { OcrExclusionMatchType.valueOf(matchType) }.getOrNull()

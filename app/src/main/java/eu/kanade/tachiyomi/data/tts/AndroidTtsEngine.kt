@@ -131,7 +131,12 @@ class AndroidTtsEngine(
                 if (!completion.isCompleted) stop()
             }
         } finally {
-            synchronized(pendingUtterances) { pendingUtterances.remove(utteranceId) }
+            // Remove only OUR entry: a relaunch may have registered a newer
+            // completion under the same id; removing it unconditionally would
+            // misroute the new dispatch's callbacks.
+            synchronized(pendingUtterances) {
+                if (pendingUtterances[utteranceId] === completion) pendingUtterances.remove(utteranceId)
+            }
         }
     }
 

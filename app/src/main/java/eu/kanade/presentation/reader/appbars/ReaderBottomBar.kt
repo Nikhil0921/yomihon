@@ -30,6 +30,8 @@ fun ReaderBottomBar(
     onClickSettings: () -> Unit,
     onClickOcr: () -> Unit,
     onClickReadAloud: () -> Unit,
+    showOcrButton: Boolean = true,
+    showReadAloudButton: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -59,18 +61,22 @@ fun ReaderBottomBar(
             )
         }
 
-        IconButton(onClick = onClickOcr) {
-            Icon(
-                imageVector = Icons.Outlined.DocumentScanner,
-                contentDescription = stringResource(MR.strings.action_ocr),
-            )
+        if (showOcrButton) {
+            IconButton(onClick = onClickOcr) {
+                Icon(
+                    imageVector = Icons.Outlined.DocumentScanner,
+                    contentDescription = stringResource(MR.strings.action_ocr),
+                )
+            }
         }
 
-        IconButton(onClick = onClickReadAloud) {
-            Icon(
-                imageVector = Icons.Outlined.RecordVoiceOver,
-                contentDescription = stringResource(MR.strings.action_read_aloud),
-            )
+        if (showReadAloudButton) {
+            IconButton(onClick = onClickReadAloud) {
+                Icon(
+                    imageVector = Icons.Outlined.RecordVoiceOver,
+                    contentDescription = stringResource(MR.strings.action_read_aloud),
+                )
+            }
         }
 
         IconButton(onClick = onClickSettings) {

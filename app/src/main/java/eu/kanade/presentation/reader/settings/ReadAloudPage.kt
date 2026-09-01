@@ -60,6 +60,10 @@ internal fun ColumnScope.ReadAloudPage(
         label = stringResource(MR.strings.pref_tts_normalize_punctuation),
         pref = ttsPreferences.ttsNormalizePunctuation(),
     )
+    CheckboxItem(
+        label = stringResource(MR.strings.pref_tts_ellipsis_to_pause),
+        pref = ttsPreferences.ttsEllipsisToPause(),
+    )
 
     HeadingItem(stringResource(MR.strings.pref_tts_spoken_content_section))
     CheckboxItem(

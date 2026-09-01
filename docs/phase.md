@@ -5,21 +5,16 @@
 > A phase is COMPLETED only when its verification steps have actually been run
 > and recorded in `docs/memory.md`.
 
-Current phase pointer: **Phase 10A COMPLETED (2026-08-31) — advanced system
-  TTS voice configuration, device-verified (USER CONFIRMED PASS, build
-  0.5.0-8250, evidence .device-pass/tts-10a-test.log). Includes the
-  user-requested voice-picker search/filter follow-up. All work UNCOMMITTED
-  awaiting user commit. Phase 10B backlog remains (per-voice profiles,
-  cloud/neural providers, expressive speech). Phase 9 COMPLETED
-  (2026-08-29) — all hardening items done. Phase 8 device pass COMPLETE
-  (steps 1–15 executed + user-confirmed 2026-08-28 RUN4 build 0.4.0-8238).
-  All prior fix sets committed (z-order 41200022e, action logging
-  be31edb71, prefetch-DNS fix 80deac5b8 — the latter DEVICE-VERIFIED via
-  wifi-killed test; leak fix 5c7d2cc2c — 0 leaks re-verified). LeakCanary
-  enabled 2026-08-28 → Finding #5 fixed + device-verified; battery
-  measurement PASS (2026-08-29). Findings #1/#2 FIXED+VERIFIED (22/22
-  advances 1–5ms / 0 timeouts); Finding #3 duplicate speech USER DROPPED
-  2026-08-28 — LOW PRIORITY post-build (memory.md Deferred issues)**.
+Current phase pointer: **Post-device-test audit set COMPLETED (2026-09-01,
+  all 4 gates green) — repeated-speech fixes, OCR exclusion redesign
+  (ZONE/WORD/PHRASE/COMBINED + 19.sqm), speed-adaptive prefetch, stop-during-
+  prepare, reader interaction toggles, ellipsis pause. UNCOMMITTED, device
+  pass pending (9-item checklist in memory.md audit-set block).**
+  Prior: Phase 10A COMPLETED (2026-08-31, device-verified, build 0.5.0-8250);
+  Phases A–I multi-feature set COMMITTED as c70e32252; v0.5.1 released.
+  Phase 10B backlog remains (per-voice profiles, cloud/neural providers,
+  expressive speech). Phase 9 COMPLETED (2026-08-29). Phase 8 device pass
+  COMPLETE (2026-08-28). All prior fix sets committed.
 PRODUCT PIVOT 2026-08-25: English is the primary v1 Read-Aloud language;
   Japanese TTS moved to Phase 10B.
 
