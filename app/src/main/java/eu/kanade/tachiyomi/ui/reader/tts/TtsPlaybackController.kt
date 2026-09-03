@@ -518,6 +518,17 @@ internal class TtsPlaybackController(
                 "TTS page=$pageIndex exclusion rules=${zones.size} types=$typeCounts " +
                     "excluded=${result.regions.size - regions.size}/${result.regions.size}"
             }
+            // Structural rule detail (no text content, rules §7): enough to prove
+            // which rule/scope/rect fired or did not on a given page.
+            zones.forEach { z ->
+                logcat(LogPriority.DEBUG) {
+                    "OCR-ZONE rule=${z.id} type=${z.matchType.name} scope=${z.scope.name} " +
+                        "page=${z.pageIndex} chapter=${z.chapterId} manga=${z.mangaId} " +
+                        "rect=[${z.boundingBox.left},${z.boundingBox.top}," +
+                        "${z.boundingBox.right},${z.boundingBox.bottom}] " +
+                        "enabled=${z.enabled}"
+                }
+            }
         }
         val dedupedRegions = SpeechPipeline.dedupeOverlappingDuplicates(regions)
         if (dedupedRegions.size < regions.size) {

@@ -43,7 +43,13 @@ class WebtoonViewer(val activity: ReaderActivity, val isContinuous: Boolean = tr
 
     val downloadManager: DownloadManager by injectLazy()
 
-    private val scope = MainScope()
+    /**
+     * Scope for viewer-scoped work. Also used by the holders so their collectors
+     * die with the viewer in [destroy] — a private MainScope per holder leaked
+     * the destroyed activity via chapter/page stateFlow slots (LeakCanary
+     * 2026-09-03: 112MB WebtoonPageHolder + 184MB WebtoonTransitionHolder).
+     */
+    internal val scope = MainScope()
 
     /**
      * Recycler view used by this viewer.

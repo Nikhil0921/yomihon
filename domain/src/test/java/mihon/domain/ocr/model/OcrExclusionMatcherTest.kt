@@ -40,8 +40,9 @@ class OcrExclusionMatcherTest {
         enabled: Boolean = true,
         matchType: OcrExclusionMatchType = OcrExclusionMatchType.ZONE,
         matchText: String? = null,
+        id: Long = 1,
     ) = OcrExclusionZone(
-        id = 1,
+        id = id,
         mangaId = mangaId,
         sourceId = sourceId,
         chapterId = chapterId,
@@ -182,6 +183,59 @@ class OcrExclusionMatcherTest {
     }
 
     @Test
+    fun `phrase rule with space matches punctuation-joined ocr text`() {
+        val regions = listOf(
+            region(0, text = "Join discord.gg today"),
+            region(1, text = "Join AsuraScans today"),
+        )
+        val zones = listOf(zone(matchType = OcrExclusionMatchType.PHRASE, matchText = "discord gg"))
+        regions.applyExclusions(zones, context).map { it.order } shouldContainExactly listOf(1)
+    }
+
+    @Test
+    fun `phrase rule with punctuation matches space-joined ocr text`() {
+        val regions = listOf(region(0, text = "discord gg asurascans"))
+        val zones = listOf(zone(matchType = OcrExclusionMatchType.PHRASE, matchText = "discord.gg"))
+        regions.applyExclusions(zones, context).size shouldBe 0
+    }
+
+    @Test
+    fun `phrase rule tolerates nakaguro separator in ocr text`() {
+        val regions = listOf(region(0, text = "discord・gg・asurascans"))
+        val zones = listOf(zone(matchType = OcrExclusionMatchType.PHRASE, matchText = "discord gg asurascans"))
+        regions.applyExclusions(zones, context).size shouldBe 0
+    }
+
+    @Test
+    fun `phrase rule split across two regions is not excluded`() {
+        // Documented v1 semantics: the matcher is per-region; a phrase spanning an
+        // OCR region (line) boundary never matches. Pins the behavior.
+        val regions = listOf(
+            region(0, text = "Join our"),
+            region(1, text = "Discord now"),
+        )
+        val zones = listOf(zone(matchType = OcrExclusionMatchType.PHRASE, matchText = "join our discord"))
+        regions.applyExclusions(zones, context).size shouldBe 2
+    }
+
+    @Test
+    fun `phrase rule with punctuation-only text never matches`() {
+        val regions = listOf(region(0, text = "Hello there"))
+        val zones = listOf(zone(matchType = OcrExclusionMatchType.PHRASE, matchText = "!!!"))
+        regions.applyExclusions(zones, context).size shouldBe 1
+    }
+
+    @Test
+    fun `word rule splits on internal newline tokens`() {
+        // Newline is a token separator: "Dis\ncord" tokens [dis, cord] and the
+        // consecutive-run concat "discord" equals the rule — excluded by design
+        // (same separator-tolerance as "KeyManga" ≡ "Key Manga").
+        val regions = listOf(region(0, text = "Dis\ncord"))
+        val zones = listOf(zone(matchType = OcrExclusionMatchType.WORD, matchText = "discord"))
+        regions.applyExclusions(zones, context).size shouldBe 0
+    }
+
+    @Test
     fun `combined chapter rule needs rect and text on any page of chapter`() {
         val zones = listOf(
             zone(
@@ -240,6 +294,81 @@ class OcrExclusionMatcherTest {
                 val zones = listOf(zone(scope = scope, chapterId = if (scope == OcrExclusionScope.CHAPTER) 1 else null))
                 regions.applyExclusions(zones, context(7)).size shouldBe 1
             }
+    }
+
+    @Test
+    fun `chapter-scope zone stays anchored to its own chapter and page index`() {
+        val regions = listOf(region(0, top = 0f, bottom = 0.3f), region(1, top = 0.5f, bottom = 0.9f))
+        val zones = listOf(zone(scope = OcrExclusionScope.CHAPTER, pageIndex = 3, top = 0f, bottom = 0.3f))
+        // Own chapter, same page index: rect applies.
+        regions.applyExclusions(zones, context(3)).map { it.order } shouldContainExactly listOf(1)
+        // Own chapter, different page index: rect does not apply.
+        regions.applyExclusions(zones, context(0)).map { it.order } shouldContainExactly listOf(0, 1)
+        // Other chapter (same page index): scope gate blocks the rule.
+        regions.applyExclusions(zones, context.copy(chapterId = 99, pageIndex = 3)).map {
+            it.order
+        } shouldContainExactly listOf(0, 1)
+    }
+
+    @Test
+    fun `manga and source scope zones apply on matching page index only`() {
+        val regions = listOf(region(0))
+        val mangaZone = listOf(
+            zone(scope = OcrExclusionScope.MANGA, chapterId = null, pageIndex = 2),
+        )
+        regions.applyExclusions(mangaZone, context(2)).size shouldBe 0
+        regions.applyExclusions(mangaZone, context(3)).size shouldBe 1
+        regions.applyExclusions(mangaZone, context.copy(mangaId = 42, pageIndex = 2)).size shouldBe 1
+
+        val sourceZone = listOf(
+            zone(scope = OcrExclusionScope.SOURCE, chapterId = null, sourceId = 1, pageIndex = 2),
+        )
+        regions.applyExclusions(sourceZone, context(2)).size shouldBe 0
+        regions.applyExclusions(sourceZone, context(3)).size shouldBe 1
+        regions.applyExclusions(sourceZone, context.copy(sourceId = 42, pageIndex = 2)).size shouldBe 1
+    }
+
+    @Test
+    fun `zone with null page index never matches`() {
+        val regions = listOf(region(0))
+        val zones = listOf(zone(pageIndex = null))
+        regions.applyExclusions(zones, context(0)).size shouldBe 1
+    }
+
+    @Test
+    fun `zone matches only regions overlapping its rect`() {
+        val inside = region(0, left = 0.1f, top = 0.1f, right = 0.15f, bottom = 0.15f)
+        val touchingEdge = region(1, left = 0.3f, top = 0f, right = 0.4f, bottom = 0.1f)
+        val outside = region(2, left = 0.5f, top = 0.5f, right = 0.9f, bottom = 0.9f)
+        val spanBoth = region(3, left = 0.1f, top = 0.05f, right = 0.5f, bottom = 0.25f)
+        val zones = listOf(zone(pageIndex = 0, left = 0f, top = 0f, right = 0.2f, bottom = 0.2f))
+        val kept = listOf(inside, touchingEdge, outside, spanBoth)
+            .applyExclusions(zones, context(0))
+            .map { it.order }
+        // Edge-touching (shared boundary, zero-area intersection) survives; strict
+        // interior overlap (contained and spanning) is excluded; disjoint survives.
+        kept shouldContainExactly listOf(1, 2)
+    }
+
+    @Test
+    fun `zone with degenerate rect never matches`() {
+        val regions = listOf(region(0))
+        val zones = listOf(zone(pageIndex = 0, left = 0.2f, top = 0.2f, right = 0.2f, bottom = 0.2f))
+        regions.applyExclusions(zones, context(0)).size shouldBe 1
+    }
+
+    @Test
+    fun `multiple zones on one page exclude their own regions`() {
+        val regions = listOf(
+            region(0, left = 0f, top = 0f, right = 0.1f, bottom = 0.1f),
+            region(1, left = 0.4f, top = 0.4f, right = 0.5f, bottom = 0.5f),
+            region(2, left = 0.8f, top = 0.8f, right = 0.9f, bottom = 0.9f),
+        )
+        val zones = listOf(
+            zone(pageIndex = 0, left = 0f, top = 0f, right = 0.2f, bottom = 0.2f),
+            zone(id = 2, pageIndex = 0, left = 0.35f, top = 0.35f, right = 0.55f, bottom = 0.55f),
+        )
+        regions.applyExclusions(zones, context(0)).map { it.order } shouldContainExactly listOf(2)
     }
 
     @Test

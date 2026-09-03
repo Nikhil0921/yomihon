@@ -14,7 +14,6 @@ import eu.kanade.tachiyomi.ui.reader.model.ReaderChapter
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderTransitionView
 import eu.kanade.tachiyomi.util.system.dpToPx
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import tachiyomi.core.common.i18n.stringResource
@@ -28,7 +27,7 @@ class WebtoonTransitionHolder(
     viewer: WebtoonViewer,
 ) : WebtoonBaseHolder(layout, viewer) {
 
-    private val scope = MainScope()
+    private val scope get() = viewer.scope
     private var stateJob: Job? = null
 
     private val transitionView = ReaderTransitionView(context)
@@ -73,6 +72,16 @@ class WebtoonTransitionHolder(
      * Called when the view is recycled and being added to the view pool.
      */
     override fun recycle() {
+        stateJob?.cancel()
+    }
+
+    /**
+     * The RecyclerView never recycles holders on activity destroy, so the
+     * chapter-stateFlow collector would otherwise stay registered in the
+     * StateFlow slot and retain this holder -> the destroyed activity
+     * (LeakCanary: 184.7MB chain, 2026-09-03). The adapter cancels on detach.
+     */
+    fun detach() {
         stateJob?.cancel()
     }
 

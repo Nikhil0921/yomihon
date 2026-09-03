@@ -65,6 +65,22 @@ fun boxesOverlap(a: OcrBoundingBox, b: OcrBoundingBox): Boolean =
     a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
 
 /**
+ * True when at least [minCoverage] of box a's area lies inside box b. Used to
+ * select OCR regions genuinely inside a user selection — an edge-grazing
+ * neighbor (any-overlap) must not contribute its text.
+ */
+fun boxMostlyInside(a: OcrBoundingBox, b: OcrBoundingBox, minCoverage: Float = 0.5f): Boolean {
+    if (a.width <= 0f || a.height <= 0f) return false
+    val intersectLeft = maxOf(a.left, b.left)
+    val intersectTop = maxOf(a.top, b.top)
+    val intersectRight = minOf(a.right, b.right)
+    val intersectBottom = minOf(a.bottom, b.bottom)
+    val intersection = (intersectRight - intersectLeft).coerceAtLeast(0f) *
+        (intersectBottom - intersectTop).coerceAtLeast(0f)
+    return intersection / (a.width * a.height) >= minCoverage
+}
+
+/**
  * Intersection-over-union of two normalized boxes; 0 when they do not overlap.
  */
 fun boundingBoxIoU(a: OcrBoundingBox, b: OcrBoundingBox): Float {

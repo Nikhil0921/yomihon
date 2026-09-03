@@ -1303,7 +1303,8 @@
     <string name="ocr_exclusion_section_zones">Exclusion zones</string>
     <string name="ocr_exclusion_add_word">Add word</string>
     <string name="ocr_exclusion_add_phrase">Add phrase</string>
-    <string name="ocr_exclusion_match_text_label">Only exclude when this text is found (required)</string>
+    <string name="ocr_exclusion_match_text_label">Only exclude when this text is found</string>
+    <string name="ocr_exclusion_match_text_optional">Optional — leave empty to always exclude this area</string>
     <string name="ocr_exclusion_rule_hint">Word and phrase rules apply to all manga. Zones apply only where you created them.</string>
     <string name="ocr_exclusion_invalid_text">Enter some text first</string>
     <string name="ocr_exclusion_empty">No exclusion rules yet</string>

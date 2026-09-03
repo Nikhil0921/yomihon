@@ -135,6 +135,16 @@ class WebtoonAdapter(val viewer: WebtoonViewer) : RecyclerView.Adapter<RecyclerV
     }
 
     /**
+     * Activity destroy never recycles holders; cancel the transition holder's
+     * chapter-state collector here so it cannot retain the destroyed activity
+     * (LeakCanary 2026-09-03: 184.7MB chain via ReaderChapter.stateFlow).
+     */
+    override fun onViewDetachedFromWindow(holder: RecyclerView.ViewHolder) {
+        super.onViewDetachedFromWindow(holder)
+        (holder as? WebtoonTransitionHolder)?.detach()
+    }
+
+    /**
      * Diff util callback used to dispatch delta updates instead of full dataset changes.
      */
     private class Callback(

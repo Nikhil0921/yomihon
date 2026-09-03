@@ -5,12 +5,23 @@
 > A phase is COMPLETED only when its verification steps have actually been run
 > and recorded in `docs/memory.md`.
 
-Current phase pointer: **OCR exclusion regression-fix set COMPLETED
+Current phase pointer: **P0 ZONE exclusion reliability fix (2026-09-03 #3)
+  code COMPLETE + gates green — pure-rect page-anchored ZONE rules for all
+  scopes (COMBINED now opt-in via text field), original-dims guard against
+  split/rotate page transforms, per-rule OCR-ZONE diagnostics. APK built
+  (arm64, 12:42); device repeat-matrix verification PENDING user. UNCOMMITTED.**
+  Prior: OCR exclusion regression-fix set #2 (2026-09-03) code COMPLETE +
+  gates green — crop-OCR engine redirect (Legacy JP model
+  caused garbage), boxMostlyInside selection filter (outside-region text
+  leak), PHRASE token-concat matching, WebtoonTransitionHolder leak fix
+  (184.7MB), single-flight detect. APK 0.5.1-8255 installed; device
+  verification (tests A–J) PENDING user run. UNCOMMITTED.**
+  Prior: OCR exclusion regression-fix set COMPLETED
   (2026-09-02, all 4 gates green) — toggle param-swap fix, WORD/PHRASE
   matcher rework (NFKC fold + token-concat runs + whitespace-strip phrase),
   manage-sheet global-rule visibility, exclusion diagnostics, selected-area
   auto-detect (cached-first + crop-OCR fallback). UNCOMMITTED, device pass
-  pending (checklist in memory.md 2026-09-02 block).**
+  pending (checklist in memory.md 2026-09-02 block).
   Prior: Post-device-test audit set COMPLETED (2026-09-01, all 4 gates green)
   — repeated-speech fixes, OCR exclusion redesign (ZONE/WORD/PHRASE/COMBINED +
   19.sqm), speed-adaptive prefetch, stop-during-prepare, reader interaction

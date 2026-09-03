@@ -7,6 +7,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
@@ -126,6 +127,7 @@ import eu.kanade.tachiyomi.util.system.toShareIntent
 import eu.kanade.tachiyomi.util.system.toast
 import eu.kanade.tachiyomi.util.view.setComposeContent
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
@@ -520,7 +522,6 @@ class ReaderActivity : BaseActivity() {
             }
             is ReaderViewModel.Dialog.ExclusionZoneScope -> {
                 ExclusionZoneScopeDialog(
-                    detectedText = dialog.detectedText,
                     onDismissRequest = onDismissRequest,
                     onScopeSelected = viewModel::saveExclusionZone,
                 )
@@ -977,7 +978,6 @@ class ReaderActivity : BaseActivity() {
                     }
                     is ReaderViewModel.Dialog.ExclusionZoneScope -> {
                         ExclusionZoneScopeDialog(
-                            detectedText = dialog.detectedText,
                             onDismissRequest = onDismissRequest,
                             onScopeSelected = viewModel::saveExclusionZone,
                         )
@@ -1359,16 +1359,39 @@ class ReaderActivity : BaseActivity() {
      * available, targeted crop OCR otherwise), then asks the ViewModel to open
      * the scope dialog with the detected text pre-filled for review.
      */
+    private var exclusionDetectJob: Job? = null
+
     private fun captureExclusionZoneSelection(rect: android.graphics.RectF) {
-        lifecycleScope.launchIO {
+        // Single-flight: a new selection cancels the obsolete detection (its dialog
+        // would be overwritten anyway); also cancelled on destroy via lifecycleScope.
+        exclusionDetectJob?.cancel()
+        exclusionDetectJob = lifecycleScope.launchIO {
             try {
                 val captures = resolveSelectionCaptures(rect)
                 val capture = captures.firstOrNull() ?: error("No page under exclusion selection")
                 val pageInput = capture.bitmapSource?.selectionPageInput()
                     ?: error("Exclusion selection page input unavailable")
                 val bitmap = pageInput.openBitmap() ?: error("Exclusion selection bitmap unavailable")
-                var detectedText: String? = null
                 try {
+                    // Zone rects and OCR scan bboxes must share one coordinate base:
+                    // the ORIGINAL page image. The displayed source can be a
+                    // transformed variant (dual-page split / rotate / split-and-merge
+                    // bake the transform into the stream), so verify the displayed
+                    // bitmap matches the original page dimensions before normalizing.
+                    val originalBounds = capture.page.stream?.invoke()?.use { stream ->
+                        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        BitmapFactory.decodeStream(stream, null, opts)
+                        if (opts.outWidth > 0 && opts.outHeight > 0) opts.outWidth to opts.outHeight else null
+                    }
+                    if (originalBounds != null &&
+                        (originalBounds.first != bitmap.width || originalBounds.second != bitmap.height)
+                    ) {
+                        error(
+                            "Exclusion selection on transformed page " +
+                                "(displayed ${bitmap.width}x${bitmap.height} != " +
+                                "original ${originalBounds.first}x${originalBounds.second})",
+                        )
+                    }
                     val normalized = withUIContext {
                         val sourceRect = capture.sourceRect
                         if (sourceRect.width() <= 0 || sourceRect.height() <= 0) {
@@ -1381,30 +1404,6 @@ class ReaderActivity : BaseActivity() {
                             (sourceRect.bottom / bitmap.height.toFloat()).coerceIn(0f, 1f),
                         )
                     }
-                    val selectionBox = mihon.domain.ocr.model.OcrBoundingBox(
-                        left = normalized.left,
-                        top = normalized.top,
-                        right = normalized.right,
-                        bottom = normalized.bottom,
-                    )
-                    val selectionChapterId = capture.page.chapter.chapter.id
-                        ?: error("Exclusion selection chapter id unavailable")
-                    // Reuse cached OCR regions when they exist; no full-page scan ever.
-                    detectedText = viewModel.detectExclusionZoneText(
-                        chapterId = selectionChapterId,
-                        pageIndex = capture.page.index,
-                        selection = selectionBox,
-                    )
-                    if (detectedText == null) {
-                        val x = (normalized.left * bitmap.width).toInt().coerceIn(0, bitmap.width - 1)
-                        val y = (normalized.top * bitmap.height).toInt().coerceIn(0, bitmap.height - 1)
-                        val w = ((normalized.right - normalized.left) * bitmap.width).toInt()
-                            .coerceIn(1, bitmap.width - x)
-                        val h = ((normalized.bottom - normalized.top) * bitmap.height).toInt()
-                            .coerceIn(1, bitmap.height - y)
-                        val crop = Bitmap.createBitmap(bitmap, x, y, w, h)
-                        detectedText = viewModel.ocrExclusionCropText(crop)
-                    }
                     withUIContext {
                         viewModel.openExclusionZoneScopeDialog(
                             pageIndex = capture.page.index,
@@ -1412,7 +1411,6 @@ class ReaderActivity : BaseActivity() {
                             top = normalized.top,
                             right = normalized.right,
                             bottom = normalized.bottom,
-                            detectedText = detectedText,
                         )
                     }
                 } finally {

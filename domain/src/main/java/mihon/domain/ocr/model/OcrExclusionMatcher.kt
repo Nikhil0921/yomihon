@@ -13,9 +13,13 @@ data class ExclusionMatchContext(
 /**
  * Pure exclusion-rule matching for OCR regions.
  *
- * - ZONE: rectangle on a specific page (scope PAGE). Legacy rows with wider
- *   scopes are dormant: their rectangle was drawn on one page only, so applying
- *   it to every page in scope would suppress unrelated text.
+ * - ZONE: pure rectangle. A rectangle is drawn on exactly one page, so the
+ *   rule always requires the drawing page (pageIndex) to match; the scope only
+ *   widens where in the manga that page is looked up on (CHAPTER = any chapter
+ *   page with the same index, MANGA = same page index across the manga,
+ *   SOURCE = same page index across the source). Legacy rows with a null
+ *   pageIndex (pre-redesign wide ZONE rules) are dormant: their rectangle was
+ *   drawn on one page but the page is unknown.
  * - WORD: region excluded when the rule's token concatenation equals the
  *   concatenation of a consecutive run of region word tokens. Tokenization is
  *   identical on both sides, so "K-manga.com" matches tokens k, manga, com and
@@ -42,7 +46,13 @@ fun List<OcrRegion>.applyExclusions(
 }
 
 private fun OcrExclusionZone.matchesRegionScope(context: ExclusionMatchContext): Boolean = when (matchType) {
-    OcrExclusionMatchType.ZONE -> scope == OcrExclusionScope.PAGE && chapterId == context.chapterId
+    OcrExclusionMatchType.ZONE ->
+        pageIndex != null &&
+            when (scope) {
+                OcrExclusionScope.PAGE, OcrExclusionScope.CHAPTER -> chapterId == context.chapterId
+                OcrExclusionScope.MANGA -> mangaId == context.mangaId
+                OcrExclusionScope.SOURCE -> sourceId == context.sourceId
+            }
     OcrExclusionMatchType.WORD, OcrExclusionMatchType.PHRASE -> true
     OcrExclusionMatchType.COMBINED -> when (scope) {
         OcrExclusionScope.PAGE ->
@@ -59,6 +69,7 @@ private fun matchesRegion(
     region: OcrRegion,
     context: ExclusionMatchContext,
 ): Boolean = when (zone.matchType) {
+    // Rect rules are page-anchored: pageIndex gates scope, the rect does the work.
     OcrExclusionMatchType.ZONE ->
         zone.pageIndex == context.pageIndex &&
             overlaps(region.boundingBox, zone.boundingBox)
@@ -113,11 +124,22 @@ private fun normalizeForPhrase(text: String?): String? {
         .lowercase()
 }
 
+/**
+ * PHRASE: substring match on token concatenations — NFKC-folded, lowercase,
+ * letter/digit tokens joined without separators. Tolerates OCR spacing AND
+ * punctuation noise in BOTH directions ("discord gg" rule matches
+ * "Discord. gg / AsuraScans" region; "discord.gg" rule matches "discord gg").
+ */
 private fun phraseMatches(ruleText: String?, regionText: String): Boolean {
     val needle = normalizeForPhrase(ruleText) ?: return false
     if (needle.isEmpty()) return false
     val haystack = normalizeForPhrase(regionText) ?: return false
-    return haystack.contains(needle)
+    if (haystack.contains(needle)) return true
+    val needleTokens = ruleText.normalizedTokens() ?: return false
+    if (needleTokens.isEmpty()) return false
+    val haystackTokens = regionText.normalizedTokens() ?: return false
+    if (haystackTokens.isEmpty()) return false
+    return haystackTokens.joinToString("").contains(needleTokens.joinToString(""))
 }
 
 private fun overlaps(a: OcrBoundingBox, b: OcrBoundingBox): Boolean =

@@ -184,6 +184,8 @@ object SettingsOcrExclusionsScreen : Screen {
                 Text(
                     text = if (zone.matchType == OcrExclusionMatchType.COMBINED) {
                         "${zone.typeLabel()} · ${zone.scopeName()}"
+                    } else if (zone.matchType == OcrExclusionMatchType.ZONE && zone.scope != OcrExclusionScope.PAGE) {
+                        "${zone.typeLabel()} · ${zone.scopeName()}"
                     } else {
                         zone.typeLabel()
                     },
@@ -191,7 +193,7 @@ object SettingsOcrExclusionsScreen : Screen {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (zone.matchType == OcrExclusionMatchType.COMBINED ||
-                    (zone.matchType == OcrExclusionMatchType.ZONE && zone.scope == OcrExclusionScope.PAGE)
+                    (zone.matchType == OcrExclusionMatchType.ZONE && zone.pageIndex != null)
                 ) {
                     Text(
                         text = "${zone.boundingBox.left}, ${zone.boundingBox.top} — " +
@@ -200,7 +202,7 @@ object SettingsOcrExclusionsScreen : Screen {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                if (zone.matchType == OcrExclusionMatchType.ZONE && zone.scope != OcrExclusionScope.PAGE) {
+                if (zone.matchType == OcrExclusionMatchType.ZONE && zone.pageIndex == null) {
                     Text(
                         text = stringResource(MR.strings.ocr_exclusion_type_legacy),
                         style = MaterialTheme.typography.bodySmall,

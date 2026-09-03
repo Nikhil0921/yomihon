@@ -31,19 +31,20 @@ import tachiyomi.presentation.core.i18n.stringResource
 
 /**
  * Scope chooser shown after the user drag-selects an OCR exclusion region.
- * Wider-than-page scopes create a combined rule: the rectangle only suppresses
- * regions that also contain the entered text. Text detected inside the
- * selection is pre-filled; the user can edit or clear it before saving.
- * Cancel + re-select runs detection again.
+ * Every scope saves the page-anchored rectangle; wider scopes (CHAPTER/MANGA/
+ * SOURCE) reuse the same rect on the same page index in that scope. Entering
+ * text is OPTIONAL (starts empty) and turns the rule into a combined rect+text
+ * rule. Cancel + re-select runs detection again.
  */
 @Composable
 fun ExclusionZoneScopeDialog(
-    detectedText: String? = null,
     onDismissRequest: () -> Unit,
     onScopeSelected: (OcrExclusionScope, String?) -> Unit,
 ) {
     var selectedScope by remember { mutableStateOf<OcrExclusionScope?>(null) }
-    var matchText by remember(detectedText) { mutableStateOf(detectedText.orEmpty()) }
+    // Never pre-fill: pre-filled OCR text turns every zone save into a COMBINED
+    // rect+text rule (RC1 regression). Pure zones need an explicitly empty field.
+    var matchText by remember { mutableStateOf("") }
     val chosen = selectedScope
 
     AlertDialog(
@@ -63,11 +64,14 @@ fun ExclusionZoneScopeDialog(
                 scopeOption(MR.strings.ocr_exclusion_scope_source, OcrExclusionScope.SOURCE) {
                     selectedScope = OcrExclusionScope.SOURCE
                 }
-                if (chosen != null && chosen != OcrExclusionScope.PAGE) {
+                if (chosen != null) {
                     OutlinedTextField(
                         value = matchText,
                         onValueChange = { matchText = it },
                         label = { Text(stringResource(MR.strings.ocr_exclusion_match_text_label)) },
+                        supportingText = {
+                            Text(stringResource(MR.strings.ocr_exclusion_match_text_optional))
+                        },
                         singleLine = false,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -77,10 +81,9 @@ fun ExclusionZoneScopeDialog(
             }
         },
         confirmButton = {
-            if (chosen != null && chosen != OcrExclusionScope.PAGE) {
+            if (chosen != null) {
                 TextButton(
                     onClick = { onScopeSelected(chosen, matchText) },
-                    enabled = matchText.isNotBlank(),
                 ) {
                     Text(stringResource(MR.strings.action_save))
                 }
@@ -176,9 +179,9 @@ fun OcrExclusionZonesSheet(
     }
 }
 
-/** Legacy pre-redesign rows: rectangle rules wider than a single page are dormant. */
+/** Legacy pre-redesign rows: rect rules without a drawing page are dormant. */
 private fun isLegacyZone(zone: OcrExclusionZone): Boolean =
-    zone.matchType == OcrExclusionMatchType.ZONE && zone.scope != OcrExclusionScope.PAGE
+    zone.matchType == OcrExclusionMatchType.ZONE && zone.pageIndex == null
 
 @Composable
 private fun ruleTypeLabel(zone: OcrExclusionZone): String = when (zone.matchType) {

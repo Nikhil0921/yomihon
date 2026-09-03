@@ -209,7 +209,17 @@ class OcrRepositoryImpl(
         return withActiveOperation {
             submitTask(PrioritizedTaskQueue.Priority.HIGH) {
                 image.useBitmap { bitmap ->
-                    recognizeWithFallback(selectedEngineType(), bitmap)
+                    val type = selectedEngineType()
+                    // Local recognition engines (LEGACY/FAST) are JP-vocab models that
+                    // garble arbitrary English crops into kana/kanji; the scan path never
+                    // uses them directly (detection stub throws -> Glens). Mirror that
+                    // redirect for text recognition while detection stays unavailable.
+                    // ponytail: drop this redirect when a real DetOcrEngine lands.
+                    val effective = when (type) {
+                        EngineType.LEGACY, EngineType.FAST -> EngineType.GLENS
+                        EngineType.GLENS, EngineType.OWOCR -> type
+                    }
+                    recognizeWithFallback(effective, bitmap)
                 }
             }
         }

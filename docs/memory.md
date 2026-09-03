@@ -422,9 +422,260 @@ Files changed (10): OcrExclusionMatcher.kt, OcrExclusionMatcherTest.kt,
   (pre-fill), TtsPlaybackController.kt (diagnostics log).
 ```
 
+```text
+[COMPLETED 2026-09-03 — OCR exclusion regression #2: diagnostic-first fix set, UNCOMMITTED]
+
+Device evidence FIRST (on-device capture .device-pass/ocr-excl-snapshot1.log,
+PID 20038, 11:00–11:37, build 0.5.1-8254):
+- 11:01:36 "OCR(legacy) Runtime: recognizeText total time: 5715 ms" during
+  exclusion auto-detect → crop OCR ran the JP-vocab LegacyOcrEngine on an
+  English selection (device DB rule _id=14 = COMBINED with saved JP garbage
+  text — user-confirmed garbage insert). 36 tokens of kana/kanji output.
+- 11:03:05 "TTS page=0 exclusion rules=2 types={PHRASE=1, COMBINED=1}
+  excluded=0/16" → exclusion MISS with rules loaded (matcher semantics).
+- 11:03:35 ReaderActivity destroy → LeakCanary "Found 2 objects retained,
+  app is not visible" → 11:06 heap dump (12.3s freeze, all threads stopped)
+  → analysis 131.5s @ ~100% CPU on WorkManager thread. Leak trace:
+  WebtoonTransitionHolder retained 184.7MB → ReaderChapter.stateFlow slot →
+  ScopeCoroutine collect → holder.itemView LinearLayout.mContext → destroyed
+  ReaderActivity (97.7kB, 2691 objects). Root: holder's stateJob (own
+  MainScope) cancelled ONLY in recycle(); RecyclerView never recycles holders
+  on activity destroy → collector stayed registered in the chapter's StateFlow
+  slot. PagerTransitionHolder has onDetachedFromWindow cancel; webtoon one
+  didn't. Same family as 2026-08-30 WebtoonPageHolder 49.9MB flag.
+- Device DB dump (python sqlite3): 3 rules; enabled values all clean 0/1
+  (B-RC1 corrupt-enabled residue from old toggle bug NOT present on device;
+  zonesForSpeech enabled=1 predicate safe here). Rule 10 COMBINED disabled
+  (toggle fix works), rule 13 PHRASE enabled, rule 14 = the JP-garbage rule.
+
+3 parallel explore subagents (A auto-detect pipeline, B exclusion/TTS, C perf)
++ orchestrator source verification. CONFIRMED root causes and fixes:
+
+Fix 1 (A-RC1, garbage crops): OcrRepositoryImpl.recognizeText called
+  recognizeWithFallback(selectedEngineType()) — LEGACY default pref routed
+  arbitrary English crops into LegacyOcrEngine (JP vocab, non-uniform 224×224
+  stretch). Scan path NEVER hits LEGACY directly (detection stub throws →
+  Glens redirect) but recognizeText did. FIX: LEGACY/FAST text-recognition
+  redirects to GLENS in recognizeText (mirrors scanLocalOrFallback), with
+  ponytail: note to drop when a real DetOcrEngine lands. Manual long-press OCR
+  selection path (processOcrRegion) gets the same correction for free.
+
+Fix 2 (A-RC2, outside-selection leaks): detectExclusionZoneText filtered
+  cached regions by boxesOverlap (ANY intersection ≥1px) → neighboring bubble
+  text leaked into detected field. FIX: new pure fn boxMostlyInside(a, b,
+  minCoverage=0.5f) in SpeechPipeline.kt (intersection ≥50% of REGION area);
+  detectExclusionZoneText uses it. Selection-inside-huge-region now EXCLUDED
+  (documented decision: merged-bubble box mostly outside selection = leak).
+  BoxMostlyInsideTest 7 cases (contain/graze/disjoint/40%/75%/huge/degenerate).
+
+Fix 3 (B-RC3, phrase punctuation asymmetry): phraseMatches kept punctuation —
+  rule "discord gg" could never match OCR "discord.gg"; single ・ survived.
+  FIX: phraseMatches first tries whitespace-stripped substring (as before),
+  then falls back to TOKEN-CONCAT containment (normalizedTokens joined, both
+  sides) — separator/punctuation tolerant in BOTH directions. New matcher
+  tests 20→27: space-rule vs punct-OCR, punct-rule vs space-OCR, ・ separator,
+  cross-region phrase NOT excluded (pins documented v1 per-region semantics),
+  punctuation-only rule never matches, "Dis\ncord" word concat-run pinned.
+  NOT fixed (documented): phrase split across TWO regions stays un-excluded
+  (per-region matcher by design, v1); mid-page rule additions apply next page.
+
+Fix 4 (C-RC1, 184.7MB leak): WebtoonTransitionHolder gained detach() =
+  stateJob?.cancel(); WebtoonAdapter.onViewDetachedFromWindow calls it
+  (RecyclerView.ViewHolder has no onDetachedFromWindow). detach also fires on
+  mid-session recycling — same semantics as recycle(), next bind relaunches.
+
+Fix 5 (C-A, detect job pile-up): captureExclusionZoneSelection now
+  single-flight — exclusionDetectJob?.cancel() before relaunch (lifecycleScope
+  cancels on destroy); obsolete detections no longer queue 5.7s OCRs behind
+  each other. Sub-10px degenerate crops skip OCR entirely (honest empty field
+  beats noise). Lazy-bitmap-open REJECTED during implementation: normalization
+  needs file dims before cache lookup (chicken-egg with region decode) — not
+  worth a bounds-only decoder helper.
+
+Fix 5' (C-RC2, LeakCanary Toast config) DROPPED after API verification:
+  IgnoredReferenceMatcher/referenceMatchers only filter leak-trace paths,
+  do NOT prevent dumps of retained instances; AppWatcher exposes no
+  per-class watcher filter. The REAL retained object was the (now-fixed)
+  holder leak; Toast/PopupLayout dumps remain debug-build noise = Known
+  issue #13 (unchanged). Debug sourceSet + manifest override reverted.
+
+GATES GREEN 2026-09-03 (devcontainer JDK17, -Xmx4g, both volumes):
+  spotlessCheck 35s; testDebugUnitTest + verifySqlDelightMigration BUILD
+  SUCCESSFUL 2m36s (193 domain tests, matcher 27/27, BoxMostlyInside 7/7,
+  one pre-existing test expectation of mine corrected before green);
+  :app:assembleDebug BUILD SUCCESSFUL 2m44s. NO DB schema change.
+  APK 0.5.1-8255 installed on SM_M066B 12:54; on-device verify capture
+  /sdcard/ocr-excl-verify.log running (PID 24098).
+
+Device verification checklist (Phase 7, pending user): A/B English selections,
+C noisy area, D WORD excl, E PHRASE excl spacing/punct variant, F cached,
+G fresh, H rapid re-select + rule CRUD, I long session lag watch,
+J no playback regressions.
+
+Files changed (7): OcrRepositoryImpl.kt (recognizeText redirect),
+  SpeechPipeline.kt (+boxMostlyInside), ReaderViewModel.kt (filter + import),
+  OcrExclusionMatcher.kt (phraseMatches token-concat), ReaderActivity.kt
+  (single-flight detect + min-crop guard + Job import),
+  WebtoonTransitionHolder.kt (+detach), WebtoonAdapter.kt
+  (+onViewDetachedFromWindow), OcrExclusionMatcherTest.kt (+7),
+  BoxMostlyInsideTest.kt (new, 7).
+```
+
+```text
+[COMPLETED 2026-09-03 — P0 ZONE exclusion reliability fix (RC1/RC2/RC3), UNCOMMITTED]
+
+User report: ZONE exclusion intermittent on device (WORD/PHRASE fine). 6
+parallel explore agents + orchestrator verification + fresh device-log
+evidence (ocr-excl-verify2.log, 63 exclusion decisions). Root causes:
+
+RC1 (CONFIRMED, primary): zones drawn with CHAPTER/MANGA/SOURCE scope were
+  FORCED to match_type=COMBINED (rect AND phraseMatches) by
+  saveExclusionZone — user zones all became text-dependent rules whose text
+  half broke on Glens re-clustering/noise (excluded=0/22 dominant; device
+  logs show ONLY types={COMBINED=*}, never a pure ZONE rule). Fix:
+  - Matcher ZONE semantics: all scopes pure-rect, PAGE-ANCHORED —
+    matchesRegionScope: ZONE requires pageIndex!=null && (PAGE/CHAPTER:
+    own chapterId; MANGA: mangaId; SOURCE: sourceId); matchesRegion rect
+    still requires zone.pageIndex == context.pageIndex. CHAPTER-scope pure
+    zone ≡ PAGE (documented; rect drawn on one page). Legacy rows
+    (page_index NULL) dormant via pageIndex null-gate.
+  - saveExclusionZone: matchType derived from text presence ONLY — blank
+    text = pure ZONE for ANY scope; non-blank = COMBINED (opt-in).
+  - ExclusionZoneScopeDialog: PAGE saves immediately (pure zone); wider
+    scopes show OPTIONAL text field (supportingText "leave empty to always
+    exclude"); Save no longer disabled on blank. Legacy detection now
+    pageIndex==null (was scope!=PAGE — new wider-scope ZONE rules would
+    have been mislabeled legacy).
+  - SettingsOcrExclusionsScreen RuleRow: scope label shown for all
+    non-PAGE scopes; rect shown for pageIndex!=null; legacy = null pageIndex.
+RC2 (CONFIRMED conditional): zone normalized against DISPLAYED bitmap,
+  OCR bboxes against ORIGINAL image — divergent exactly on dual-page
+  split (x halved+offset) / rotateToFit (x/y transposed) / webtoon
+  splitAndMerge pages → wrong rect, page-dependent = "intermittent".
+  cropBorders + splitTallImages verified SAFE (both paths share base).
+  Fix: captureExclusionZoneSelection now bounds-decodes the ORIGINAL
+  page stream (page.stream, inJustDecodeBounds) and REJECTS zone creation
+  with a clear error when displayed dims != original dims (honest failure
+  beats silently-wrong rect). Full inverse-transform mapping deferred
+  (documented follow-up if users need zones on split pages).
+RC3 (diagnostics): controller acquireSentences now logs per-rule
+  structural detail after the summary line: "OCR-ZONE rule=<id>
+  type=<t> scope=<s> page=<pi> chapter=<cid> manga=<mid> rect=[l,t,r,b]
+  enabled=<b>" — no text content (rules §7). Proves rule/scope/rect per
+  page on next device pass.
+
+CONFIRMED NON-CAUSES (agents + logs): all OCR engines emit normalized
+  0..1 full-image bboxes (Glens single+tiled, OwOcr; Legacy/Fast never
+  emit bboxes, redirected to Glens); cache roundtrip bit-exact; rules
+  re-queried fresh per acquire (awaitAsList, no Flow race); matcher pure;
+  same (chapter,page) always stable excluded A/B in logs (all A/B changes
+  = chapter switches). ZonesForSpeech SQL unchanged (enabled=1 +
+  text-rules-or-scope-match) — still correct for new ZONE semantics.
+
+Tests: OcrExclusionMatcherTest 28→35: chapter-scope anchoring,
+  manga/source same-page-index, null-pageIndex dormant, rect edge
+  touching vs overlap vs spanning, degenerate rect, multi-zone/page.
+  All prior WORD/PHRASE/COMBINED cases unchanged+green (COMBINED stays
+  rect+text, opt-in).
+
+GATES GREEN 2026-09-03 (devcontainer JDK17, -Xmx4g, both volumes):
+  spotlessApply+spotlessCheck; :domain:OcrExclusionMatcherTest 35/35;
+  full testDebugUnitTest + verifySqlDelightMigration BUILD SUCCESSFUL
+  3m3s; :app:assembleDebug BUILD SUCCESSFUL (arm64 APK 12:42).
+  NO DB schema change (no migration needed).
+
+Files changed (7): OcrExclusionMatcher.kt, OcrExclusionMatcherTest.kt,
+  ReaderViewModel.kt (saveExclusionZone), OcrExclusionZoneDialogs.kt
+  (dialog + isLegacyZone), SettingsOcrExclusionsScreen.kt (RuleRow),
+  ReaderActivity.kt (original-bounds guard + BitmapFactory import),
+  TtsPlaybackController.kt (OCR-ZONE per-rule log), i18n base
+  strings.xml (ocr_exclusion_match_text_optional; label de-required).
+
+Device verification PENDING user (repeat matrix): fresh vs cached OCR,
+replay, exit/reopen, toggle off/on, delete, multi-zone, page-edge zone,
+webtoon top/middle/bottom, CHAPTER/MANGA/SOURCE pure-zone (blank text),
+COMBINED opt-in, repeated same-scenario runs (detect intermittency),
+"OCR-ZONE rule=" lines confirm rule content. Existing device DB rules
+(match_type=COMBINED from old save path) keep working as COMBINED;
+re-create as blank-text zone rules for pure-rect behavior.
+```
+
+```text
+[COMPLETED 2026-09-03 — verify2 log deep-analysis (read-only, no code change)]
+
+Analyzed .device-pass/ocr-excl-verify2.log (79MB; PID 24098 12:54–13:11,
+PID 8957 13:26–13:39+ after user relaunch, build 0.5.1-8255) +
+ocr-excl-verify.log (= truncated prefix of verify2, ends 13:06, NO new data;
+do not re-analyze) + ocr-excl-snapshot1.log (PID 20038, build 8254).
+Findings (full report in session; structural facts only, no OCR text):
+
+EXCLUSION PIPELINE: HEALTHY — no nondeterminism found.
+- All "A/B changes across acquisitions" cases resolve to CHAPTER switches:
+  page=0 with B=16/22/18/25/8/24 = chapters 2145/2188/2187/2186/1717/2184
+  respectively. Same (chapter,page) re-acquired → A and B ALWAYS identical,
+  cache vs fresh (dispatch textHashes also identical).
+- No page ever completed a fresh scan twice (single-flight + cache hold).
+  Near-miss: ch2184 p0 scan 13:30:25 abandoned (user left reader, VRI
+  destructor 13:30:48) before completion — second attempt 13:32:10 was
+  cache MISS → fresh → 2/24. No A/B contradiction.
+- Matcher fixes verified stable: snapshot1 ch2152 p19 = 1/13 FRESH then ×8
+  CACHE 1/13; ch2145 p0 = 0/16 across 1h47m + app restart (cache stable).
+- ZONE pure type: NEVER appears in any log. Types seen: PHRASE/COMBINED/WORD
+  only. ("types={[100]=...}" lines = Samsung CpEventLog telephony noise.)
+- "dedup dropped": ZERO events in all three logs (only MR2SystemProvider /
+  fb4a substring noise).
+- Rule CRUD invisible (no repo logging) but inferable: rules count path
+  2→{COMB=2}→1→3→4→5 with dialog opens (WindowManager addView) at
+  13:29:45–57 (before first rules=4 line) and 13:36:44–58 (before first
+  rules=5 line). Count bumps land exactly after dialog windows. Rules
+  re-queried per acquire confirmed live (mid-session adds take effect).
+
+REAL DEFECTS FOUND (unrelated to matcher, ranked):
+1. NEW BUG — NetworkOnMainThreadException ×25: TtsPlaybackController.scanOnDemand
+   → OcrPageSourceResolver.resolveRemotePages → HttpSource.getPageList via
+   awaitSingle ON MAIN THREAD. Kills next-page prefetch scans in ~35ms each
+   (ch2188 p1/p2 ×10 each; ch2184 p1..p7). "TTS prefetch scan failed page=N
+   (best-effort)". FIX CANDIDATE: move page-list resolve off main (IO
+   dispatcher) — root-cause fix at resolver/scanOnDemand level.
+2. Glens HTTP 502 ×4 (13:05:35 / 13:34:58 / 13:38:26 / 13:38:33), server-side,
+   NO client retry. FALLBACK INCONSISTENCY: recognizeText path falls back to
+   fast engine (13:05 → FastOcrEngine 2245ms OK); scan path does NOT — 502
+   during scan = page gets NO OCR at all (TTS on-demand scan failed).
+3. DetectionUnavailable redirect stacks ×22 (detection model absent on
+   device — expected, but 21-frame W-stack per scan = log spam; benign).
+
+Noise ruled out: SQLiteLog (10) LOCK error 3850 ×10 = transient lock
+contention, self-recovered, not exclusion-related. 24098 death 13:26:06 =
+normal LMK cached-app reaping (cch CAC), no crash/ANR.
+
+Device clock = host + ~5h29m (log timestamps 12:54+ ↔ file mtime ~07:30).
+```
+
 ## In progress
 
 ```text
+P0 followup: ZONE-exclusion "prefill regression" FIX — code done, device
+verify pending. Device logs (excl3-final.log, 20:10-20:26) proved all 6
+new zone-drag rules (34,36,37,38,39,46) saved type=COMBINED: dialog
+pre-filled matchText with OCR-detected text (RC1 resurrected via UI);
+user tapped Save w/o clearing → rect+text conjunct broke on OCR text
+variance again (rule 38 covers 94% of page 15 yet excluded=0/4).
+FIX: prefill removed; dialog matchText starts EMPTY; blank→ZONE, typed→
+COMBINED (opt-in as designed). Dead chain deleted: ExclusionZoneScopeDialog
+detectedText param, Dialog.ExclusionZoneScope.detectedText field,
+openExclusionZoneScopeDialog param, detectExclusionZoneText +
+ocrExclusionCropText fns, ReaderActivity detection block (crop OCR
+fallback + selectionChapterId/selectionBox), boxMostlyInside import.
+Gates GREEN (docker, correct volume mounts — android-home mounts at
+/home/vscode/.android NOT /opt/android-sdk, memory line 172): spotless+
+compile 5m12s, spotlessCheck+testDebugUnitTest+assembleDebug 3m14s.
+APK installed 16:17. Fresh capture /sdcard/zone-prefill-fix.log running.
+NOTE: old COMBINED rules 34-46 from bad session still in device DB —
+must be deleted/re-created blank for pure-zone behavior. PHRASE/WORD
+rules confirmed working in same log (3/19 etc.) — "phrase broken" cases
+were COMBINED-by-prefill zones, not phrase rules.
+```
+
 Feature: Phase 10A advanced system TTS voice configuration — COMPLETE
            (device-verified 2026-08-31), ALL UNCOMMITTED awaiting user commit.
            Tasks 1-6 (domain prefs/resolver, TtsEngine contracts,
@@ -1731,10 +1982,11 @@ Injekt 91edab2317, JUnit5 6.1.1/Kotest 6.2.2/MockK 1.14.11).
 ## Testing status
 
 ```text
-Unit tests:        PASS (2026-09-02, full testDebugUnitTest — OCR exclusion
-                    regression fixes + auto-detect; OcrExclusionMatcherTest
-                    20/20 incl. NFKC fold, token-concat runs, URL spacing
-                    noise, full-width cases; all prior suites green)
+Unit tests:        PASS (2026-09-03, full testDebugUnitTest — OCR exclusion
+                    regression-fix set #2; OcrExclusionMatcherTest 27/27 incl.
+                    token-concat PHRASE both directions, ・ separator,
+                    cross-region pin; BoxMostlyInsideTest 7/7; all prior
+                    suites green)
 Integration tests: none run (existing androidTest suites are device-gated/@Ignore)
 UI tests:          none exist in repo
 Device tests:      Phase 8 script COMPLETE (steps 1–15 executed +
@@ -1742,10 +1994,11 @@ Device tests:      Phase 8 script COMPLETE (steps 1–15 executed +
                       COMPLETE (leak re-verify 0 leaks; battery PASS).
                       Phase 10A Task 7 COMPLETE (user-confirmed 2026-08-31).
                       PENDING: post-device-test audit set device pass
-                      (9-item checklist in the audit-set block).
-Lint:              spotlessCheck PASS (2026-09-01, audit set)
-Build:             :app:assembleDebug PASS (2026-08-29, 0.4.0-8241 = 5c7d2cc2c
-                    installed on SM_M066B)
+                      (9-item checklist) + regression-fix #2 A–J checklist
+                      (memory.md 2026-09-03 block).
+Lint:              spotlessCheck PASS (2026-09-03, regression-fix #2)
+Build:             :app:assembleDebug PASS (2026-09-03, 0.5.1-8255 installed
+                    on SM_M066B 12:54)
 Baseline (pre-TTS expectations): CI order = spotlessCheck → testDebugUnitTest →
                          verifySqlDelightMigration → assembleRelease (see rules.md §11)
 Environment: devcontainer image vsc-yomihon-e24e3bd7… (JDK 17) via docker on host;
@@ -1758,29 +2011,29 @@ Environment: devcontainer image vsc-yomihon-e24e3bd7… (JDK 17) via docker on h
 ## Last verified build
 
 ```text
-Date:     2026-09-02 (OCR exclusion regression-fix set, run by orchestrator)
+Date:     2026-09-03 (OCR exclusion regression-fix set #2, run by orchestrator)
 Command:  ./gradlew spotlessCheck testDebugUnitTest verifySqlDelightMigration
           :app:assembleDebug (docker devcontainer JDK17, -Xmx4g, both volumes)
-Result:   ALL GREEN — spotlessCheck + testDebugUnitTest + verifySqlDelight-
-          Migration BUILD SUCCESSFUL 3m39s; :app:assembleDebug BUILD SUCCESSFUL
-          3m20s. Change set: setEnabled named-args toggle fix, WORD/PHRASE
-          matcher rework (NFKC fold + token-concat runs + whitespace-strip
-          phrase), zonesForManga global-rule visibility, controller exclusion
-          diagnostics, selected-area auto-detect (cached-first, crop-OCR
-          fallback). UNCOMMITTED; device pass pending.
+Result:   ALL GREEN — spotlessCheck 35s; testDebugUnitTest + verifySqlDelight-
+          Migration BUILD SUCCESSFUL 2m36s; :app:assembleDebug BUILD
+          SUCCESSFUL 2m44s. Change set: recognizeText LEGACY/FAST→Glens
+          redirect, boxMostlyInside selection filter, PHRASE token-concat
+          matching, WebtoonTransitionHolder detach-cancel leak fix,
+          single-flight exclusion detect + min-crop guard. UNCOMMITTED;
+          device verification A–J pending (APK 0.5.1-8255 installed).
 ```
 
 ## Last verified test
 
 ```text
-Date:     2026-09-02 (OCR exclusion regression-fix set)
+Date:     2026-09-03 (OCR exclusion regression-fix set #2)
 Command:  ./gradlew testDebugUnitTest (docker devcontainer, JDK 17, -Xmx4g,
           both volumes)
 Result:   BUILD SUCCESSFUL — full suite green incl. extended
-          OcrExclusionMatcherTest 20/20 (token-concat run semantics: ion ≠
-          combination, K-manga.com ≡ token runs, KeyManga ≡ Key Manga; NFKC
-          full-width folds WORD+PHRASE; URL-like OCR spacing noise; all
-          ZONE/COMBINED/scope/legacy/disabled cases kept green).
+          OcrExclusionMatcherTest 27/27 (NEW: phrase space-rule vs punct-OCR,
+          punct-rule vs space-OCR, ・ separator, cross-region phrase pin,
+          punctuation-only rule, Dis\ncord concat-run pin; all prior 20 kept
+          green) + BoxMostlyInsideTest 7/7 (new file).
 ```
 
 ---
@@ -1788,45 +2041,46 @@ Result:   BUILD SUCCESSFUL — full suite green incl. extended
 ## Agent handoff
 
 ```text
-Last agent:                 opencode (2026-09-02 — OCR exclusion device-test
-                            regression audit + fixes + auto-detect)
-Date:                       2026-09-02
-Task completed:             Evidence-first audit (2 parallel explore agents,
-                            source-level tracing, no fresh device logs
-                            existed). Issue A toggle: SQLDelight positional
-                            param swap in repo setEnabled (generated (enabled,
-                            id) vs call (id, enabled) — OFF updated 0 rows,
-                            ON corrupted row _id=1); delete immune (1 param) —
-                            fixed with named args. Issue B WORD/PHRASE: wiring
-                            correct (per-page rule query, global SQL branch,
-                            playback-time filtering incl. cached pages); match
-                            semantics reworked — NFKC width fold everywhere,
-                            WORD = rule-token-concat equals consecutive region-
-                            token-run concat, PHRASE = whitespace-stripped
-                            substring. Reader manage sheet now lists global
-                            WORD/PHRASE + source rules (zonesForManga SQL +
-                            subscribeForManga(mangaId, sourceId) ripple).
-                            Controller logs per-page rule counts/types/
-                            excluded. Issue D auto-detect: cached-regions
-                            intersect (boxesOverlap) → crop-OCR fallback
-                            (targeted, recycled) → dialog pre-fill, editable,
-                            user confirms. Matcher tests 14→20. All 4 gates
-                            green.
-Current task:               NONE — awaiting user review + commit + device pass.
-Next recommended task:      Run the device checklist below (toggle both UIs ×
-                            all 4 rule types, keymanga/K-manga.com word,
-                            discord.gg phrase, scopes, cached-after-rule,
-                            auto-detect). Check row _id=1 enabled state (ON-
-                            tap side effect may have re-enabled it).
-Files safe to modify:       docs/* ; app reader/tts/settings ; data OCR/backup ;
+Last agent:                 opencode (2026-09-03 — OCR exclusion regression
+                            #2: diagnostic-first investigation + fixes)
+Date:                       2026-09-03
+Task completed:             Phase 0 fresh device evidence (on-device logcat,
+                            LegacyOcrEngine crop proof, exclusion-miss log,
+                            LeakCanary 12.3s freeze + 131.5s analysis, device
+                            DB dump via run-as+python sqlite3). 3 parallel
+                            explore subagents + orchestrator verification.
+                            5 evidence-confirmed root causes fixed: crop-OCR
+                            engine asymmetry (LEGACY JP model → Glens
+                            redirect), any-overlap selection leak
+                            (boxMostlyInside 50%), PHRASE punctuation
+                            asymmetry (token-concat fallback), 184.7MB
+                            WebtoonTransitionHolder leak (detach-cancel),
+                            detect pile-up (single-flight + min-crop guard).
+                            LeakCanary-config approach investigated and
+                            DROPPED (API cannot prevent dumps; real leak
+                            fixed instead). Tests matcher 20→27 +
+                            BoxMostlyInsideTest 7. All 4 gates green.
+                            APK 0.5.1-8255 installed 12:54.
+Current task:               Verify-log analysis DONE (see verify2 block in
+                            Completed work — pipeline healthy, 2 new defects:
+                            main-thread page-list fetch, Glens-502 scan-path
+                            fallback gap). Pending: user review + commit of
+                            regression #2 fix set.
+Next recommended task:      Analyze verify log after user run: expect OCR(glens)
+                            on crop fallback (never OCR(legacy)), exclusion
+                            rules=X excluded>0 for word/phrase pages, 0
+                            LeakCanary dumps after reader exit (holder leak
+                            gone), no detect pile-up on rapid re-select.
+                            Then user review + commit.
+Files safe to modify:       docs/* ; app reader/tts/settings/viewer ; data OCR;
                             i18n base strings.xml
-Known risks:                WORD multi-token rules use concat-run matching —
-                            a rule like "k manga" ALSO matches "kmanga" text
-                            (deliberate, OCR-noise-tolerant); PHRASE strips
-                            ALL whitespace — a phrase rule with meaningful
-                            internal word boundaries still matches (substring
-                            semantics unchanged, only spacing-insensitive);
-                            device DB row _id=1 may need manual re-toggle.
+Known risks:                PHRASE spanning two OCR regions stays un-excluded
+                            (documented v1 semantics, pinned by test); mid-
+                            session rule adds apply from next page acquire;
+                            sub-10px selection crops return empty detect
+                            field by design; Known issue #13 LeakCanary
+                            Toast/Popup debug noise unchanged (ignored-
+                            matcher API cannot suppress dumps).
 ```
 
 ---
