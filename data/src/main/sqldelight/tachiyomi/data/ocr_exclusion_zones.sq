@@ -102,7 +102,9 @@ SELECT
     oez.match_type,
     oez.rule_name
 FROM ocr_exclusion_zones oez
-WHERE oez.manga_id = :mangaId;
+WHERE oez.manga_id = :mangaId
+   OR oez.source_id = :sourceId
+   OR oez.match_type IN ('WORD', 'PHRASE');
 
 zonesForSource:
 SELECT

@@ -29,9 +29,9 @@ class OcrExclusionZoneRepositoryImpl(
             .asFlow()
             .mapToList(Dispatchers.IO)
 
-    override fun subscribeZonesForManga(mangaId: Long): Flow<List<OcrExclusionZone>> =
+    override fun subscribeZonesForManga(mangaId: Long, sourceId: Long): Flow<List<OcrExclusionZone>> =
         database.ocr_exclusion_zonesQueries
-            .zonesForManga(mangaId, ::zoneMapper)
+            .zonesForManga(mangaId, sourceId, ::zoneMapper)
             .asFlow()
             .mapToList(Dispatchers.IO)
 
@@ -100,7 +100,8 @@ class OcrExclusionZoneRepositoryImpl(
 
     override suspend fun setEnabled(id: Long, enabled: Boolean) {
         withContext(Dispatchers.IO) {
-            database.ocr_exclusion_zonesQueries.setEnabled(id, if (enabled) 1L else 0L)
+            // Named args: SQLDelight generates (enabled, id) — positional call order swapped them.
+            database.ocr_exclusion_zonesQueries.setEnabled(id = id, enabled = if (enabled) 1L else 0L)
         }
     }
 

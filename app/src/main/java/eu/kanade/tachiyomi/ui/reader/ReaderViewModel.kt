@@ -85,6 +85,7 @@ import mihon.domain.ocr.repository.OcrRepository
 import mihon.domain.panel.repository.PanelDetectionRepository
 import mihon.domain.tts.engine.TtsEngine
 import mihon.domain.tts.service.TtsPreferences
+import mihon.domain.tts.speech.boxesOverlap
 import tachiyomi.core.common.preference.toggle
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.launchNonCancellable
@@ -1036,13 +1037,48 @@ class ReaderViewModel @JvmOverloads constructor(
         top: Float,
         right: Float,
         bottom: Float,
+        detectedText: String? = null,
     ) {
         mutableState.update {
             it.copy(
-                dialog = Dialog.ExclusionZoneScope(pageIndex, left, top, right, bottom),
+                dialog = Dialog.ExclusionZoneScope(pageIndex, left, top, right, bottom, detectedText),
                 exclusionZonePending = PendingExclusionZone(pageIndex, left, top, right, bottom),
             )
         }
+    }
+
+    /**
+     * Text found in already-cached OCR regions intersecting the selection, or
+     * null when the page has no cached OCR. Reuses existing results — no scan.
+     */
+    suspend fun detectExclusionZoneText(
+        chapterId: Long,
+        pageIndex: Int,
+        selection: mihon.domain.ocr.model.OcrBoundingBox,
+    ): String? = try {
+        val cached = getCachedPageOcr.await(chapterId, pageIndex) ?: return null
+        val text = cached.regions
+            .filter { boxesOverlap(it.boundingBox, selection) }
+            .sortedBy { it.order }
+            .joinToString("\n") { it.text.trim() }
+        text.ifBlank { null }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        logcat(LogPriority.WARN, e) { "Exclusion zone text detection failed" }
+        null
+    }
+
+    /** Targeted OCR of the selected crop only (no cached regions available). Recycles [bitmap]. */
+    suspend fun ocrExclusionCropText(bitmap: Bitmap): String? = try {
+        ocrProcessor.getText(bitmap.toOcrImage()).trim().ifBlank { null }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        logcat(LogPriority.WARN, e) { "Exclusion zone crop OCR failed" }
+        null
+    } finally {
+        if (!bitmap.isRecycled) bitmap.recycle()
     }
 
     /** Saves the pending exclusion region; combined scopes require non-blank match text. */
@@ -1085,9 +1121,9 @@ class ReaderViewModel @JvmOverloads constructor(
     }
 
     private fun subscribeExclusionZones() {
-        val mangaId = manga?.id ?: return
+        val manga = manga ?: return
         viewModelScope.launch {
-            getOcrExclusionZones.subscribeForManga(mangaId).collect { zones ->
+            getOcrExclusionZones.subscribeForManga(manga.id, manga.source).collect { zones ->
                 mutableState.update { it.copy(exclusionZones = zones) }
             }
         }
@@ -1336,6 +1372,7 @@ class ReaderViewModel @JvmOverloads constructor(
             val top: Float,
             val right: Float,
             val bottom: Float,
+            val detectedText: String? = null,
         ) : Dialog
     }
 

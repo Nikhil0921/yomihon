@@ -11,7 +11,7 @@ interface OcrExclusionZoneRepository {
 
     fun subscribeAll(): Flow<List<OcrExclusionZone>>
 
-    fun subscribeZonesForManga(mangaId: Long): Flow<List<OcrExclusionZone>>
+    fun subscribeZonesForManga(mangaId: Long, sourceId: Long): Flow<List<OcrExclusionZone>>
 
     fun subscribeZonesForSource(sourceId: Long): Flow<List<OcrExclusionZone>>
 

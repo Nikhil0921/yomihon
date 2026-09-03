@@ -1,5 +1,7 @@
 package mihon.domain.ocr.model
 
+import java.text.Normalizer
+
 /** Chapter/page identity the matcher needs to decide which zones apply where. */
 data class ExclusionMatchContext(
     val mangaId: Long,
@@ -14,10 +16,18 @@ data class ExclusionMatchContext(
  * - ZONE: rectangle on a specific page (scope PAGE). Legacy rows with wider
  *   scopes are dormant: their rectangle was drawn on one page only, so applying
  *   it to every page in scope would suppress unrelated text.
- * - WORD: region excluded when any standalone word token equals the rule text.
- * - PHRASE: region excluded when the rule text appears as a case-insensitive,
- *   whitespace-tolerant substring of the region text.
+ * - WORD: region excluded when the rule's token concatenation equals the
+ *   concatenation of a consecutive run of region word tokens. Tokenization is
+ *   identical on both sides, so "K-manga.com" matches tokens k, manga, com and
+ *   camelCase/OCR separator variants ("KeyManga" ≡ "Key Manga") match too,
+ *   while "ion" never matches "combination" (token boundaries enforced).
+ * - PHRASE: region excluded when the rule text appears as a substring after
+ *   Unicode-folded, case-insensitive, whitespace-stripped comparison —
+ *   tolerant of OCR spacing noise around punctuation ("Discord. gg / x").
  * - COMBINED: rectangle + phrase must both match within the rule's scope.
+ *
+ * All text comparisons NFKC-normalize (folds full-width ｋｅｙ → key) so
+ * JP-mixed OCR lines converted to full-width still match half-width rules.
  */
 fun List<OcrRegion>.applyExclusions(
     zones: List<OcrExclusionZone>,
@@ -59,25 +69,48 @@ private fun matchesRegion(
             phraseMatches(zone.matchText, region.text)
 }
 
+/**
+ * WORD: the rule's token concatenation must equal the concatenation of some
+ * consecutive run of region tokens. Single-token rules therefore behave as
+ * standalone-word match ("ion" never matches "combination"), while separator
+ * variants match across rule/region ("KeyManga" ≡ "Key Manga" ≡ [k, manga, com]
+ * runs of "K-manga.com").
+ */
 private fun wordMatches(ruleText: String?, regionText: String): Boolean {
-    val needle = ruleText?.trim()?.lowercase() ?: return false
-    if (needle.isEmpty()) return false
-    return regionText.tokens().any { it == needle }
+    val needleTokens = ruleText.normalizedTokens() ?: return false
+    if (needleTokens.isEmpty()) return false
+    val regionTokens = regionText.normalizedTokens() ?: return false
+    if (regionTokens.isEmpty()) return false
+    val needleConcat = needleTokens.joinToString("")
+    return (1..regionTokens.size).any { size ->
+        regionTokens.windowed(size).any { run -> run.joinToString("") == needleConcat }
+    }
 }
 
-private fun CharSequence.tokens(): List<String> {
+/** NFKC-fold, then split on non-letter/digit runs; tokens keep their case-fold. */
+private fun String?.normalizedTokens(): List<String>? {
+    if (this == null) return null
+    val normalized = Normalizer.normalize(this, Normalizer.Form.NFKC).lowercase()
     val tokens = ArrayList<String>()
     val current = StringBuilder()
-    forEach { ch ->
+    for (ch in normalized) {
         if (ch.isLetterOrDigit()) {
             current.append(ch)
         } else if (current.isNotEmpty()) {
-            tokens.add(current.toString().lowercase())
+            tokens.add(current.toString())
             current.clear()
         }
     }
-    if (current.isNotEmpty()) tokens.add(current.toString().lowercase())
+    if (current.isNotEmpty()) tokens.add(current.toString())
     return tokens
+}
+
+/** NFKC-fold, lowercase, strip ALL whitespace — OCR spacing noise-proof. */
+private fun normalizeForPhrase(text: String?): String? {
+    if (text == null) return null
+    return Normalizer.normalize(text, Normalizer.Form.NFKC)
+        .filterNot { it.isWhitespace() }
+        .lowercase()
 }
 
 private fun phraseMatches(ruleText: String?, regionText: String): Boolean {
@@ -85,11 +118,6 @@ private fun phraseMatches(ruleText: String?, regionText: String): Boolean {
     if (needle.isEmpty()) return false
     val haystack = normalizeForPhrase(regionText) ?: return false
     return haystack.contains(needle)
-}
-
-private fun normalizeForPhrase(text: String?): String? {
-    if (text == null) return null
-    return text.replace(Regex("\\s+"), " ").trim().lowercase()
 }
 
 private fun overlaps(a: OcrBoundingBox, b: OcrBoundingBox): Boolean =

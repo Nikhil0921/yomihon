@@ -98,6 +98,52 @@ class OcrExclusionMatcherTest {
     }
 
     @Test
+    fun `word rule matches keymanga in all cases and trailing punctuation`() {
+        val regions = listOf(
+            region(0, text = "Keymanga"),
+            region(1, text = "KEYMANGA."),
+            region(2, text = "keymanga,"),
+            region(3, text = "not keymanga here"),
+        )
+        val zones = listOf(zone(matchType = OcrExclusionMatchType.WORD, matchText = "keymanga"))
+        regions.applyExclusions(zones, context).map { it.order } shouldContainExactly emptyList()
+    }
+
+    @Test
+    fun `word rule with punctuation matches tokenized rule text`() {
+        val regions = listOf(region(0, text = "Read K-manga.com now"))
+        val zones = listOf(zone(matchType = OcrExclusionMatchType.WORD, matchText = "K-manga.com"))
+        regions.applyExclusions(zones, context).size shouldBe 0
+    }
+
+    @Test
+    fun `word rule with separator variants still matches`() {
+        // OCR reads "Keymanga" as "Key Manga" — tokenized rule matches consecutive tokens.
+        val regions = listOf(region(0, text = "Key Manga"))
+        val zones = listOf(zone(matchType = OcrExclusionMatchType.WORD, matchText = "KeyManga"))
+        regions.applyExclusions(zones, context).size shouldBe 0
+    }
+
+    @Test
+    fun `word rule token sequence must be consecutive`() {
+        val regions = listOf(
+            region(0, text = "K manga now"),
+            region(1, text = "K manga"),
+            region(2, text = "K great manga"),
+        )
+        val zones = listOf(zone(matchType = OcrExclusionMatchType.WORD, matchText = "K-manga"))
+        regions.applyExclusions(zones, context).map { it.order } shouldContainExactly listOf(2)
+    }
+
+    @Test
+    fun `word rule folds full-width characters`() {
+        // JP-mixed OCR lines get half→full-width converted by TextPostprocessor.
+        val regions = listOf(region(0, text = "ｋｅｙｍａｎｇａ こんにちは"))
+        val zones = listOf(zone(matchType = OcrExclusionMatchType.WORD, matchText = "keymanga"))
+        regions.applyExclusions(zones, context).size shouldBe 0
+    }
+
+    @Test
     fun `phrase rule matches case and whitespace tolerant`() {
         val regions = listOf(
             region(0, text = "Join  our   Discord!"),
@@ -115,6 +161,24 @@ class OcrExclusionMatcherTest {
         )
         val zones = listOf(zone(matchType = OcrExclusionMatchType.PHRASE, matchText = "Support us on Patreon"))
         regions.applyExclusions(zones, context).map { it.order } shouldContainExactly listOf(1)
+    }
+
+    @Test
+    fun `phrase rule matches url-like text with ocr spacing noise`() {
+        val regions = listOf(
+            region(0, text = "Discord.gg / AsuraScans"),
+            region(1, text = "discord. gg / asurascans"),
+            region(2, text = "Discord. gg/ AsuraScans"),
+        )
+        val zones = listOf(zone(matchType = OcrExclusionMatchType.PHRASE, matchText = "Discord.gg/AsuraScans"))
+        regions.applyExclusions(zones, context).map { it.order } shouldContainExactly emptyList()
+    }
+
+    @Test
+    fun `phrase rule folds full-width characters`() {
+        val regions = listOf(region(0, text = "Ｄｉｓｃｏｒｄ．ｇｇ／ＡｓｕｒａＳｃａｎｓ こんにちは"))
+        val zones = listOf(zone(matchType = OcrExclusionMatchType.PHRASE, matchText = "discord.gg/asurascans"))
+        regions.applyExclusions(zones, context).size shouldBe 0
     }
 
     @Test

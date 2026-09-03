@@ -9,8 +9,8 @@ import mihon.domain.ocr.repository.OcrExclusionZoneRepository
 class GetOcrExclusionZones(
     private val repository: OcrExclusionZoneRepository,
 ) {
-    fun subscribeForManga(mangaId: Long): Flow<List<OcrExclusionZone>> =
-        repository.subscribeZonesForManga(mangaId)
+    fun subscribeForManga(mangaId: Long, sourceId: Long): Flow<List<OcrExclusionZone>> =
+        repository.subscribeZonesForManga(mangaId, sourceId)
 
     fun subscribeForSource(sourceId: Long): Flow<List<OcrExclusionZone>> =
         repository.subscribeZonesForSource(sourceId)

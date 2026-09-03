@@ -512,6 +512,13 @@ internal class TtsPlaybackController(
                 pageIndex = pageIndex,
             ),
         )
+        if (zones.isNotEmpty()) {
+            val typeCounts = zones.groupingBy { it.matchType.name }.eachCount()
+            logcat(LogPriority.DEBUG) {
+                "TTS page=$pageIndex exclusion rules=${zones.size} types=$typeCounts " +
+                    "excluded=${result.regions.size - regions.size}/${result.regions.size}"
+            }
+        }
         val dedupedRegions = SpeechPipeline.dedupeOverlappingDuplicates(regions)
         if (dedupedRegions.size < regions.size) {
             logcat(LogPriority.DEBUG) {

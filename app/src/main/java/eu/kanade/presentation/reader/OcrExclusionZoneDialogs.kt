@@ -32,15 +32,18 @@ import tachiyomi.presentation.core.i18n.stringResource
 /**
  * Scope chooser shown after the user drag-selects an OCR exclusion region.
  * Wider-than-page scopes create a combined rule: the rectangle only suppresses
- * regions that also contain the entered text.
+ * regions that also contain the entered text. Text detected inside the
+ * selection is pre-filled; the user can edit or clear it before saving.
+ * Cancel + re-select runs detection again.
  */
 @Composable
 fun ExclusionZoneScopeDialog(
+    detectedText: String? = null,
     onDismissRequest: () -> Unit,
     onScopeSelected: (OcrExclusionScope, String?) -> Unit,
 ) {
     var selectedScope by remember { mutableStateOf<OcrExclusionScope?>(null) }
-    var matchText by remember { mutableStateOf("") }
+    var matchText by remember(detectedText) { mutableStateOf(detectedText.orEmpty()) }
     val chosen = selectedScope
 
     AlertDialog(
@@ -65,7 +68,7 @@ fun ExclusionZoneScopeDialog(
                         value = matchText,
                         onValueChange = { matchText = it },
                         label = { Text(stringResource(MR.strings.ocr_exclusion_match_text_label)) },
-                        singleLine = true,
+                        singleLine = false,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 12.dp),

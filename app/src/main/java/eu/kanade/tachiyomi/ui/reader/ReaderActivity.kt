@@ -447,7 +447,7 @@ class ReaderActivity : BaseActivity() {
         }
 
         val onDismissRequest = viewModel::closeDialog
-        when (state.dialog) {
+        when (val dialog = state.dialog) {
             is ReaderViewModel.Dialog.Loading -> {
                 AlertDialog(
                     onDismissRequest = {},
@@ -520,6 +520,7 @@ class ReaderActivity : BaseActivity() {
             }
             is ReaderViewModel.Dialog.ExclusionZoneScope -> {
                 ExclusionZoneScopeDialog(
+                    detectedText = dialog.detectedText,
                     onDismissRequest = onDismissRequest,
                     onScopeSelected = viewModel::saveExclusionZone,
                 )
@@ -976,6 +977,7 @@ class ReaderActivity : BaseActivity() {
                     }
                     is ReaderViewModel.Dialog.ExclusionZoneScope -> {
                         ExclusionZoneScopeDialog(
+                            detectedText = dialog.detectedText,
                             onDismissRequest = onDismissRequest,
                             onScopeSelected = viewModel::saveExclusionZone,
                         )
@@ -1353,7 +1355,9 @@ class ReaderActivity : BaseActivity() {
 
     /**
      * Resolves the drag selection against the current viewer into normalized
-     * image coordinates, then asks the ViewModel to open the scope dialog.
+     * image coordinates, detects the text inside it (cached OCR regions when
+     * available, targeted crop OCR otherwise), then asks the ViewModel to open
+     * the scope dialog with the detected text pre-filled for review.
      */
     private fun captureExclusionZoneSelection(rect: android.graphics.RectF) {
         lifecycleScope.launchIO {
@@ -1363,6 +1367,7 @@ class ReaderActivity : BaseActivity() {
                 val pageInput = capture.bitmapSource?.selectionPageInput()
                     ?: error("Exclusion selection page input unavailable")
                 val bitmap = pageInput.openBitmap() ?: error("Exclusion selection bitmap unavailable")
+                var detectedText: String? = null
                 try {
                     val normalized = withUIContext {
                         val sourceRect = capture.sourceRect
@@ -1376,13 +1381,40 @@ class ReaderActivity : BaseActivity() {
                             (sourceRect.bottom / bitmap.height.toFloat()).coerceIn(0f, 1f),
                         )
                     }
-                    viewModel.openExclusionZoneScopeDialog(
-                        pageIndex = capture.page.index,
+                    val selectionBox = mihon.domain.ocr.model.OcrBoundingBox(
                         left = normalized.left,
                         top = normalized.top,
                         right = normalized.right,
                         bottom = normalized.bottom,
                     )
+                    val selectionChapterId = capture.page.chapter.chapter.id
+                        ?: error("Exclusion selection chapter id unavailable")
+                    // Reuse cached OCR regions when they exist; no full-page scan ever.
+                    detectedText = viewModel.detectExclusionZoneText(
+                        chapterId = selectionChapterId,
+                        pageIndex = capture.page.index,
+                        selection = selectionBox,
+                    )
+                    if (detectedText == null) {
+                        val x = (normalized.left * bitmap.width).toInt().coerceIn(0, bitmap.width - 1)
+                        val y = (normalized.top * bitmap.height).toInt().coerceIn(0, bitmap.height - 1)
+                        val w = ((normalized.right - normalized.left) * bitmap.width).toInt()
+                            .coerceIn(1, bitmap.width - x)
+                        val h = ((normalized.bottom - normalized.top) * bitmap.height).toInt()
+                            .coerceIn(1, bitmap.height - y)
+                        val crop = Bitmap.createBitmap(bitmap, x, y, w, h)
+                        detectedText = viewModel.ocrExclusionCropText(crop)
+                    }
+                    withUIContext {
+                        viewModel.openExclusionZoneScopeDialog(
+                            pageIndex = capture.page.index,
+                            left = normalized.left,
+                            top = normalized.top,
+                            right = normalized.right,
+                            bottom = normalized.bottom,
+                            detectedText = detectedText,
+                        )
+                    }
                 } finally {
                     if (!bitmap.isRecycled) bitmap.recycle()
                 }

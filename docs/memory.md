@@ -335,6 +335,93 @@ Verified: spotlessCheck + testDebugUnitTest + :app:assembleDebug GREEN
 (.device-pass/logcat-8234-test.log). Awaiting device script steps 7–15.
 ```
 
+```text
+[COMPLETED 2026-09-02 — OCR exclusion device-test regression fixes + auto-detect, UNCOMMITTED]
+
+Device test (user, build from 1b810ccde audit set) found: toggle no-op in BOTH
+management UIs, WORD/PHRASE rules not excluded on fresh OCR pages. Evidence
+phase: 2 parallel explore agents traced full pipelines against source (no fresh
+device logs existed; newest .device-pass log = 2026-08-31). Root causes proven
+in code, DISTINCT for the two bugs:
+
+Issue A (toggle dead) — ROOT CAUSE: positional-argument swap in
+OcrExclusionZoneRepositoryImpl.setEnabled. .sq writes "SET enabled=:enabled
+WHERE _id=:id" → SQLDelight generates (enabled, id); repo called (id, enabled)
+positionally, both Long — silent swap. OFF → "WHERE _id=0" = 0 rows (no
+autoincrement row has id 0); ON → "SET enabled=<rowId> WHERE _id=1" = corrupts
+row 1, never touches tapped row. DELETE worked because deleteZone is
+single-param (unswappable). Toggle wiring (both UIs → interactor → repo) was
+fully correct end-to-end. FIX: named args at call site (compile-checked
+forever). NOTE: device DB may have row _id=1 re-enabled by the ON-tap side
+effect — user should re-toggle row 1 to intended state.
+
+Issue B (WORD/PHRASE no-op on fresh pages) — wiring verified CORRECT: rules
+re-queried per page (TtsPlaybackController.acquireSentences:496 via
+awaitForSpeech), zonesForSpeech SQL includes global WORD/PHRASE, matcher has no
+rect requirement for them, cache stores RAW regions + playback-time filtering
+(cached pages DO get new exclusions on next acquire). Failure was MATCH
+SEMANTICS only, 3 causes all in OcrExclusionMatcher:
+  1. WORD needle never tokenized: "K-manga.com" contains -/. → pure
+     isLetterOrDigit tokens can never equal it = impossible rule; "keymanga"
+     missed OCR variants ("Key Manga").
+  2. PHRASE collapsed whitespace to single space but kept it: OCR emits
+     "Discord. gg / AsuraScans" → needle "discord.gg/asurascans" (0 spaces)
+     never substring-matches.
+  3. JP-mixed lines are full-width-converted by TextPostprocessor (half→full
+     ASCII mapping); matcher lowercase() does not fold width → ｋｅｙｍａｎｇａ ≠
+     keymanga.
+FIX (OcrExclusionMatcher rework): all text comparisons NFKC-normalize (folds
+full-width→half). WORD = rule-token CONCATENATION must equal concat of a
+consecutive run of region tokens (single-token "ion" still ≠ "combination";
+"K-manga.com" ≡ [k,manga,com] runs; "KeyManga" ≡ "Key Manga"). PHRASE =
+NFKC-fold + lowercase + strip ALL whitespace + substring (URL/domain noise-
+proof). URL-like input therefore behaves predictably in EITHER type (documented
+choice: robust matching in both, no UI forced-conversion).
+
+Manage-sheet visibility landmine (agent-found): reader "Manage exclusion zones"
+used zonesForManga WHERE manga_id=:id → global WORD/PHRASE rows (manga_id=0)
+invisible there = user thinks rule missing. FIX: zonesForManga now
+manga_id=:mangaId OR source_id=:sourceId OR match_type IN (WORD,PHRASE);
+subscribeForManga(mangaId, sourceId) signature ripple (repo+interactor+VM).
+Settings screen unchanged (subscribeAll already).
+
+Diagnostics (rules §7 — no text logged): acquireSentences now logs
+"TTS page=N exclusion rules=X types={WORD=1,...} excluded=A/B" per page when
+rules exist.
+
+Issue D (auto-detect selection text) — implemented per spec, cached-first:
+captureExclusionZoneSelection resolves normalized rect → VM
+detectExclusionZoneText (cached OcrPageResult regions intersecting selection
+via boxesOverlap, sorted by order, joined \n — NO scan) → miss → targeted crop
+OCR (Bitmap.createBitmap of selection rect only, existing ocrProcessor.getText
+HIGH-priority queue path, no full-page scan, bitmap recycled in VM finally) →
+Dialog.ExclusionZoneScope gains detectedText → ExclusionZoneScopeDialog
+pre-fills match text field (multiline, editable, clearable; cancel+re-select =
+re-detect). User confirms before any rule is saved (dialog flow unchanged).
+rejoin: detection runs while dialog opens? NO — detection runs BEFORE dialog
+opens (launchIO), dialog opens with result; null detection = empty field,
+manual entry.
+
+Tests: OcrExclusionMatcherTest extended 14→20 cases: keymanga all-cases +
+trailing punct, punctuated rule tokenized ("K-manga.com"), separator variants
+("KeyManga"≡"Key Manga"), consecutive-run requirement, full-width fold WORD +
+PHRASE, URL-like OCR spacing noise ×3 variants, (existing ion/combination
+standalone-token case kept).
+
+GATES GREEN 2026-09-02 (devcontainer JDK17, -Xmx4g, both volumes):
+  spotlessCheck + testDebugUnitTest + verifySqlDelightMigration BUILD
+  SUCCESSFUL 3m39s (matcher 20/20); :app:assembleDebug BUILD SUCCESSFUL 3m20s.
+  No DB schema change (query-only edit to zonesForManga — verifySqlDelight
+  Migration still run + green).
+
+Files changed (10): OcrExclusionMatcher.kt, OcrExclusionMatcherTest.kt,
+  OcrExclusionZoneRepositoryImpl.kt, ocr_exclusion_zones.sq (zonesForManga
+  query), OcrExclusionZoneInteractors.kt, OcrExclusionZoneRepository.kt,
+  ReaderViewModel.kt (subscribeForManga call + detect/crop fns + dialog field),
+  ReaderActivity.kt (capture flow + dialog args), OcrExclusionZoneDialogs.kt
+  (pre-fill), TtsPlaybackController.kt (diagnostics log).
+```
+
 ## In progress
 
 ```text
@@ -1644,10 +1731,10 @@ Injekt 91edab2317, JUnit5 6.1.1/Kotest 6.2.2/MockK 1.14.11).
 ## Testing status
 
 ```text
-Unit tests:        PASS (2026-09-01, full testDebugUnitTest — post-device-test
-                    audit set: dedup + exclusion-redesign + ellipsis + prefetch;
-                    new suites OcrExclusionMatcherTest 14/14, SpeechCleanerTest
-                    11/11, SpeechPipelineDedupTest 9/9)
+Unit tests:        PASS (2026-09-02, full testDebugUnitTest — OCR exclusion
+                    regression fixes + auto-detect; OcrExclusionMatcherTest
+                    20/20 incl. NFKC fold, token-concat runs, URL spacing
+                    noise, full-width cases; all prior suites green)
 Integration tests: none run (existing androidTest suites are device-gated/@Ignore)
 UI tests:          none exist in repo
 Device tests:      Phase 8 script COMPLETE (steps 1–15 executed +
@@ -1671,27 +1758,29 @@ Environment: devcontainer image vsc-yomihon-e24e3bd7… (JDK 17) via docker on h
 ## Last verified build
 
 ```text
-Date:     2026-09-01 (post-device-test audit set, run by orchestrator)
+Date:     2026-09-02 (OCR exclusion regression-fix set, run by orchestrator)
 Command:  ./gradlew spotlessCheck testDebugUnitTest verifySqlDelightMigration
           :app:assembleDebug (docker devcontainer JDK17, -Xmx4g, both volumes)
-Result:   ALL GREEN — spotlessCheck 42s; testDebugUnitTest + verifySqlDelight-
-          Migration 4m9s (19.sqm validated); :app:assembleDebug 3m52s.
-          Audit set: repeated-speech fixes (dedup/resumeIndex/utterance ids/
-          zombie-stop), OCR exclusion redesign (ZONE/WORD/PHRASE/COMBINED +
-          19.sqm), speed-adaptive prefetch, stop-during-prepare, reader
-          toggles, ellipsis pause. UNCOMMITTED; device pass pending.
+Result:   ALL GREEN — spotlessCheck + testDebugUnitTest + verifySqlDelight-
+          Migration BUILD SUCCESSFUL 3m39s; :app:assembleDebug BUILD SUCCESSFUL
+          3m20s. Change set: setEnabled named-args toggle fix, WORD/PHRASE
+          matcher rework (NFKC fold + token-concat runs + whitespace-strip
+          phrase), zonesForManga global-rule visibility, controller exclusion
+          diagnostics, selected-area auto-detect (cached-first, crop-OCR
+          fallback). UNCOMMITTED; device pass pending.
 ```
 
 ## Last verified test
 
 ```text
-Date:     2026-09-01 (post-device-test audit set)
+Date:     2026-09-02 (OCR exclusion regression-fix set)
 Command:  ./gradlew testDebugUnitTest (docker devcontainer, JDK 17, -Xmx4g,
           both volumes)
-Result:   BUILD SUCCESSFUL — full suite green incl. new OcrExclusionMatcherTest
-          14/14 (word-boundary/case/unicode, phrase, combined scopes, legacy
-          dormant, disabled), SpeechCleanerTest 11/11 (ellipsis→pause cases),
-          SpeechPipelineDedupTest 9/9 (overlap-dedup, disjoint survival, IoU).
+Result:   BUILD SUCCESSFUL — full suite green incl. extended
+          OcrExclusionMatcherTest 20/20 (token-concat run semantics: ion ≠
+          combination, K-manga.com ≡ token runs, KeyManga ≡ Key Manga; NFKC
+          full-width folds WORD+PHRASE; URL-like OCR spacing noise; all
+          ZONE/COMBINED/scope/legacy/disabled cases kept green).
 ```
 
 ---
@@ -1699,51 +1788,45 @@ Result:   BUILD SUCCESSFUL — full suite green incl. new OcrExclusionMatcherTes
 ## Agent handoff
 
 ```text
-Last agent:                 opencode (2026-09-01 — post-device-test audit:
-                            repeated speech + OCR exclusion redesign +
-                            adaptive prefetch + stop-during-prepare + reader
-                            interaction prefs/toolbar toggles + ellipsis pause)
-Date:                       2026-09-01
-Task completed:             Evidence-first audit of the 10 reported device
-                            issues (5 explore agents), root-cause report,
-                            then implementation. Issue 2 repeated speech: 4
-                            root causes fixed (domain text-dedup before
-                            segmentation; resumeIndex post-completion
-                            maintenance; unique per-dispatch utterance ids +
-                            identity-checked engine remove; resume() zombie-
-                            stop guard). Issue 3: OCR exclusion system
-                            redesigned (ZONE/WORD/PHRASE/COMBINED; 19.sqm
-                            table rebuild dropping manga_id FK; legacy wide-
-                            scope zones dormant but preserved; Settings→OCR
-                            exclusions screen; backup proto 11/12/13 +
-                            restorer dedupe/enabled fixes). Issue 4: speed-
-                            adaptive prefetch depth 1/2/3 by rate + mid-page
-                            re-arm. Issue 5: Stop button in Preparing/
-                            LoadingPage. Issue 6/8: reader_ocr_text_selection
-                            + reader_read_aloud_button toggles gating
-                            bottom-bar buttons. Issue 7: verified ALREADY
-                            EXISTING (pref_dictionary_reader_tap_lookup).
-                            Issue 1: ellipsisToPause cleanup option.
-                            Issues 9/10 untouched per directive.
+Last agent:                 opencode (2026-09-02 — OCR exclusion device-test
+                            regression audit + fixes + auto-detect)
+Date:                       2026-09-02
+Task completed:             Evidence-first audit (2 parallel explore agents,
+                            source-level tracing, no fresh device logs
+                            existed). Issue A toggle: SQLDelight positional
+                            param swap in repo setEnabled (generated (enabled,
+                            id) vs call (id, enabled) — OFF updated 0 rows,
+                            ON corrupted row _id=1); delete immune (1 param) —
+                            fixed with named args. Issue B WORD/PHRASE: wiring
+                            correct (per-page rule query, global SQL branch,
+                            playback-time filtering incl. cached pages); match
+                            semantics reworked — NFKC width fold everywhere,
+                            WORD = rule-token-concat equals consecutive region-
+                            token-run concat, PHRASE = whitespace-stripped
+                            substring. Reader manage sheet now lists global
+                            WORD/PHRASE + source rules (zonesForManga SQL +
+                            subscribeForManga(mangaId, sourceId) ripple).
+                            Controller logs per-page rule counts/types/
+                            excluded. Issue D auto-detect: cached-regions
+                            intersect (boxesOverlap) → crop-OCR fallback
+                            (targeted, recycled) → dialog pre-fill, editable,
+                            user confirms. Matcher tests 14→20. All 4 gates
+                            green.
 Current task:               NONE — awaiting user review + commit + device pass.
-Next recommended task:      Run the 9-item device-pass checklist (audit-set
-                            block): repeated-speech re-verify on affected
-                            manga (unique _c dispatch ids + dedup dropped=X
-                            in logcat), exclusion scopes/word/phrase/combined,
-                            1x-3x prefetch stalls, stop-during-prepare, both
-                            toolbar toggles, backup/restore round-trip.
-Files safe to modify:       docs/* ; app reader/tts/settings/feed/dictionary ;
-                            data OCR/backup files ; i18n base strings.xml
-Known risks:                Dedup requires EXACT normalized-text match +
-                            box overlap — OCR fragments with differing text
-                            in overlapping boxes still survive (intended);
-                            legacy wide-scope zones are DORMANT (visible in
-                            manage UI w/ legacy hint, deletable) — user must
-                            re-create as combined rules if they want the old
-                            effect; remote-OCR latency at 3x on uncached tall
-                            strips can still stall (physical limit, documented
-                            — prefetch depth 3 is the mitigation); WORD/PHRASE
-                            rules are GLOBAL across all manga by design.
+Next recommended task:      Run the device checklist below (toggle both UIs ×
+                            all 4 rule types, keymanga/K-manga.com word,
+                            discord.gg phrase, scopes, cached-after-rule,
+                            auto-detect). Check row _id=1 enabled state (ON-
+                            tap side effect may have re-enabled it).
+Files safe to modify:       docs/* ; app reader/tts/settings ; data OCR/backup ;
+                            i18n base strings.xml
+Known risks:                WORD multi-token rules use concat-run matching —
+                            a rule like "k manga" ALSO matches "kmanga" text
+                            (deliberate, OCR-noise-tolerant); PHRASE strips
+                            ALL whitespace — a phrase rule with meaningful
+                            internal word boundaries still matches (substring
+                            semantics unchanged, only spacing-insensitive);
+                            device DB row _id=1 may need manual re-toggle.
 ```
 
 ---
