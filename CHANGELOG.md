@@ -10,6 +10,45 @@ The format is a modified version of [Keep a Changelog](https://keepachangelog.co
 - `Fixed` - for any bug fixes.
 - `Other` - for technical stuff.
 
+## [v0.5.2] - 2026-09-03
+
+### Added
+- Add Feed tab: browse latest updates from multiple sources in one home screen, with
+  add / remove, enable-toggle, and reorder controls per feed
+- Add OCR exclusion rules for Read-Aloud: suppress unwanted OCR regions (ads,
+  watermarks, SFX, scanlator credits) from being spoken
+  - Rule types: rectangular zone (page-anchored), whole manga, whole source, word,
+    phrase, and combined rect+text
+  - Draw a zone directly in the reader, or manage all rules under
+    Settings → OCR exclusion rules
+  - Rules are included in backups
+- Add intelligent speech cleanup for Read-Aloud: skip punctuation-only regions and
+  OCR garbage, normalize excessive punctuation, speak ellipses as a pause
+- Add spoken-content classification controls: skip sound effects / expressions /
+  foreign-script regions, with per-language script hint
+- Extend Read-Aloud speech-rate range to 50%–300% (was 50%–200%)
+- Add dictionary screen entry point in Settings
+- Add per-rule OCR diagnostics logging for exclusion decisions (no text content logged)
+
+### Changed
+- Dictionary UI renamed and reorganized for clearer navigation
+- OCR exclusion rule matching is now punctuation-, spacing-, and full-width
+  character-insensitive (NFKC normalization) so OCR noise never defeats a rule
+
+### Fixed
+- Fix exclusion-zone enable/disable toggle corrupting the wrong row
+- Fix zones drawn on split pages / rotated pages saving wrong coordinates (now
+  rejected with a clear error instead of silently mis-anchoring)
+- Fix zone rules with CHAPTER/MANGA/SOURCE scope being forced to also require text
+  match (pure rectangular zones now always exclude)
+- Fix exclusion pre-fill forcing all zone rules to require OCR-detected text
+  (detected text no longer pre-filled; blank = pure zone, typed = combined rule)
+- Fix neighboring bubble text leaking into zone auto-detect results
+- Fix selection crop OCR routing into the Japanese-vocab legacy engine
+- Fix English OCR region ordering on pages with no Japanese text
+- Fix webtoon transition holder leaking a destroyed Activity (~185MB) on exit
+- Fix rapid re-selection piling up zone-detection OCR jobs
+
 ## [v0.5.1] - 2026-08-31
 
 ### Added
