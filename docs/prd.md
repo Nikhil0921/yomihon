@@ -20,7 +20,9 @@ Yomitan-style dictionary lookups, and one-click Anki card creation.
 - Application ID: `app.yomihon` (code namespaces remain `eu.kanade.tachiyomi.*`,
   `mihon.*`, `tachiyomi.*` — see `docs/rules.md`).
 - Requires Android 8.0+ (`minSdk 26`); `targetSdk 36`, `compileSdk 37`.
-- Current release: v0.5.0 (version code 26).
+- Current release: v0.5.2 (version code 28) — includes Read-Aloud TTS v1,
+  Phase 10A voice configuration, speech cleanup pipeline, OCR exclusion
+  rules, voice profiles, 3x rate, and the Feed tab.
 
 ### 1.2 Who it is for
 
@@ -39,13 +41,19 @@ Yomitan-style dictionary lookups, and one-click Anki card creation.
 | Look up unknown words on a page | Tap-to-lookup on cached OCR results, or long-press/drag region selection → OCR → dictionary popup/sheet |
 | Create Anki cards while reading | Term-group export from the OCR result overlay |
 | Background chapter scanning | OcrScanJob/OcrScanManager queue scans whole chapters into the OCR cache |
+| Listen hands-free (Read Aloud) | Reader ▶ button speaks a page's OCR text sentence-by-sentence, auto page/chapter advance, floating playback pill with speed chip |
+| Skip noise while listening | Speech cleanup (punct-only/garbage skip), region classification (SFX/expressions/foreign script off by default), exclusion rules (ZONE/WORD/PHRASE/COMBINED) |
+| Configure the reading voice | Settings → Read aloud & voice: engine/language/locale/voice pickers, rate 50–300%, pitch, preview, voice profiles |
+| Follow new chapters across sources | Feed tab: user-picked sources' Popular/Latest listings in one grid, per-source filter chips, central management screen |
+| Look up words outside the reader | More → Dictionary lookup screen (same search model as in-reader lookup) |
 | Experimental panel-by-panel reading | Panel detection model drives pager navigation on tall pages |
 
 ### 1.4 Core user experience
 
-- Bottom-navigation app shell (Library / History / Updates / Browse / More) built
-  with Jetpack Compose + Voyager screens; light/dark/AMOLED themes with 13 color
-  schemes plus Android 12+ dynamic color (Monet).
+- Bottom-navigation app shell (Library / History / Updates / Browse / Feed /
+  More) built with Jetpack Compose + Voyager screens; light/dark/AMOLED themes
+  with 13 color schemes plus Android 12+ dynamic color (Monet); floating
+  pill-style bottom navigation bar.
 - A highly configurable reader: LTR/RTL/vertical pagers, webtoon (continuous and
   paged), multiple tap zones/navigation kinds, crop borders, color filters,
   brightness overlay, dual-page split, panel navigation.
@@ -58,11 +66,13 @@ See §2 — every item there was verified against actual source files.
 
 ### 1.6 Planned capabilities
 
-The single major planned feature is **Read-Aloud TTS**: reading a page's OCR text
-aloud in correct manga reading order, with sentence-level controls and automatic
-page/chapter progression. Full requirements in §3; implementation plan approved at
-the scope level in root `architect.md` / `architect-2.md`. No other feature is
-currently planned by this documentation system.
+The major "planned" feature block — Read-Aloud TTS — **shipped**: v1 (Phases
+1–9), Phase 10A voice configuration, and the 2026-09-01 multi-feature set
+(speech cleanup, region classification, OCR exclusion rules, voice profiles,
+3x rate, Feed tab, dictionary navigation cleanup) are all released in v0.5.x
+(see §3, §6, and `docs/memory.md`). Remaining planned work is the Phase 10B
+backlog (cloud/neural engines, expressive speech, per-voice tuning, background
+playback, on-image highlight — see `docs/phase.md`).
 
 ---
 
@@ -148,9 +158,11 @@ extend it (see `docs/rules.md`).
 ### 2.6 Settings & preferences
 
 - `PreferenceStore` (SharedPreferences-backed, Flow-exposing) with per-feature
-  preference classes registered in `PreferenceModule`: Reader, Library, Downloads,
+  preference classes registered in PreferenceModule: Reader, Library, Downloads,
   Track, Backup, Security, Privacy, UI, Source, Network, Storage, Base,
-  **OcrPreferences**, Dictionary, AnkiDroid, Updates.
+  **OcrPreferences**, Dictionary (incl. reader tap-lookup + auto-search toggles),
+  AnkiDroid, Updates, **TtsPreferences**, **TtsVoicePreferences**,
+  **FeedPreferences**.
 - Settings screens under `ui/setting/*` (appearance, library, reader, downloads,
   tracking, security, advanced…) and reader-specific settings dialog with tabs
   (Reading mode / General / Color filter).
@@ -161,13 +173,54 @@ extend it (see `docs/rules.md`).
   crash screen, about/libraries, updater (flag-gated `-Penable-updater`),
   telemetry (flag-gated `-Pinclude-telemetry`, Firebase or compile-time noop).
 
+### 2.8 Read-Aloud TTS (shipped v0.5.x)
+
+Everything in §3 F1–F8 plus Phase 10A (§6) is implemented and device-verified.
+Additions shipped in v0.5.2:
+
+- **Speech cleanup** (pref-gated, on by default): punctuation-only and
+  OCR-garbage region skip, excessive-punctuation normalization, whitespace
+  collapse, ellipsis→pause.
+- **Region classification + spoken-type filters**: heuristic classifier
+  (dialogue/SFX/expression/narration/decorative); SFX + expressions off by
+  default; foreign-script skip with script-based (Latin/CJK) hint.
+- **Duplicate-region dedup**: seam-duplicate regions (identical normalized
+  text + overlapping bbox) dropped before segmentation.
+- **OCR exclusion rules**: ZONE (pure rect, page-anchored), WORD (token-run),
+  PHRASE (NFKC-fold substring + token-concat fallback), COMBINED (opt-in
+  rect+text). Reader drag-select save flow + Settings management screen
+  (edit/toggle/delete/legacy markers); backed up/restored; rules re-queried
+  per page. Applied to speech ONLY — tap/dictionary OCR unaffected.
+- **Voice profiles**: named snapshots (engine+voice+language+rate+pitch),
+  apply/delete in Read aloud & voice settings.
+- **Speech rate 50–300%**: slider in settings + speed chip on the playback
+  pill (0.5–3x dropdown), applied live; speed-aware OCR prefetch (depth 1–3
+  pages by rate).
+- **Webtoon support**: region-level auto-scroll to the spoken bubble.
+
+### 2.9 Feed (shipped v0.5.2)
+
+Bottom-nav Feed tab: user-selected sources' Popular/Latest listings fetched
+into one grid; per-source filter chips; All/Popular/Latest listing filter;
+central Manage Feeds screen (reorder/enable/delete); manga tap → MangaScreen.
+Feed config persisted as one JSON pref (backed up).
+
+### 2.10 Dictionary navigation (shipped v0.5.2)
+
+Standalone Dictionary lookup screen (More tab) replacing the old bottom-nav
+Dictionary tab; Dictionaries manager row separate. Reader interaction prefs:
+tap-lookup toggle (default ON) and auto-search toggle (default ON; off = popup
+opens with query filled).
+
 ---
 
-## 3. TTS requirements (planned feature: "Read Aloud")
+## 3. TTS requirements (SHIPPED: "Read Aloud" v1 + Phase 10A)
 
 **Goal:** read a page's OCR text aloud in correct manga reading order with
 sentence-level playback controls, then automatically advance pages/chapters so a
-reader can listen hands-free.
+reader can listen hands-free. *(Status: shipped and device-verified — Phases
+1–9 complete, Phase 10A complete; requirements below are retained as the
+binding spec for regressions and future engine work.)*
 
 **Approved scope decisions** (from root `architect.md` / `architect-2.md`, binding):
 
@@ -197,7 +250,9 @@ reader can listen hands-free.
 - F2.3 Split within a region only on terminal punctuation
   `。！？!?‼⁇⁉⁈`, keeping punctuation attached; trailing remainder becomes the
   final fragment; skip blank regions.
-- F2.4 `.`/`...` are NOT terminal (engines expand `…` to `...`).
+- F2.4 ASCII `.` is terminal ONLY as a single dot before whitespace/EOL
+  (English rules, 2026-08-25 pivot); dot-runs `...`/`…` expansion and decimals
+  are never terminal.
 - F2.5 Reuse existing normalization (`TextPostprocessor`, `flattenOcrTextForQuery`);
   do not duplicate cleanup logic.
 
@@ -210,17 +265,20 @@ reader can listen hands-free.
   the new page and keep playing (no bouncing back).
 
 **F4 — Voice/language/rate/pitch**
-- Language availability preflight (Japanese required for JP content) with an
-  actionable error if no voice is installed.
-- Speech rate (0.5–2.0, default 1.0) and pitch (default 1.0) settings applied live.
-- Voice selection follows the system TTS default in v1; explicit voice picker
-  landed in Phase 10A (see §6).
+- Voice selection: engine/language/locale/voice pickers + preview landed in
+  Phase 10A (§6); language availability is surfaced through picker states
+  and preview rather than a hard JP preflight (English is the primary v1
+  language per the 2026-08-25 pivot).
+- Speech rate (50–300 %, default 100 %) and pitch (50–200 %, default 100 %)
+  settings applied live; speed chip on the playback pill writes the same
+  rate pref.
 
 **F5 — Reader integration**
 - Entry point(s) consistent with existing OCR entry points (bottom-bar icon
   patterned after the OCR button).
-- Mini playback bar modeled on `OcrLoadingIndicator` (bottom pill, slide-up
-  animation) showing current sentence text, position x/y, prev/play-pause/next/stop.
+- Playback pill (`TtsPlaybackBar`): floating rounded bottom pill (slide-up
+  animation, elevation surface) showing current sentence text, position x/y,
+  prev/play-pause/next/stop, and a speed chip (0.5–3x).
 - Keep-screen-on honored while playing (preference, default true).
 - State surfaced through `ReaderViewModel.State.ttsState` so existing Compose
   plumbing works unchanged.
@@ -277,6 +335,9 @@ reader can listen hands-free.
 ### 3.4 Success criteria (measurable)
 
 TTS v1 is production-ready when ALL of the following hold:
+*(Status: MET — all criteria verified and recorded in `docs/memory.md`:
+suites green, device script steps 1–15 executed + user-confirmed 2026-08-28,
+Phase 9 leak/battery/latency measurements 2026-08-29.)*
 
 1. `./gradlew :domain:test` passes including new `SentenceSegmenterTest` and
    `TtsAdvancePolicyTest` covering: multi-sentence bubbles, remainder fragments,
@@ -289,7 +350,8 @@ TTS v1 is production-ready when ALL of the following hold:
    (cached-first path), an uncached page (scan-on-demand path), and a webtoon
    chapter; verify play/pause/resume, prev/next sentence, swipe-away arbitration
    (user navigation wins), page turn at last sentence, chapter transition,
-   end-of-content stop, missing-Japanese-voice error, rate/pitch changes take effect.
+   end-of-content stop, rate/pitch changes take effect. (The
+   missing-Japanese-voice branch was removed by the 2026-08-25 EN pivot.)
 4. Lifecycle matrix verified: onStop pauses; rotation continues; finish() shuts
    down the engine with no leaked callbacks (no `Exception` in logcat after exit);
    audio-focus transient loss pauses and regain resumes.
@@ -303,12 +365,15 @@ TTS v1 is production-ready when ALL of the following hold:
 
 - **Existing (do not regress)**: everything in §2. Any change to reader/OCR
   behavior requires explicit justification in `docs/memory.md` before proceeding.
-- **TTS (v1)**: F1–F8 above.
-- **Future (explicitly out of v1 scope)**:
+- **TTS (v1)**: F1–F8 above — shipped, incl. speech pipeline + exclusion
+  rules + voice profiles + 3x rate (§2.8).
+- **Future (explicitly remaining backlog — Phase 10B)**:
   - Foreground-service background playback + MediaSession + notification controls.
-  - Explicit voice picker UI — **landed in Phase 10A** (see §6); per-language
-    voice memory still future.
-  - Cloud TTS providers, local neural TTS engines (new `TtsEngine` impls).
+  - Cloud TTS providers, local neural TTS engines, downloadable AI voices
+    (new `TtsEngine` impls via Injekt swap).
+  - Expressive narration (provider SSML/prosody controls — never fake via
+    random pitch).
+  - Per-voice rate/pitch tuning beyond the global pair + voice profiles.
   - On-image bbox highlighting of the currently spoken region.
   - Audio caching for high-latency cloud engines.
   - Porting Glens-style reading-order sort into the local Legacy/Fast scan path
@@ -327,8 +392,9 @@ TTS v1 is production-ready when ALL of the following hold:
 
 ## 6. Phase 10A — Advanced system TTS voice configuration
 
-**Status: IN_PROGRESS** (code complete, gates green 2026-08-30; device
-verification pending — not marked complete until the on-device pass runs).
+**Status: COMPLETED** (code complete + gates green 2026-08-30; device pass
+user-confirmed 2026-08-31 on build 0.5.0-8250; released in v0.5.x; voice-picker
+search follow-up also landed).
 
 **Goal:** let users choose WHICH system TTS engine, voice, and language reads
 their manga, calibrate rate/pitch, and audition the result with a preview —
@@ -346,9 +412,13 @@ while reader playback behavior stays identical to v1.
 - **Voice selection**: per-engine voice list (`pref_tts_voice_name`), filtered
   to the selected language; selecting a voice live re-applies it via an
   initialize call on the running instance.
-- **Voice calibration**: rate + pitch sliders (50–200 %) reusing the single
-  global `pref_tts_speech_rate` / `pref_tts_pitch` pair from v1 — one pair for
+- **Voice calibration**: rate + pitch sliders (rate extended to 50–300 % in the
+  2026-09 set; pitch 50–200 %) reusing the single global
+  `pref_tts_speech_rate` / `pref_tts_pitch` pair from v1 — one pair for
   all voices (deliberate; see 6.4).
+- **Voice profiles** (2026-09-01 addition): named snapshots of
+  engine+voice+language+rate+pitch, saved/applied/deleted in the same screen;
+  active profile highlighted.
 - **Preview**: plays a hardcoded sample ("Hello. This is a preview of the
   selected reading voice.") with the CURRENT rate/pitch/voice; a second tap
   stops it.
@@ -388,8 +458,9 @@ playback step (engine re-reads fresh prefs on every initialize).
 
 ### 6.4 Deferred to Phase 10B (backlog)
 
-- Per-voice rate/pitch profiles (rate/pitch stay one global pair; voice-
-  specific overrides only if a future need fits cleanly).
+- Per-voice rate/pitch tuning beyond the named voice-profile snapshots that
+  landed 2026-09-01 (profiles store a rate/pitch pair each; live per-voice
+  overrides remain future).
 - Cloud/neural TTS providers — requires credentials, billing/cost, network,
   privacy, streaming/downloaded-audio, caching, and latency-management
   design; new `TtsEngine` impls via Injekt swap, reader untouched.

@@ -19,6 +19,11 @@ Yomihon inherits Mihon's **Material 3** design language, rendered through
   rather than inventing new primitives.
 - Reader UI is overlay-based and auto-hiding (menus toggle, bottom pills slide in
   for transient state like `OcrLoadingIndicator`).
+- Floating pill language: since the 2026-09 UI modernization set, the bottom
+  navigation bar is a floating elevated pill (`RoundedCornerShape(28.dp)`,
+  `surfaceContainer`), and the TTS playback bar is a rounded floating pill
+  rather than a full-width strip — elevated, rounded surfaces at the bottom
+  edge are the current pattern for both chrome and reader overlays.
 
 New TTS UI must feel native to this system: a compact bottom pill in the reader,
 settings rows/sliders using existing settings item specs.
@@ -45,7 +50,7 @@ Token mapping for TTS components (no new colors unless a proven need appears):
 | Primary / accent | `colorScheme.primary` |
 | Secondary | `colorScheme.secondary` |
 | Background | `colorScheme.background` |
-| Surface (bars/pills) | `colorScheme.surfaceContainer` (matches `OcrLoadingIndicator`) |
+| Surface (bars/pills) | `colorScheme.surfaceContainer` (matches `OcrLoadingIndicator`); floating pills use `surfaceColorAtElevation(3.dp)` with slight alpha |
 | Text | `colorScheme.onSurface` |
 | Muted text | `colorScheme.onSurfaceVariant` |
 | Success | `colorScheme.primary` (checkmark affordance); avoid new greens |
@@ -93,9 +98,13 @@ Material 3 shape tokens from the theme:
 - Cards/sheets: `AdaptiveSheet` (presentation-core) handles bottom-sheet radius;
   dialogs use M3 defaults.
 - Buttons: M3 defaults (`IconButton` for bar actions).
-- Pills/bars: rectangular fill of `surfaceContainer` spanning full width
-  (reader bottom overlays are full-width bars, not floating rounded chips).
-- No custom corner radii in feature composables.
+- Pills/bars: the bottom navigation bar and the TTS playback pill are FLOATING
+  rounded pills (`RoundedCornerShape(28.dp)`, elevated shadow, inset from screen
+  edges; playback pill `fillMaxWidth(0.92f)` + `widthIn(max = 560.dp)`).
+  `OcrLoadingIndicator` remains a full-width `surfaceContainer` strip — the
+  two families coexist: transient loading strips are full-width; interactive
+  floating controls are rounded pills.
+- No custom corner radii in feature composables beyond these shared shapes.
 
 ## 7. Icons
 
@@ -115,12 +124,16 @@ Placement mirrors established reader patterns:
 
 - **Entry**: bottom-bar icon button in `ReaderBottomBar`, threaded exactly like
   `onClickOcr`.
-- **Playback pill** (`TtsPlaybackBar`): full-width bottom bar above the bottom
-  bar area, `Alignment.BottomCenter`, AnimatedVisibility slide-up/fade — visually
-  a sibling of `OcrLoadingIndicator`. Contents:
+- **Playback pill** (`TtsPlaybackBar`): floating rounded pill
+  (`RoundedCornerShape(28.dp)`, elevation shadow, `fillMaxWidth(0.92f)`,
+  `widthIn(max = 560.dp)`), `Alignment.BottomCenter`, AnimatedVisibility
+  slide-up/fade; rendered BEFORE the dialog block in the reader overlay so all
+  dialogs/overlays draw above it. Contents:
   - Current sentence text (single line, ellipsize, `bodyLarge`)
   - Position indicator "x/y" (`labelMedium`)
   - Controls row: previous | play/pause | next | stop (`IconButton`s)
+  - Speed chip ("1x" label) with `DropdownMenu` (0.5–3x) writing the shared
+    speech-rate pref; applied live by the controller
   - Preparing/LoadingPage states show a small `CircularProgressIndicator`
     (20 dp, stroke 2 dp) instead of controls where applicable
   - Error state: message + retry action
@@ -128,7 +141,8 @@ Placement mirrors established reader patterns:
   loading bar family; it hides with menus when appropriate and always yields to
   page interaction (controls are tap targets only).
 - v1 has NO on-image highlighting (approved scope decision); current-sentence
-  feedback is textual in the pill only.
+  feedback is textual in the pill only (webtoon auto-scroll to the spoken
+  region is navigational, not a highlight).
 
 ## 9. Accessibility
 
@@ -147,17 +161,21 @@ Placement mirrors established reader patterns:
 
 - Reuse existing patterns; no bespoke animation systems:
   - Bars appear/disappear with `fadeIn()+slideInVertically` /
-    `fadeOut()+slideOutVertically` (OcrLoadingIndicator precedent).
-  - Standard M3 ripple/pressed states on controls.
+    `fadeOut()+slideOutVertically` (OcrLoadingIndicator precedent; the playback
+    pill slides half its height).
+  - Standard M3 ripple/pressed states on controls; `animateContentSize` for
+    expand/collapse (OCR exclusion rule rows).
 - No looping animations while playing (progress is conveyed by text position);
   spinner only during Preparing/LoadingPage.
 - Respect system animator duration scale implicitly (Compose defaults).
 
 ## 11. Responsive behavior
 
-- Phone portrait: pill spans width above bottom bar; controls centered.
-- Phone landscape / tablets: same full-width pill; reader already adapts app bars
-  (`ChapterNavigator` rails); no separate tablet layout for the pill.
+- Phone portrait: pill spans ~92% width (max 560 dp) above the bottom bar;
+  controls centered.
+- Phone landscape / tablets: same floating pill, width-capped; reader already
+  adapts app bars (`ChapterNavigator` rails); no separate tablet layout for
+  the pill.
 - Dual-page/split pages: pill reflects the primary visible page's queue; worst
   case a one-tick stall on InsertPage transitions (accepted in root architect.md).
 
@@ -192,10 +210,13 @@ search. Composed of existing `Preference` components (`PreferenceGroup`,
   = existing `action_search` string) sits above the list and case-insensitively
   matches entry labels — engines expose hundreds of voices; other pickers
   unchanged (`searchable` defaults false on `BasicListPreference`).
-- **Group 2 — Voice calibration**: rate + pitch sliders (50–200 %, reusing the
-  global `pref_tts_speech_rate`/`pref_tts_pitch` keys), preview row showing a
-  small 2dp-stroke `CircularProgressIndicator` widget while the sample plays;
-  tapping again stops it.
+- **Group 2 — Voice calibration**: rate slider (50–300 %) + pitch slider
+  (50–200 %, reusing the global `pref_tts_speech_rate`/`pref_tts_pitch` keys),
+  preview row showing a small 2dp-stroke `CircularProgressIndicator` widget
+  while the sample plays; tapping again stops it.
+- **Voice profiles group**: named snapshot rows (apply + delete icon buttons,
+  active-profile highlight) with a save row + name dialog (default name
+  "N% · voice").
 - **Group 3 — Advanced**: engine info row (label + voice count, no onClick),
   "Available voices: %d" info row, reset action + confirmation toast.
 - **Voice metadata labels — API facts only**: quality ≥ 400 → "high quality",
@@ -203,7 +224,7 @@ search. Composed of existing `Preference` components (`PreferenceGroup`,
   No invented quality tiers; no display of raw numeric values.
 - **Locale display names**: `Locale.forLanguageTag(tag).getDisplayName()` in
   picker entries; blank display name falls back to the raw tag.
-- **Reader tab stays minimal**: rate slider + auto page turn / auto next
-  chapter / keep-screen-on checkboxes + one "Advanced voice settings" row
-  linking to the full screen (pitch slider relocated here from v1's reader
-  tab — one obvious home for calibration).
+- **Reader tab stays minimal**: rate slider (50–300 %) + auto page turn /
+  auto next chapter / keep-screen-on checkboxes + one "Advanced voice
+  settings" row linking to the full screen (pitch slider relocated here from
+  v1's reader tab — one obvious home for calibration).

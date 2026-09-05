@@ -1,18 +1,21 @@
 package eu.kanade.tachiyomi.ui.feed
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Feed
+import androidx.compose.animation.graphics.res.animatedVectorResource
+import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
+import androidx.compose.animation.graphics.vector.AnimatedImageVector
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalContext
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import eu.kanade.presentation.feed.FeedScreen
+import eu.kanade.presentation.feed.ManageFeedsScreen
 import eu.kanade.presentation.util.Tab
+import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import tachiyomi.i18n.MR
@@ -22,11 +25,15 @@ data object FeedTab : Tab {
 
     override val options: TabOptions
         @Composable
-        get() = TabOptions(
-            index = 5u,
-            title = stringResource(MR.strings.label_feed),
-            icon = rememberVectorPainter(Icons.Outlined.Feed),
-        )
+        get() {
+            val isSelected = LocalTabNavigator.current.current.key == key
+            val image = AnimatedImageVector.animatedVectorResource(R.drawable.anim_feed_enter)
+            return TabOptions(
+                index = 4u,
+                title = stringResource(MR.strings.label_feed),
+                icon = rememberAnimatedVectorPainter(image, isSelected),
+            )
+        }
 
     @Composable
     override fun Content() {
@@ -38,11 +45,10 @@ data object FeedTab : Tab {
             state = state,
             onMangaClick = { mangaId -> navigator.push(MangaScreen(mangaId, true)) },
             onAddFeedClick = { screenModel.showAddDialog() },
-            onDeleteFeedClick = { screenModel.deleteFeed(it) },
-            onToggleFeed = { feed, enabled -> screenModel.setFeedEnabled(feed, enabled) },
-            onMoveFeedUp = { screenModel.moveFeedUp(it) },
-            onMoveFeedDown = { screenModel.moveFeedDown(it) },
+            onManageFeedsClick = { navigator.push(ManageFeedsScreen()) },
             onAddFeedConfirm = { sourceId, listing -> screenModel.addFeed(sourceId, listing) },
+            onSelectSource = { screenModel.selectSource(it) },
+            onSelectListing = { screenModel.selectListing(it) },
             onDismissAddDialog = { screenModel.dismissAddDialog() },
         )
 

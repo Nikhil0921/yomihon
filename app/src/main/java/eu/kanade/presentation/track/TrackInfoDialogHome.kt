@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
@@ -221,8 +220,7 @@ private fun TrackInfoItem(
                 .padding(top = 12.dp)
                 .clip(MaterialTheme.shapes.medium)
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                .padding(8.dp)
-                .clip(RoundedCornerShape(6.dp)),
+                .padding(8.dp),
         ) {
             Column {
                 Row(modifier = Modifier.height(IntrinsicSize.Min)) {

@@ -6,7 +6,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
@@ -14,6 +13,7 @@ import androidx.compose.ui.semantics.Role
 import coil3.compose.AsyncImage
 import eu.kanade.presentation.util.rememberResourceBitmapPainter
 import eu.kanade.tachiyomi.R
+import tachiyomi.presentation.core.components.material.CoverPlaceholderColor
 
 enum class MangaCover(val ratio: Float) {
     Square(1f / 1f),
@@ -50,5 +50,3 @@ enum class MangaCover(val ratio: Float) {
         )
     }
 }
-
-private val CoverPlaceholderColor = Color(0x1F888888)

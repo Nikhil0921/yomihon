@@ -57,6 +57,8 @@ object SettingsAppearanceScreen : SearchableSettings {
         val amoledPref = uiPreferences.themeDarkAmoled
         val amoled by amoledPref.collectAsState()
 
+        val translucentPref = uiPreferences.translucentTheme
+
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pref_category_theme),
             preferenceItems = listOf(
@@ -87,6 +89,11 @@ object SettingsAppearanceScreen : SearchableSettings {
                         (context as? Activity)?.let { ActivityCompat.recreate(it) }
                         true
                     },
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = translucentPref,
+                    title = stringResource(MR.strings.pref_theme_translucent),
+                    subtitle = stringResource(MR.strings.pref_theme_translucent_summary),
                 ),
             ),
         )

@@ -49,6 +49,7 @@ import eu.kanade.tachiyomi.ui.reader.tts.TtsPhase
 import eu.kanade.tachiyomi.ui.reader.tts.TtsPlaybackState
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.theme.asChromeContainer
 
 private val pillShape = RoundedCornerShape(28.dp)
 
@@ -85,7 +86,8 @@ fun TtsPlaybackBar(
                 .background(
                     MaterialTheme.colorScheme
                         .surfaceColorAtElevation(3.dp)
-                        .copy(alpha = if (isSystemInDarkTheme()) 0.9f else 0.95f),
+                        .copy(alpha = if (isSystemInDarkTheme()) 0.9f else 0.95f)
+                        .asChromeContainer(),
                 )
                 .padding(horizontal = 16.dp, vertical = 4.dp),
         ) {

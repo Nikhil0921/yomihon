@@ -39,4 +39,6 @@ interface OcrExclusionZoneRepository {
     suspend fun delete(id: Long)
 
     suspend fun setEnabled(id: Long, enabled: Boolean)
+
+    suspend fun updateMatchText(id: Long, matchText: String)
 }

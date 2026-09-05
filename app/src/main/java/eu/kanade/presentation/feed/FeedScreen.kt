@@ -1,7 +1,9 @@
 package eu.kanade.presentation.feed
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -12,22 +14,23 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.ArrowDownward
-import androidx.compose.material.icons.outlined.ArrowUpward
-import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,11 +38,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
-import cafe.adriel.voyager.navigator.LocalNavigator
-import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.domain.feed.model.FeedItem
 import eu.kanade.domain.feed.model.FeedListing
+import eu.kanade.presentation.components.AppBar
+import eu.kanade.presentation.components.AppBarActions
+import eu.kanade.presentation.library.components.CommonMangaItemDefaults
 import eu.kanade.presentation.library.components.MangaComfortableGridItem
 import eu.kanade.tachiyomi.ui.feed.FeedScreenModel
 import eu.kanade.tachiyomi.ui.feed.FeedSectionResult
@@ -47,34 +52,50 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.asMangaCover
 import tachiyomi.domain.source.model.Source
 import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.components.ListGroupHeader
 import tachiyomi.presentation.core.components.material.Scaffold
+import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.screens.EmptyScreen
+import tachiyomi.presentation.core.screens.EmptyScreenAction
 import tachiyomi.presentation.core.screens.LoadingScreen
+import tachiyomi.presentation.core.theme.header
 
 @Composable
 fun FeedScreen(
     state: FeedScreenModel.State,
     onMangaClick: (Long) -> Unit,
     onAddFeedClick: () -> Unit,
-    onDeleteFeedClick: (FeedItem) -> Unit,
-    onToggleFeed: (FeedItem, Boolean) -> Unit,
-    onMoveFeedUp: (FeedItem) -> Unit,
-    onMoveFeedDown: (FeedItem) -> Unit,
+    onManageFeedsClick: () -> Unit,
     onAddFeedConfirm: (Long, FeedListing) -> Unit,
+    onSelectSource: (Long?) -> Unit,
+    onSelectListing: (FeedListing?) -> Unit,
     onDismissAddDialog: () -> Unit,
 ) {
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
+
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(MR.strings.label_feed)) },
+            AppBar(
+                title = stringResource(MR.strings.label_feed),
                 actions = {
-                    IconButton(onClick = onAddFeedClick) {
-                        Icon(
-                            imageVector = Icons.Outlined.Add,
-                            contentDescription = stringResource(MR.strings.feed_add),
-                        )
-                    }
+                    AppBarActions(
+                        listOf(
+                            AppBar.Action(
+                                title = stringResource(MR.strings.feed_manage),
+                                icon = Icons.Outlined.Tune,
+                                onClick = onManageFeedsClick,
+                            ),
+                            AppBar.Action(
+                                title = stringResource(MR.strings.feed_add),
+                                icon = Icons.Outlined.Add,
+                                onClick = onAddFeedClick,
+                            ),
+                        ),
+                    )
                 },
+                scrollBehavior = scrollBehavior,
             )
         },
     ) { padding ->
@@ -83,40 +104,70 @@ fun FeedScreen(
             return@Scaffold
         }
         if (state.feeds.isEmpty()) {
-            FeedEmptyScreen(Modifier.padding(padding), onAddFeedClick)
+            EmptyScreen(
+                stringRes = MR.strings.feed_empty,
+                modifier = Modifier.padding(padding),
+                actions = listOf(
+                    EmptyScreenAction(
+                        stringRes = MR.strings.feed_add,
+                        icon = Icons.Outlined.Add,
+                        onClick = onAddFeedClick,
+                    ),
+                ),
+            )
             return@Scaffold
         }
 
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(96.dp),
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            state.feeds.forEach { feed ->
-                item(span = {
-                    GridItemSpan(maxLineSpan)
-                }) { FeedHeader(feed, state, onDeleteFeedClick, onToggleFeed, onMoveFeedUp, onMoveFeedDown) }
-                when (val section = state.sections[feed]) {
-                    is FeedSectionResult.Success -> items(section.mangas) { manga ->
-                        MangaComfortableGridItem(
-                            coverData = manga.asMangaCover(),
-                            title = manga.title,
-                            onClick = { onMangaClick(manga.id) },
-                            onLongClick = { },
-                        )
+        Column(modifier = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding())) {
+            FeedFilterBar(
+                state = state,
+                onSelectSource = onSelectSource,
+                onSelectListing = onSelectListing,
+            )
+            val bottom = padding.calculateBottomPadding()
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(96.dp),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 8.dp, end = 8.dp, bottom = bottom),
+                verticalArrangement = Arrangement.spacedBy(CommonMangaItemDefaults.GridVerticalSpacer),
+                horizontalArrangement = Arrangement.spacedBy(CommonMangaItemDefaults.GridHorizontalSpacer),
+            ) {
+                state.visibleFeeds.forEach { feed ->
+                    item(span = { GridItemSpan(maxLineSpan) }, contentType = { "feed_header" }) {
+                        FeedHeader(feed, state)
                     }
-                    else -> item(span = { GridItemSpan(maxLineSpan) }) {
-                        Text(
-                            text = stringResource(
-                                when (section) {
-                                    is FeedSectionResult.Loading -> MR.strings.loading
-                                    else -> MR.strings.unknown_error
-                                },
-                            ),
-                            style = MaterialTheme.typography.bodySmall,
-                        )
+                    when (val section = state.sections[feed]) {
+                        is FeedSectionResult.Success -> items(section.mangas) { manga ->
+                            MangaComfortableGridItem(
+                                coverData = manga.asMangaCover(),
+                                title = manga.title,
+                                onClick = { onMangaClick(manga.id) },
+                                onLongClick = { },
+                            )
+                        }
+                        is FeedSectionResult.Loading -> item(
+                            span = { GridItemSpan(maxLineSpan) },
+                            contentType = { "feed_section_loading" },
+                        ) {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(MaterialTheme.padding.medium),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                CircularProgressIndicator()
+                            }
+                        }
+                        else -> item(
+                            span = { GridItemSpan(maxLineSpan) },
+                            contentType = { "feed_section_error" },
+                        ) {
+                            Text(
+                                text = (section as? FeedSectionResult.Error)?.message
+                                    ?: stringResource(MR.strings.unknown_error),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(MaterialTheme.padding.medium),
+                            )
+                        }
                     }
                 }
             }
@@ -133,24 +184,80 @@ fun FeedScreen(
 }
 
 @Composable
-private fun FeedHeader(
-    feed: FeedItem,
+private fun FeedFilterBar(
     state: FeedScreenModel.State,
-    onDeleteFeedClick: (FeedItem) -> Unit,
-    onToggleFeed: (FeedItem, Boolean) -> Unit,
-    onMoveFeedUp: (FeedItem) -> Unit,
-    onMoveFeedDown: (FeedItem) -> Unit,
+    onSelectSource: (Long?) -> Unit,
+    onSelectListing: (FeedListing?) -> Unit,
 ) {
+    val enabledFeeds = state.feeds.filter { it.enabled }
+    val feedSourceIds = enabledFeeds.map { it.sourceId }.distinct()
+    val feedSources = feedSourceIds.mapNotNull { id -> state.sources.firstOrNull { it.id == id } }
+    if (feedSources.size < 2 && state.listingOverride == null) return
+
+    Column {
+        if (feedSources.size >= 2) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = MaterialTheme.padding.medium),
+                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+            ) {
+                FilterChip(
+                    selected = state.selectedSourceId == null,
+                    onClick = { onSelectSource(null) },
+                    label = { Text(stringResource(MR.strings.feed_all_sources)) },
+                )
+                feedSources.forEach { source ->
+                    FilterChip(
+                        selected = state.selectedSourceId == source.id,
+                        onClick = { onSelectSource(source.id) },
+                        label = { Text(source.visualName) },
+                    )
+                }
+            }
+        }
+        if (enabledFeeds.map { it.listing }.distinct().size > 1) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = MaterialTheme.padding.medium, vertical = MaterialTheme.padding.small),
+                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+            ) {
+                FilterChip(
+                    selected = state.listingOverride == null,
+                    onClick = { onSelectListing(null) },
+                    label = { Text(stringResource(MR.strings.all)) },
+                )
+                FilterChip(
+                    selected = state.listingOverride == FeedListing.POPULAR,
+                    onClick = { onSelectListing(FeedListing.POPULAR) },
+                    label = { Text(stringResource(MR.strings.popular)) },
+                )
+                FilterChip(
+                    selected = state.listingOverride == FeedListing.LATEST,
+                    onClick = { onSelectListing(FeedListing.LATEST) },
+                    label = { Text(stringResource(MR.strings.latest)) },
+                )
+            }
+        }
+        HorizontalDivider()
+    }
+}
+
+@Composable
+private fun FeedHeader(feed: FeedItem, state: FeedScreenModel.State) {
     val source = state.sources.firstOrNull { it.id == feed.sourceId }
     Column {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(vertical = MaterialTheme.padding.small),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
                     text = source?.visualName ?: stringResource(MR.strings.feed_source_unavailable),
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.header,
                 )
                 Text(
                     text = stringResource(
@@ -159,32 +266,8 @@ private fun FeedHeader(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            IconButton(onClick = { onMoveFeedUp(feed) }) {
-                Icon(Icons.Outlined.ArrowUpward, contentDescription = stringResource(MR.strings.feed_move_up))
-            }
-            IconButton(onClick = { onMoveFeedDown(feed) }) {
-                Icon(Icons.Outlined.ArrowDownward, contentDescription = stringResource(MR.strings.feed_move_down))
-            }
-            Switch(checked = feed.enabled, onCheckedChange = { onToggleFeed(feed, it) })
-            IconButton(onClick = { onDeleteFeedClick(feed) }) {
-                Icon(Icons.Outlined.Delete, contentDescription = stringResource(MR.strings.action_delete))
-            }
         }
         HorizontalDivider()
-    }
-}
-
-@Composable
-private fun FeedEmptyScreen(modifier: Modifier, onAddFeedClick: () -> Unit) {
-    Column(modifier = modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.Center) {
-        Text(
-            text = stringResource(MR.strings.feed_empty),
-            style = MaterialTheme.typography.titleMedium,
-        )
-        TextButton(onClick = onAddFeedClick) {
-            Icon(Icons.Outlined.Add, contentDescription = null)
-            Text(stringResource(MR.strings.feed_add))
-        }
     }
 }
 
@@ -202,15 +285,20 @@ private fun AddFeedDialog(
         title = { Text(stringResource(MR.strings.feed_add)) },
         text = {
             Column {
-                Text(stringResource(MR.strings.feed_select_source), style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(MR.strings.feed_select_source), style = MaterialTheme.typography.header)
                 sources.forEach { source ->
+                    val selected = selectedSource?.id == source.id
                     ListItem(
                         headlineContent = { Text(source.visualName) },
                         supportingContent = { Text(source.lang) },
-                        trailingContent = if (selectedSource?.id == source.id) {
-                            { Icon(Icons.Outlined.Check, contentDescription = null) }
-                        } else {
-                            null
+                        trailingContent = {
+                            RadioButton(
+                                selected = selected,
+                                onClick = {
+                                    selectedSource = source
+                                    if (!source.supportsLatest) selectedListing = FeedListing.POPULAR
+                                },
+                            )
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -220,27 +308,21 @@ private fun AddFeedDialog(
                             },
                     )
                 }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                Text(stringResource(MR.strings.feed_select_listing), style = MaterialTheme.typography.titleSmall)
-                Row {
-                    TextButton(
+                HorizontalDivider(modifier = Modifier.padding(vertical = MaterialTheme.padding.small))
+                Text(stringResource(MR.strings.feed_select_listing), style = MaterialTheme.typography.header)
+                Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small)) {
+                    FilterChip(
+                        selected = selectedListing == FeedListing.POPULAR,
                         onClick = { selectedListing = FeedListing.POPULAR },
-                    ) {
-                        Text(
-                            stringResource(MR.strings.popular) +
-                                if (selectedListing == FeedListing.POPULAR) " ✓" else "",
-                        )
-                    }
+                        label = { Text(stringResource(MR.strings.popular)) },
+                    )
                     val latestSupported = selectedSource?.supportsLatest ?: true
-                    TextButton(
+                    FilterChip(
+                        selected = selectedListing == FeedListing.LATEST,
                         onClick = { if (latestSupported) selectedListing = FeedListing.LATEST },
                         enabled = latestSupported,
-                    ) {
-                        Text(
-                            stringResource(MR.strings.latest) +
-                                if (selectedListing == FeedListing.LATEST) " ✓" else "",
-                        )
-                    }
+                        label = { Text(stringResource(MR.strings.latest)) },
+                    )
                 }
             }
         },

@@ -5,8 +5,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -27,6 +31,7 @@ import mihon.domain.ocr.model.OcrExclusionMatchType
 import mihon.domain.ocr.model.OcrExclusionScope
 import mihon.domain.ocr.model.OcrExclusionZone
 import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.components.Badge
 import tachiyomi.presentation.core.i18n.stringResource
 
 /**
@@ -141,11 +146,16 @@ fun OcrExclusionZonesSheet(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text(ruleTypeLabel(zone), style = MaterialTheme.typography.bodyMedium)
+                        Badge(
+                            text = ruleTypeLabel(zone),
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            textColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
                         zone.matchText?.let { text ->
                             Text(
                                 text = text,
                                 style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 2.dp),
                             )
                         }
                         if (zone.matchType != OcrExclusionMatchType.WORD &&
@@ -169,8 +179,12 @@ fun OcrExclusionZonesSheet(
                         checked = zone.enabled,
                         onCheckedChange = { onToggleEnabled(zone.id, it) },
                     )
-                    TextButton(onClick = { onDelete(zone.id) }) {
-                        Text(stringResource(MR.strings.action_delete))
+                    IconButton(onClick = { onDelete(zone.id) }) {
+                        Icon(
+                            Icons.Outlined.Delete,
+                            contentDescription = stringResource(MR.strings.action_delete),
+                            tint = MaterialTheme.colorScheme.error,
+                        )
                     }
                 }
                 HorizontalDivider()

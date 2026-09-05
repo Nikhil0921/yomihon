@@ -5,9 +5,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import tachiyomi.presentation.core.components.material.padding
+import tachiyomi.presentation.core.theme.header
 
+/**
+ * The in-list section header. All list-style sections (More tab groups,
+ * Sources/Feed/History/Updates headers) converge on this style: one rank
+ * below screen titles, `Typography.header` (bodyMedium/onSurfaceVariant/
+ * semibold).
+ */
 @Composable
 fun ListGroupHeader(
     text: String,
@@ -20,8 +26,6 @@ fun ListGroupHeader(
                 horizontal = MaterialTheme.padding.medium,
                 vertical = MaterialTheme.padding.small,
             ),
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        fontWeight = FontWeight.SemiBold,
-        style = MaterialTheme.typography.bodyMedium,
+        style = MaterialTheme.typography.header,
     )
 }

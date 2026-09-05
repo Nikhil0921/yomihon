@@ -1,6 +1,7 @@
 package eu.kanade.presentation.more
 
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.automirrored.outlined.Label
@@ -14,8 +15,8 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Storage
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.vectorResource
@@ -27,6 +28,7 @@ import eu.kanade.tachiyomi.ui.more.DownloadQueueState
 import eu.kanade.tachiyomi.ui.more.OcrQueueState
 import tachiyomi.core.common.Constants
 import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.components.ListGroupHeader
 import tachiyomi.presentation.core.components.ScrollbarLazyColumn
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.pluralStringResource
@@ -60,6 +62,7 @@ fun MoreScreen(
                     iconPadding = PaddingValues(vertical = 32.dp),
                 )
             }
+            item { ListGroupHeader(stringResource(MR.strings.pref_category_general)) }
             item {
                 SwitchPreferenceWidget(
                     title = stringResource(MR.strings.label_downloaded_only),
@@ -79,7 +82,7 @@ fun MoreScreen(
                 )
             }
 
-            item { HorizontalDivider() }
+            item { ListGroupHeader(stringResource(MR.strings.pref_category_library)) }
 
             item {
                 val downloadQueueState = downloadQueueStateProvider()
@@ -175,7 +178,7 @@ fun MoreScreen(
                 )
             }
 
-            item { HorizontalDivider() }
+            item { ListGroupHeader(stringResource(MR.strings.label_settings)) }
 
             item {
                 TextPreferenceWidget(

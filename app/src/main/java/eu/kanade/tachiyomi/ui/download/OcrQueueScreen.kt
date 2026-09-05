@@ -4,7 +4,6 @@ import android.view.LayoutInflater
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -56,6 +55,7 @@ import mihon.domain.ocr.service.OcrPreferences
 import mihon.feature.ocr.titleRes
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.Pill
+import tachiyomi.presentation.core.components.material.PILL_ALPHA
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
@@ -122,12 +122,11 @@ object OcrQueueScreen : Screen() {
                                 overflow = TextOverflow.Ellipsis,
                             )
                             if (state.totalCount > 0) {
-                                val pillAlpha = if (isSystemInDarkTheme()) 0.12f else 0.08f
                                 Pill(
                                     text = state.totalCount.toString(),
                                     modifier = Modifier.padding(start = 4.dp),
                                     color = androidx.compose.material3.MaterialTheme.colorScheme.onBackground
-                                        .copy(alpha = pillAlpha),
+                                        .copy(alpha = PILL_ALPHA),
                                     fontSize = 14.sp,
                                 )
                             }

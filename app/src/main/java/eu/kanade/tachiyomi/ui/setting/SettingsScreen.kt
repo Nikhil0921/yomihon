@@ -91,8 +91,8 @@ class SettingsScreen(
     sealed class Destination(val id: Int) {
         data object About : Destination(0)
         data object DataAndStorage : Destination(1)
-        data object Dictionary : Destination(3)
         data object Tracking : Destination(2)
+        data object Dictionary : Destination(3)
         data object ReadAloud : Destination(4)
         data object OcrExclusions : Destination(5)
     }

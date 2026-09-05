@@ -114,4 +114,8 @@
         <item quantity="one">%1$d update failed</item>
         <item quantity="other">%1$d updates failed</item>
     </plurals>
+    <plurals name="continue_reading_unread">
+        <item quantity="one">%1$d unread chapter</item>
+        <item quantity="other">%1$d unread chapters</item>
+    </plurals>
 </resources>

@@ -144,5 +144,8 @@ DELETE FROM ocr_exclusion_zones WHERE _id = :id;
 setEnabled:
 UPDATE ocr_exclusion_zones SET enabled = :enabled WHERE _id = :id;
 
+updateMatchText:
+UPDATE ocr_exclusion_zones SET match_text = :matchText WHERE _id = :id;
+
 selectLastInsertedRowId:
 SELECT last_insert_rowid();

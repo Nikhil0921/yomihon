@@ -37,11 +37,11 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import eu.kanade.presentation.manga.components.MangaCover
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.BadgeGroup
 import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.theme.itemTitle
 import tachiyomi.presentation.core.util.selectedBackground
 import tachiyomi.domain.manga.model.MangaCover as MangaCoverModel
 
@@ -276,12 +276,10 @@ private fun GridItemTitle(
     Text(
         modifier = modifier,
         text = title,
-        fontSize = 12.sp,
-        lineHeight = 18.sp,
         minLines = minLines,
         maxLines = maxLines,
         overflow = TextOverflow.Ellipsis,
-        style = style,
+        style = style.merge(MaterialTheme.typography.itemTitle),
     )
 }
 

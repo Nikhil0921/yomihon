@@ -40,7 +40,15 @@ class FeedScreenModel(
         val sections: Map<FeedItem, FeedSectionResult> = emptyMap(),
         val sources: List<tachiyomi.domain.source.model.Source> = emptyList(),
         val showAddDialog: Boolean = false,
-    )
+        val selectedSourceId: Long? = null,
+        val listingOverride: FeedListing? = null,
+    ) {
+        val visibleFeeds: List<FeedItem>
+            get() = feeds.filter { feed ->
+                (selectedSourceId == null || feed.sourceId == selectedSourceId) &&
+                    (listingOverride == null || feed.listing == listingOverride)
+            }
+    }
 
     init {
         screenModelScope.launch {
@@ -101,6 +109,14 @@ class FeedScreenModel(
 
     fun dismissAddDialog() {
         mutableState.update { it.copy(showAddDialog = false) }
+    }
+
+    fun selectSource(sourceId: Long?) {
+        mutableState.update { it.copy(selectedSourceId = sourceId) }
+    }
+
+    fun selectListing(listing: FeedListing?) {
+        mutableState.update { it.copy(listingOverride = listing) }
     }
 
     fun addFeed(sourceId: Long, listing: FeedListing) {

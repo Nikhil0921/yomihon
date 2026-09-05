@@ -205,7 +205,7 @@ fun SearchBar(
         placeholder = { Text(stringResource(MR.strings.action_search)) },
         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
         singleLine = true,
-        textStyle = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp),
+        textStyle = MaterialTheme.typography.bodyLarge,
         shape = RoundedCornerShape(12.dp),
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { onSearch(query) }),

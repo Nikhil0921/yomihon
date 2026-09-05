@@ -54,7 +54,6 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.content.getSystemService
-import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.Insets
 import androidx.core.net.toUri
 import androidx.core.transition.doOnEnd
@@ -64,7 +63,6 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
-import com.google.android.material.elevation.SurfaceColors
 import com.google.android.material.transition.platform.MaterialContainerTransform
 import com.hippo.unifile.UniFile
 import dev.icerock.moko.resources.StringResource
@@ -117,7 +115,6 @@ import eu.kanade.tachiyomi.ui.reader.viewer.ReaderOcrRegionSelection
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderProgressIndicator
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderSelectionCapture
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderSelectionRegion
-import eu.kanade.tachiyomi.ui.reader.viewer.pager.R2LPagerViewer
 import eu.kanade.tachiyomi.ui.reader.viewer.queryRangeToDisplayRange
 import eu.kanade.tachiyomi.ui.reader.viewer.searchTextForOffset
 import eu.kanade.tachiyomi.ui.webview.WebViewActivity
@@ -300,7 +297,6 @@ class ReaderActivity : BaseActivity() {
         binding = ReaderActivityBinding.inflate(layoutInflater)
         setContentView(binding.root)
         binding.setComposeOverlay()
-
         if (viewModel.needsInit()) {
             val manga = intent.extras?.getLong("manga", -1) ?: -1L
             val chapter = intent.extras?.getLong("chapter", -1) ?: -1L
@@ -414,120 +410,6 @@ class ReaderActivity : BaseActivity() {
                 }
             }
             .launchIn(lifecycleScope)
-    }
-
-    private fun ReaderActivityBinding.setComposeOverlay(): Unit = composeOverlay.setComposeContent {
-        val state by viewModel.state.collectAsState()
-        val showPageNumber by readerPreferences.showPageNumber.collectAsState()
-        val settingsScreenModel = remember {
-            ReaderSettingsScreenModel(
-                readerState = viewModel.state,
-                onChangeReadingMode = viewModel::setMangaReadingMode,
-                onChangeOrientation = viewModel::setMangaOrientationType,
-            )
-        }
-        DisposableEffect(Unit) {
-            onDispose {
-                settingsScreenModel.ioCoroutineScope.cancel()
-            }
-        }
-
-        Box(modifier = Modifier.fillMaxSize()) {
-            if (!state.menuVisible && showPageNumber) {
-                ReaderPageIndicator(
-                    currentPage = state.currentPage,
-                    totalPages = state.totalPages,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .navigationBarsPadding(),
-                )
-            }
-
-            ContentOverlay(state = state)
-
-            AppBars(state = state)
-        }
-
-        val onDismissRequest = viewModel::closeDialog
-        when (val dialog = state.dialog) {
-            is ReaderViewModel.Dialog.Loading -> {
-                AlertDialog(
-                    onDismissRequest = {},
-                    confirmButton = {},
-                    text = {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            CircularProgressIndicator()
-                            Text(stringResource(MR.strings.loading))
-                        }
-                    },
-                )
-            }
-            is ReaderViewModel.Dialog.Settings -> {
-                ReaderSettingsDialog(
-                    onDismissRequest = onDismissRequest,
-                    onShowMenus = { setMenuVisibility(true) },
-                    onHideMenus = { setMenuVisibility(false) },
-                    onOpenVoiceSettings = {
-                        viewModel.closeDialog()
-                        startActivity(
-                            Intent(this@ReaderActivity, MainActivity::class.java).apply {
-                                action = Constants.SHORTCUT_VOICE_SETTINGS
-                                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                            },
-                        )
-                    },
-                    onAddExclusionZone = {
-                        viewModel.closeDialog()
-                        enterExclusionZoneSelectionMode()
-                    },
-                    onManageExclusionZones = {
-                        viewModel.closeDialog()
-                        showExclusionZonesSheet = true
-                    },
-                    screenModel = settingsScreenModel,
-                )
-            }
-            is ReaderViewModel.Dialog.ReadingModeSelect -> {
-                ReadingModeSelectDialog(
-                    onDismissRequest = onDismissRequest,
-                    screenModel = settingsScreenModel,
-                    onChange = { stringRes ->
-                        menuToggleToast?.cancel()
-                        if (!readerPreferences.showReadingMode.get()) {
-                            menuToggleToast = toast(stringRes)
-                        }
-                    },
-                )
-            }
-            is ReaderViewModel.Dialog.OrientationModeSelect -> {
-                OrientationSelectDialog(
-                    onDismissRequest = onDismissRequest,
-                    screenModel = settingsScreenModel,
-                    onChange = { stringRes ->
-                        menuToggleToast?.cancel()
-                        menuToggleToast = toast(stringRes)
-                    },
-                )
-            }
-            is ReaderViewModel.Dialog.PageActions -> {
-                ReaderPageActionsDialog(
-                    onDismissRequest = onDismissRequest,
-                    onSetAsCover = viewModel::setAsCover,
-                    onShare = viewModel::shareImage,
-                    onSave = viewModel::saveImage,
-                )
-            }
-            is ReaderViewModel.Dialog.ExclusionZoneScope -> {
-                ExclusionZoneScopeDialog(
-                    onDismissRequest = onDismissRequest,
-                    onScopeSelected = viewModel::saveExclusionZone,
-                )
-            }
-            is ReaderViewModel.Dialog.OcrResult, null -> {}
-        }
     }
 
     /**
@@ -684,202 +566,218 @@ class ReaderActivity : BaseActivity() {
         return super.dispatchTouchEvent(ev)
     }
 
-    @Composable
-    private fun ContentOverlay(state: ReaderViewModel.State) {
-        val flashOnPageChange by readerPreferences.flashOnPageChange.collectAsState()
+    /**
+     * The single live Compose composition tree for the reader overlay.
+     *
+     * Inline z-order contract (Box child order, bottom → top):
+     * 1. ReaderPageIndicator (page number, above content, below pills)
+     * 2. ReaderContentOverlay (brightness/color filter, full-bleed)
+     * 3. ReaderAppBars (top bar + bottom tray + vertical navigator)
+     * 4. OcrSelectionOverlay (drag scrim; bars hidden during selection)
+     * 5. DisplayRefreshHost (e-ink flash, transient)
+     * 6. TtsPlaybackBar (floating pill; clearance above tray/navBars/cutout)
+     * 7. Dialogs (window-level, always above inline content)
+     * 8. OcrLoadingIndicator (topmost inline; same clearance as pill)
+     */
+    private fun ReaderActivityBinding.setComposeOverlay(): Unit = composeOverlay.setComposeContent {
+        val state by viewModel.state.collectAsState()
+        val showPageNumber by readerPreferences.showPageNumber.collectAsState()
+        val dimOcrBackground by dictionaryPreferences.ocrResultDimBackground().collectAsState()
+        val ocrResultPresentation by dictionaryPreferences.ocrResultPresentation().collectAsState()
+        val ocrPopupWidthDp by dictionaryPreferences.ocrResultPopupWidthDp().collectAsState()
+        val ocrPopupHeightDp by dictionaryPreferences.ocrResultPopupHeightDp().collectAsState()
+        val ocrPopupScalePercent by dictionaryPreferences.ocrResultPopupScalePercent().collectAsState()
+        val settingsScreenModel = remember {
+            ReaderSettingsScreenModel(
+                readerState = viewModel.state,
+                onChangeReadingMode = viewModel::setMangaReadingMode,
+                onChangeOrientation = viewModel::setMangaOrientationType,
+            )
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                settingsScreenModel.ioCoroutineScope.cancel()
+            }
+        }
+        val speechRatePref by settingsScreenModel.ttsPreferences.ttsSpeechRate().collectAsState()
 
-        val colorOverlayEnabled by readerPreferences.colorFilter.collectAsState()
-        val colorOverlay by readerPreferences.colorFilterValue.collectAsState()
-        val colorOverlayMode by readerPreferences.colorFilterMode.collectAsState()
-        val colorOverlayBlendMode = remember(colorOverlayMode) {
-            ReaderPreferences.ColorFilterMode.getOrNull(colorOverlayMode)?.second
+        // Initialize dictionary search model
+        LaunchedEffect(Unit) {
+            dictionarySearchScreenModel.refreshDictionaries()
         }
 
-        binding.composeOverlay.setComposeContent {
-            val state by viewModel.state.collectAsState()
-            val dimOcrBackground by dictionaryPreferences.ocrResultDimBackground().collectAsState()
-            val ocrResultPresentation by dictionaryPreferences.ocrResultPresentation().collectAsState()
-            val ocrPopupWidthDp by dictionaryPreferences.ocrResultPopupWidthDp().collectAsState()
-            val ocrPopupHeightDp by dictionaryPreferences.ocrResultPopupHeightDp().collectAsState()
-            val ocrPopupScalePercent by dictionaryPreferences.ocrResultPopupScalePercent().collectAsState()
-            val settingsScreenModel = remember {
-                ReaderSettingsScreenModel(
-                    readerState = viewModel.state,
-                    onChangeReadingMode = viewModel::setMangaReadingMode,
-                    onChangeOrientation = viewModel::setMangaOrientationType,
-                )
-            }
-            DisposableEffect(Unit) {
-                onDispose {
-                    settingsScreenModel.ioCoroutineScope.cancel()
-                }
-            }
-            val speechRatePref by settingsScreenModel.ttsPreferences.ttsSpeechRate().collectAsState()
-
-            // Initialize dictionary search model
-            LaunchedEffect(Unit) {
-                dictionarySearchScreenModel.refreshDictionaries()
-            }
-
-            LaunchedEffect(Unit) {
-                dictionarySearchScreenModel.events.collectLatest { event ->
-                    when (event) {
-                        is DictionarySearchScreenModel.Event.ShowError -> {
-                            when (val payload = event.message) {
-                                is DictionarySearchScreenModel.UiMessage.Resource -> {
-                                    toast(payload.value)
-                                }
-                                is DictionarySearchScreenModel.UiMessage.Text -> {
-                                    toast(payload.value)
-                                }
+        LaunchedEffect(Unit) {
+            dictionarySearchScreenModel.events.collectLatest { event ->
+                when (event) {
+                    is DictionarySearchScreenModel.Event.ShowError -> {
+                        when (val payload = event.message) {
+                            is DictionarySearchScreenModel.UiMessage.Resource -> {
+                                toast(payload.value)
+                            }
+                            is DictionarySearchScreenModel.UiMessage.Text -> {
+                                toast(payload.value)
                             }
                         }
-                        is DictionarySearchScreenModel.Event.ShowMessage -> {
-                            when (val payload = event.message) {
-                                is DictionarySearchScreenModel.UiMessage.Resource -> {
-                                    toast(payload.value)
-                                }
-                                is DictionarySearchScreenModel.UiMessage.Text -> {
-                                    toast(payload.value)
-                                }
+                    }
+                    is DictionarySearchScreenModel.Event.ShowMessage -> {
+                        when (val payload = event.message) {
+                            is DictionarySearchScreenModel.UiMessage.Resource -> {
+                                toast(payload.value)
+                            }
+                            is DictionarySearchScreenModel.UiMessage.Text -> {
+                                toast(payload.value)
                             }
                         }
                     }
                 }
             }
+        }
 
-            if (!ifSourcesLoaded()) {
-                return@setComposeContent
-            }
+        if (!ifSourcesLoaded()) {
+            return@setComposeContent
+        }
 
-            Box(modifier = Modifier.fillMaxSize()) {
-                val isHttpSource = viewModel.getSource() is HttpSource
-                val isFullscreen by readerPreferences.fullscreen.collectAsState()
-                val flashOnPageChange by readerPreferences.flashOnPageChange.collectAsState()
-
-                val colorOverlayEnabled by readerPreferences.colorFilter.collectAsState()
-                val colorOverlay by readerPreferences.colorFilterValue.collectAsState()
-                val colorOverlayMode by readerPreferences.colorFilterMode.collectAsState()
-                val colorOverlayBlendMode = remember(colorOverlayMode) {
-                    ReaderPreferences.ColorFilterMode.getOrNull(colorOverlayMode)?.second
-                }
-
-                val cropBorderPaged by readerPreferences.cropBorders.collectAsState()
-                val cropBorderWebtoon by readerPreferences.cropBordersWebtoon.collectAsState()
-                val showOcrButton by readerPreferences.ocrTextSelectionEnabled.collectAsState()
-                val showReadAloudButton by readerPreferences.readAloudButtonEnabled.collectAsState()
-                val readingMode = ReadingMode.fromPreference(
-                    viewModel.getMangaReadingMode(resolveDefault = false),
-                )
-                val isPagerType = ReadingMode.isPagerType(readingMode.flagValue)
-                val cropEnabled = if (isPagerType) cropBorderPaged else cropBorderWebtoon
-
-                val verticalNavigator by readerPreferences.verticalNavigator.collectAsState()
-                val verticalNavigatorOnLeft by readerPreferences.verticalNavigatorOnLeft.collectAsState()
-                val rawVerticalNavigatorHeight by readerPreferences.verticalNavigatorHeight.collectAsState()
-                val verticalNavigatorHeight = remember(rawVerticalNavigatorHeight) { rawVerticalNavigatorHeight / 100f }
-
-                val chapterNavigatorType = remember(readingMode, verticalNavigator, verticalNavigatorOnLeft) {
-                    when {
-                        verticalNavigator.contains(
-                            readingMode,
-                        ) && verticalNavigatorOnLeft -> ChapterNavigatorType.VERTICAL_LEFT
-                        verticalNavigator.contains(readingMode) -> ChapterNavigatorType.VERTICAL_RIGHT
-                        readingMode == ReadingMode.RIGHT_TO_LEFT -> ChapterNavigatorType.HORIZONTAL_RTL
-                        else -> ChapterNavigatorType.HORIZONTAL_LTR
-                    }
-                }
-
-                ReaderContentOverlay(
-                    brightness = state.brightnessOverlayValue,
-                    color = colorOverlay.takeIf { colorOverlayEnabled },
-                    colorBlendMode = colorOverlayBlendMode,
-                )
-
-                ReaderAppBars(
-                    visible = state.menuVisible,
-
-                    mangaTitle = state.manga?.title,
-                    chapterTitle = state.currentChapter?.chapter?.name,
-                    navigateUp = onBackPressedDispatcher::onBackPressed,
-                    onClickTopAppBar = ::openMangaScreen,
-                    bookmarked = state.bookmarked,
-                    onToggleBookmarked = viewModel::toggleChapterBookmark,
-                    onOpenInWebView = ::openChapterInWebView.takeIf { isHttpSource },
-                    onOpenInBrowser = ::openChapterInBrowser.takeIf { isHttpSource },
-                    onShare = ::shareChapter.takeIf { isHttpSource },
-
-                    chapterNavigatorType = chapterNavigatorType,
-                    verticalNavigatorHeight = verticalNavigatorHeight,
-                    onNextChapter = ::loadNextChapter,
-                    enabledNext = state.viewerChapters?.nextChapter != null,
-                    onPreviousChapter = ::loadPreviousChapter,
-                    enabledPrevious = state.viewerChapters?.prevChapter != null,
+        Box(modifier = Modifier.fillMaxSize()) {
+            // 1. Page number indicator (above content, below pills)
+            if (!state.menuVisible && showPageNumber) {
+                ReaderPageIndicator(
                     currentPage = state.currentPage,
                     totalPages = state.totalPages,
-                    onPageIndexChange = {
-                        isScrollingThroughPages = true
-                        moveToPageIndex(it)
-                    },
-
-                    readingMode = readingMode,
-                    onClickReadingMode = viewModel::openReadingModeSelectDialog,
-                    orientation = ReaderOrientation.fromPreference(
-                        viewModel.getMangaOrientation(resolveDefault = false),
-                    ),
-                    onClickOrientation = viewModel::openOrientationModeSelectDialog,
-                    cropEnabled = cropEnabled,
-                    onClickCropBorder = {
-                        val enabled = viewModel.toggleCropBorders()
-                        menuToggleToast?.cancel()
-                        menuToggleToast = toast(if (enabled) MR.strings.on else MR.strings.off)
-                    },
-                    onClickSettings = viewModel::openSettingsDialog,
-                    onClickOcr = ::enterOcrMode,
-                    onClickReadAloud = viewModel::startReadAloud,
-                    showOcrButton = showOcrButton,
-                    showReadAloudButton = showReadAloudButton,
-                    onBottomTrayHeightChanged = { bottomTrayHeightPx = it },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding(),
                 )
+            }
 
-                // OCR selection overlay
-                if (state.ocrSelectionMode) {
-                    OcrSelectionOverlay(
-                        onCancel = ::exitOcrMode,
-                        instructionText = when (selectionAction) {
-                            SelectionAction.ProcessOcr -> AnnotatedString(stringResource(MR.strings.ocr_select_region))
-                            SelectionAction.SaveExclusionZone -> AnnotatedString(
-                                stringResource(MR.strings.ocr_exclusion_select_region),
-                            )
-                            is SelectionAction.ExportImageToAnki -> AnnotatedString(
-                                stringResource(MR.strings.anki_select_image_region),
-                            )
-                        },
-                        startPoint = ocrDragStart,
-                        endPoint = ocrDragEnd,
-                    )
-                }
+            val isHttpSource = viewModel.getSource() is HttpSource
+            val isFullscreen by readerPreferences.fullscreen.collectAsState()
+            val flashOnPageChange by readerPreferences.flashOnPageChange.collectAsState()
 
-                if (flashOnPageChange) {
-                    DisplayRefreshHost(
-                        hostState = displayRefreshHost,
-                    )
-                }
+            val colorOverlayEnabled by readerPreferences.colorFilter.collectAsState()
+            val colorOverlay by readerPreferences.colorFilterValue.collectAsState()
+            val colorOverlayMode by readerPreferences.colorFilterMode.collectAsState()
+            val colorOverlayBlendMode = remember(colorOverlayMode) {
+                ReaderPreferences.ColorFilterMode.getOrNull(colorOverlayMode)?.second
+            }
 
-                // Read-aloud floating pill (before dialogs so overlays render above it)
-                // Offset (not padding) so the animated move is placement-only, no re-measure.
-                val density = LocalDensity.current
-                val trayHeightPx = bottomTrayHeightPx
-                val navigationInsetPx = WindowInsets.navigationBars.getBottom(density)
-                val cutoutInsetPx = WindowInsets.displayCutout.getBottom(density)
-                val bottomClearancePx = with(density) {
-                    maxOf(trayHeightPx, navigationInsetPx, cutoutInsetPx) + 12.dp.roundToPx()
+            val cropBorderPaged by readerPreferences.cropBorders.collectAsState()
+            val cropBorderWebtoon by readerPreferences.cropBordersWebtoon.collectAsState()
+            val showOcrButton by readerPreferences.ocrTextSelectionEnabled.collectAsState()
+            val showReadAloudButton by readerPreferences.readAloudButtonEnabled.collectAsState()
+            val readingMode = ReadingMode.fromPreference(
+                viewModel.getMangaReadingMode(resolveDefault = false),
+            )
+            val isPagerType = ReadingMode.isPagerType(readingMode.flagValue)
+            val cropEnabled = if (isPagerType) cropBorderPaged else cropBorderWebtoon
+
+            val verticalNavigator by readerPreferences.verticalNavigator.collectAsState()
+            val verticalNavigatorOnLeft by readerPreferences.verticalNavigatorOnLeft.collectAsState()
+            val rawVerticalNavigatorHeight by readerPreferences.verticalNavigatorHeight.collectAsState()
+            val verticalNavigatorHeight = remember(rawVerticalNavigatorHeight) { rawVerticalNavigatorHeight / 100f }
+
+            val chapterNavigatorType = remember(readingMode, verticalNavigator, verticalNavigatorOnLeft) {
+                when {
+                    verticalNavigator.contains(
+                        readingMode,
+                    ) && verticalNavigatorOnLeft -> ChapterNavigatorType.VERTICAL_LEFT
+                    verticalNavigator.contains(readingMode) -> ChapterNavigatorType.VERTICAL_RIGHT
+                    readingMode == ReadingMode.RIGHT_TO_LEFT -> ChapterNavigatorType.HORIZONTAL_RTL
+                    else -> ChapterNavigatorType.HORIZONTAL_LTR
                 }
-                val pillClearancePx by animateIntAsState(
-                    targetValue = bottomClearancePx,
-                    animationSpec = tween(150),
-                    label = "ttsPillClearance",
+            }
+
+            ReaderContentOverlay(
+                brightness = state.brightnessOverlayValue,
+                color = colorOverlay.takeIf { colorOverlayEnabled },
+                colorBlendMode = colorOverlayBlendMode,
+            )
+
+            ReaderAppBars(
+                visible = state.menuVisible,
+
+                mangaTitle = state.manga?.title,
+                chapterTitle = state.currentChapter?.chapter?.name,
+                navigateUp = onBackPressedDispatcher::onBackPressed,
+                onClickTopAppBar = ::openMangaScreen,
+                bookmarked = state.bookmarked,
+                onToggleBookmarked = viewModel::toggleChapterBookmark,
+                onOpenInWebView = ::openChapterInWebView.takeIf { isHttpSource },
+                onOpenInBrowser = ::openChapterInBrowser.takeIf { isHttpSource },
+                onShare = ::shareChapter.takeIf { isHttpSource },
+
+                chapterNavigatorType = chapterNavigatorType,
+                verticalNavigatorHeight = verticalNavigatorHeight,
+                onNextChapter = ::loadNextChapter,
+                enabledNext = state.viewerChapters?.nextChapter != null,
+                onPreviousChapter = ::loadPreviousChapter,
+                enabledPrevious = state.viewerChapters?.prevChapter != null,
+                currentPage = state.currentPage,
+                totalPages = state.totalPages,
+                onPageIndexChange = {
+                    isScrollingThroughPages = true
+                    moveToPageIndex(it)
+                },
+
+                readingMode = readingMode,
+                onClickReadingMode = viewModel::openReadingModeSelectDialog,
+                orientation = ReaderOrientation.fromPreference(
+                    viewModel.getMangaOrientation(resolveDefault = false),
+                ),
+                onClickOrientation = viewModel::openOrientationModeSelectDialog,
+                cropEnabled = cropEnabled,
+                onClickCropBorder = {
+                    val enabled = viewModel.toggleCropBorders()
+                    menuToggleToast?.cancel()
+                    menuToggleToast = toast(if (enabled) MR.strings.on else MR.strings.off)
+                },
+                onClickSettings = viewModel::openSettingsDialog,
+                onClickOcr = ::enterOcrMode,
+                onClickReadAloud = viewModel::startReadAloud,
+                showOcrButton = showOcrButton,
+                showReadAloudButton = showReadAloudButton,
+                onBottomTrayHeightChanged = { bottomTrayHeightPx = it },
+            )
+
+            // OCR selection overlay
+            if (state.ocrSelectionMode) {
+                OcrSelectionOverlay(
+                    onCancel = ::exitOcrMode,
+                    instructionText = when (selectionAction) {
+                        SelectionAction.ProcessOcr -> AnnotatedString(stringResource(MR.strings.ocr_select_region))
+                        SelectionAction.SaveExclusionZone -> AnnotatedString(
+                            stringResource(MR.strings.ocr_exclusion_select_region),
+                        )
+                        is SelectionAction.ExportImageToAnki -> AnnotatedString(
+                            stringResource(MR.strings.anki_select_image_region),
+                        )
+                    },
+                    startPoint = ocrDragStart,
+                    endPoint = ocrDragEnd,
                 )
+            }
+
+            if (flashOnPageChange) {
+                DisplayRefreshHost(
+                    hostState = displayRefreshHost,
+                )
+            }
+
+            // Read-aloud floating pill (before dialogs so overlays render above it).
+            // Hidden while an OCR drag selection is active (mixed-modality fix).
+            // Offset (not padding) so the animated move is placement-only, no re-measure.
+            val density = LocalDensity.current
+            val trayHeightPx = bottomTrayHeightPx
+            val navigationInsetPx = WindowInsets.navigationBars.getBottom(density)
+            val cutoutInsetPx = WindowInsets.displayCutout.getBottom(density)
+            val bottomClearancePx = with(density) {
+                maxOf(trayHeightPx, navigationInsetPx, cutoutInsetPx) + 12.dp.roundToPx()
+            }
+            val pillClearancePx by animateIntAsState(
+                targetValue = bottomClearancePx,
+                animationSpec = tween(150),
+                label = "ttsPillClearance",
+            )
+            if (!state.ocrSelectionMode) {
                 TtsPlaybackBar(
                     state = state.ttsState,
                     speechRate = speechRatePref,
@@ -893,251 +791,162 @@ class ReaderActivity : BaseActivity() {
                         .align(Alignment.BottomCenter)
                         .offset { IntOffset(x = 0, y = -pillClearancePx) },
                 )
+            }
 
-                if (showExclusionZonesSheet) {
-                    OcrExclusionZonesSheet(
-                        zones = state.exclusionZones,
-                        onDismissRequest = { showExclusionZonesSheet = false },
-                        onToggleEnabled = viewModel::setExclusionZoneEnabled,
-                        onDelete = viewModel::deleteExclusionZone,
-                    )
-                }
-
-                val onDismissRequest = viewModel::closeDialog
-                val onDismissOcrResult = ::dismissActiveOcrOverlaySession
-                when (val dialog = state.dialog) {
-                    is ReaderViewModel.Dialog.Loading -> {
-                        AlertDialog(
-                            onDismissRequest = {},
-                            confirmButton = {},
-                            text = {
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    CircularProgressIndicator()
-                                    Text(stringResource(MR.strings.loading))
-                                }
-                            },
-                        )
-                    }
-                    is ReaderViewModel.Dialog.Settings -> {
-                        ReaderSettingsDialog(
-                            onDismissRequest = onDismissRequest,
-                            onShowMenus = { setMenuVisibility(true) },
-                            onHideMenus = { setMenuVisibility(false) },
-                            onOpenVoiceSettings = {
-                                viewModel.closeDialog()
-                                startActivity(
-                                    Intent(this@ReaderActivity, MainActivity::class.java).apply {
-                                        action = Constants.SHORTCUT_VOICE_SETTINGS
-                                        addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                                    },
-                                )
-                            },
-                            onAddExclusionZone = {
-                                viewModel.closeDialog()
-                                enterExclusionZoneSelectionMode()
-                            },
-                            onManageExclusionZones = {
-                                viewModel.closeDialog()
-                                showExclusionZonesSheet = true
-                            },
-                            screenModel = settingsScreenModel,
-                        )
-                    }
-                    is ReaderViewModel.Dialog.ReadingModeSelect -> {
-                        ReadingModeSelectDialog(
-                            onDismissRequest = onDismissRequest,
-                            screenModel = settingsScreenModel,
-                            onChange = { stringRes ->
-                                menuToggleToast?.cancel()
-                                if (!readerPreferences.showReadingMode.get()) {
-                                    menuToggleToast = toast(stringRes)
-                                }
-                            },
-                        )
-                    }
-                    is ReaderViewModel.Dialog.OrientationModeSelect -> {
-                        OrientationSelectDialog(
-                            onDismissRequest = onDismissRequest,
-                            screenModel = settingsScreenModel,
-                            onChange = { stringRes ->
-                                menuToggleToast?.cancel()
-                                menuToggleToast = toast(stringRes)
-                            },
-                        )
-                    }
-                    is ReaderViewModel.Dialog.PageActions -> {
-                        ReaderPageActionsDialog(
-                            onDismissRequest = onDismissRequest,
-                            onSetAsCover = viewModel::setAsCover,
-                            onShare = viewModel::shareImage,
-                            onSave = viewModel::saveImage,
-                        )
-                    }
-                    is ReaderViewModel.Dialog.ExclusionZoneScope -> {
-                        ExclusionZoneScopeDialog(
-                            onDismissRequest = onDismissRequest,
-                            onScopeSelected = viewModel::saveExclusionZone,
-                        )
-                    }
-                    is ReaderViewModel.Dialog.OcrResult -> {
-                        val searchState by dictionarySearchScreenModel.state.collectAsState()
-                        LaunchedEffect(activeOcrOverlaySession?.selection, searchState.results?.highlightRange) {
-                            updateActiveOcrOverlayHighlight(
-                                activeOcrOverlaySession?.selection?.displayText?.let {
-                                    queryRangeToDisplayRange(it, searchState.results?.highlightRange)
-                                },
-                            )
-                        }
-                        OcrResultOverlay(
-                            onDismissRequest = onDismissOcrResult,
-                            presentation = when (dialog.origin) {
-                                ReaderViewModel.OcrResultOrigin.CachedPageTap -> ocrResultPresentation
-                                ReaderViewModel.OcrResultOrigin.ManualSelection -> OcrResultPresentation.SHEET
-                            },
-                            popupSettings = OcrResultPopupSettings(
-                                widthDp = ocrPopupWidthDp,
-                                heightDp = ocrPopupHeightDp,
-                                contentScale = ocrPopupScalePercent / 100f,
-                            ),
-                            dimBackground = dimOcrBackground,
-                            queryText = dialog.queryText,
-                            initialSearchText = dialog.initialSearchText,
-                            anchorRect = activeOcrOverlaySession?.anchorRectInDialogRoot,
-                            onCopyText = {
-                                val clipboard = getSystemService<ClipboardManager>()
-                                clipboard?.setPrimaryClip(
-                                    ClipData.newPlainText(null, searchState.query),
-                                )
-                                toast(MR.strings.action_copy_to_clipboard)
-                            },
-                            searchState = searchState,
-                            autoSearchEnabled = dictionaryPreferences.readerAutoSearchEnabled().get(),
-                            onQueryChange = dictionarySearchScreenModel::updateQuery,
-                            onSearch = dictionarySearchScreenModel::search,
-                            onTermGroupClick = { terms ->
-                                lifecycleScope.launchIO {
-                                    if (
-                                        ankiDroidPreferences.croppedImageExport().get() &&
-                                        viewModel.state.value.dialog is ReaderViewModel.Dialog.OcrResult
-                                    ) {
-                                        withUIContext {
-                                            dismissActiveOcrOverlaySession()
-                                            enterImageExportSelectionMode(terms)
-                                        }
-                                    } else {
-                                        val uri = viewModel.getCurrentPageUri()
-                                        dictionarySearchScreenModel.addGroupToAnki(terms, uri)
-                                    }
-                                }
-                            },
-                            onPlayAudioClick = dictionarySearchScreenModel::fetchAndPlayAudio,
-                        )
-                    }
-                    null -> {}
-                }
-
-                // OCR loading bar at bottom of screen
-                OcrLoadingIndicator(
-                    visible = state.isProcessingOcr,
-                    modifier = Modifier.align(Alignment.BottomCenter),
+            if (showExclusionZonesSheet) {
+                OcrExclusionZonesSheet(
+                    zones = state.exclusionZones,
+                    onDismissRequest = { showExclusionZonesSheet = false },
+                    onToggleEnabled = viewModel::setExclusionZoneEnabled,
+                    onDelete = viewModel::deleteExclusionZone,
                 )
             }
-        }
 
-        val toolbarColor = ColorUtils.setAlphaComponent(
-            SurfaceColors.SURFACE_2.getColor(this),
-            if (isNightMode()) 230 else 242, // 90% dark 95% light
-        )
-
-        if (flashOnPageChange) {
-            DisplayRefreshHost(hostState = displayRefreshHost)
-        }
-    }
-
-    @Composable
-    fun AppBars(state: ReaderViewModel.State) {
-        if (!ifSourcesLoaded()) {
-            return
-        }
-
-        val isHttpSource = viewModel.getSource() is HttpSource
-
-        val cropBorderPaged by readerPreferences.cropBorders.collectAsState()
-        val cropBorderWebtoon by readerPreferences.cropBordersWebtoon.collectAsState()
-        val showOcrButton by readerPreferences.ocrTextSelectionEnabled.collectAsState()
-        val showReadAloudButton by readerPreferences.readAloudButtonEnabled.collectAsState()
-        val isPagerType = ReadingMode.isPagerType(viewModel.getMangaReadingMode())
-        val cropEnabled = if (isPagerType) cropBorderPaged else cropBorderWebtoon
-
-        val verticalNavigatorModes by readerPreferences.verticalNavigator.collectAsState()
-        val verticalNavigator = verticalNavigatorModes.contains(
-            ReadingMode.fromPreference(viewModel.getMangaReadingMode()),
-        )
-        val verticalNavigatorOnLeft by readerPreferences.verticalNavigatorOnLeft.collectAsState()
-        val verticalNavigatorHeight by readerPreferences.verticalNavigatorHeight.collectAsState()
-
-        ReaderAppBars(
-            visible = state.menuVisible,
-
-            mangaTitle = state.manga?.title,
-            chapterTitle = state.currentChapter?.chapter?.name,
-            navigateUp = onBackPressedDispatcher::onBackPressed,
-            onClickTopAppBar = ::openMangaScreen,
-            bookmarked = state.bookmarked,
-            onToggleBookmarked = viewModel::toggleChapterBookmark,
-            onOpenInWebView = ::openChapterInWebView.takeIf { isHttpSource },
-            onOpenInBrowser = ::openChapterInBrowser.takeIf { isHttpSource },
-            onShare = ::shareChapter.takeIf { isHttpSource },
-
-            chapterNavigatorType = if (!verticalNavigator) {
-                if (state.viewer is R2LPagerViewer) {
-                    ChapterNavigatorType.HORIZONTAL_RTL
-                } else {
-                    ChapterNavigatorType.HORIZONTAL_LTR
+            val onDismissRequest = viewModel::closeDialog
+            val onDismissOcrResult = ::dismissActiveOcrOverlaySession
+            when (val dialog = state.dialog) {
+                is ReaderViewModel.Dialog.Loading -> {
+                    AlertDialog(
+                        onDismissRequest = {},
+                        confirmButton = {},
+                        text = {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                CircularProgressIndicator()
+                                Text(stringResource(MR.strings.loading))
+                            }
+                        },
+                    )
                 }
-            } else {
-                if (verticalNavigatorOnLeft) {
-                    ChapterNavigatorType.VERTICAL_LEFT
-                } else {
-                    ChapterNavigatorType.VERTICAL_RIGHT
+                is ReaderViewModel.Dialog.Settings -> {
+                    ReaderSettingsDialog(
+                        onDismissRequest = onDismissRequest,
+                        onShowMenus = { setMenuVisibility(true) },
+                        onHideMenus = { setMenuVisibility(false) },
+                        onOpenVoiceSettings = {
+                            viewModel.closeDialog()
+                            startActivity(
+                                Intent(this@ReaderActivity, MainActivity::class.java).apply {
+                                    action = Constants.SHORTCUT_VOICE_SETTINGS
+                                    addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                                },
+                            )
+                        },
+                        onAddExclusionZone = {
+                            viewModel.closeDialog()
+                            enterExclusionZoneSelectionMode()
+                        },
+                        onManageExclusionZones = {
+                            viewModel.closeDialog()
+                            showExclusionZonesSheet = true
+                        },
+                        screenModel = settingsScreenModel,
+                    )
                 }
-            },
-            verticalNavigatorHeight = verticalNavigatorHeight / 100f,
-            onNextChapter = ::loadNextChapter,
-            enabledNext = state.viewerChapters?.nextChapter != null,
-            onPreviousChapter = ::loadPreviousChapter,
-            enabledPrevious = state.viewerChapters?.prevChapter != null,
-            currentPage = state.currentPage,
-            totalPages = state.totalPages,
-            onPageIndexChange = {
-                isScrollingThroughPages = true
-                moveToPageIndex(it)
-            },
+                is ReaderViewModel.Dialog.ReadingModeSelect -> {
+                    ReadingModeSelectDialog(
+                        onDismissRequest = onDismissRequest,
+                        screenModel = settingsScreenModel,
+                        onChange = { stringRes ->
+                            menuToggleToast?.cancel()
+                            if (!readerPreferences.showReadingMode.get()) {
+                                menuToggleToast = toast(stringRes)
+                            }
+                        },
+                    )
+                }
+                is ReaderViewModel.Dialog.OrientationModeSelect -> {
+                    OrientationSelectDialog(
+                        onDismissRequest = onDismissRequest,
+                        screenModel = settingsScreenModel,
+                        onChange = { stringRes ->
+                            menuToggleToast?.cancel()
+                            menuToggleToast = toast(stringRes)
+                        },
+                    )
+                }
+                is ReaderViewModel.Dialog.PageActions -> {
+                    ReaderPageActionsDialog(
+                        onDismissRequest = onDismissRequest,
+                        onSetAsCover = viewModel::setAsCover,
+                        onShare = viewModel::shareImage,
+                        onSave = viewModel::saveImage,
+                    )
+                }
+                is ReaderViewModel.Dialog.ExclusionZoneScope -> {
+                    ExclusionZoneScopeDialog(
+                        onDismissRequest = onDismissRequest,
+                        onScopeSelected = viewModel::saveExclusionZone,
+                    )
+                }
+                is ReaderViewModel.Dialog.OcrResult -> {
+                    val searchState by dictionarySearchScreenModel.state.collectAsState()
+                    LaunchedEffect(activeOcrOverlaySession?.selection, searchState.results?.highlightRange) {
+                        updateActiveOcrOverlayHighlight(
+                            activeOcrOverlaySession?.selection?.displayText?.let {
+                                queryRangeToDisplayRange(it, searchState.results?.highlightRange)
+                            },
+                        )
+                    }
+                    OcrResultOverlay(
+                        onDismissRequest = onDismissOcrResult,
+                        presentation = when (dialog.origin) {
+                            ReaderViewModel.OcrResultOrigin.CachedPageTap -> ocrResultPresentation
+                            ReaderViewModel.OcrResultOrigin.ManualSelection -> OcrResultPresentation.SHEET
+                        },
+                        popupSettings = OcrResultPopupSettings(
+                            widthDp = ocrPopupWidthDp,
+                            heightDp = ocrPopupHeightDp,
+                            contentScale = ocrPopupScalePercent / 100f,
+                        ),
+                        dimBackground = dimOcrBackground,
+                        queryText = dialog.queryText,
+                        initialSearchText = dialog.initialSearchText,
+                        anchorRect = activeOcrOverlaySession?.anchorRectInDialogRoot,
+                        onCopyText = {
+                            val clipboard = getSystemService<ClipboardManager>()
+                            clipboard?.setPrimaryClip(
+                                ClipData.newPlainText(null, searchState.query),
+                            )
+                            toast(MR.strings.action_copy_to_clipboard)
+                        },
+                        searchState = searchState,
+                        autoSearchEnabled = dictionaryPreferences.readerAutoSearchEnabled().get(),
+                        onQueryChange = dictionarySearchScreenModel::updateQuery,
+                        onSearch = dictionarySearchScreenModel::search,
+                        onTermGroupClick = { terms ->
+                            lifecycleScope.launchIO {
+                                if (
+                                    ankiDroidPreferences.croppedImageExport().get() &&
+                                    viewModel.state.value.dialog is ReaderViewModel.Dialog.OcrResult
+                                ) {
+                                    withUIContext {
+                                        dismissActiveOcrOverlaySession()
+                                        enterImageExportSelectionMode(terms)
+                                    }
+                                } else {
+                                    val uri = viewModel.getCurrentPageUri()
+                                    dictionarySearchScreenModel.addGroupToAnki(terms, uri)
+                                }
+                            }
+                        },
+                        onPlayAudioClick = dictionarySearchScreenModel::fetchAndPlayAudio,
+                    )
+                }
+                null -> {}
+            }
 
-            readingMode = ReadingMode.fromPreference(
-                viewModel.getMangaReadingMode(resolveDefault = false),
-            ),
-            onClickReadingMode = viewModel::openReadingModeSelectDialog,
-            orientation = ReaderOrientation.fromPreference(
-                viewModel.getMangaOrientation(resolveDefault = false),
-            ),
-            onClickOrientation = viewModel::openOrientationModeSelectDialog,
-            cropEnabled = cropEnabled,
-            onClickCropBorder = {
-                val enabled = viewModel.toggleCropBorders()
-                menuToggleToast?.cancel()
-                menuToggleToast = toast(if (enabled) MR.strings.on else MR.strings.off)
-            },
-            onClickSettings = viewModel::openSettingsDialog,
-            onClickOcr = ::enterOcrMode,
-            onClickReadAloud = viewModel::startReadAloud,
-            showOcrButton = showOcrButton,
-            showReadAloudButton = showReadAloudButton,
-            onBottomTrayHeightChanged = { bottomTrayHeightPx = it },
-        )
+            // 8. OCR loading bar, topmost inline — same clearance as the TTS pill
+            // so it never covers the pill or sits under system bars.
+            OcrLoadingIndicator(
+                visible = state.isProcessingOcr,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .offset { IntOffset(x = 0, y = -pillClearancePx) },
+            )
+        }
     }
 
     /**

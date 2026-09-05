@@ -83,6 +83,7 @@ import mihon.domain.ocr.interactor.GetOcrExclusionZones
 import mihon.domain.ocr.interactor.OcrProcessor
 import mihon.domain.ocr.interactor.ScanPageOcr
 import mihon.domain.ocr.interactor.SetOcrExclusionZoneEnabled
+import mihon.domain.ocr.interactor.UpdateOcrExclusionZoneText
 import mihon.domain.ocr.interactor.WithOcrScanSession
 import mihon.domain.ocr.repository.OcrExclusionZoneRepository
 import mihon.domain.ocr.repository.OcrRepository
@@ -310,6 +311,7 @@ class DomainModule : InjektModule {
         addFactory { AddOcrExclusionZone(get()) }
         addFactory { DeleteOcrExclusionZone(get()) }
         addFactory { SetOcrExclusionZoneEnabled(get()) }
+        addFactory { UpdateOcrExclusionZoneText(get()) }
         addSingletonFactory { OcrScanStore(get<Application>(), get()) }
         addSingletonFactory<OcrPageSourceGateway> { OcrPageSourceGatewayImpl(get<Application>(), get(), get()) }
         addSingletonFactory { OcrPageSourceResolver(get(), get(), get()) }

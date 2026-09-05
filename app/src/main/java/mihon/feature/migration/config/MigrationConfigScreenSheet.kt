@@ -42,7 +42,6 @@ import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Button
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
-import tachiyomi.presentation.core.theme.active
 import tachiyomi.presentation.core.theme.header
 import tachiyomi.presentation.core.util.collectAsState
 
@@ -228,7 +227,7 @@ private fun MigrationSheetWarningItem(
             Icon(
                 imageVector = Icons.Outlined.Warning,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.active,
+                tint = MaterialTheme.colorScheme.tertiary,
             )
         },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),

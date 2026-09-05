@@ -23,7 +23,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.model.rememberScreenModel
+import cafe.adriel.voyager.navigator.LocalNavigator
+import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.more.settings.Preference
+import eu.kanade.tachiyomi.ui.download.OcrQueueScreen
 import eu.kanade.tachiyomi.ui.setting.readaloud.ReadAloudSettingsScreenModel
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.collections.immutable.toImmutableList
@@ -44,6 +47,7 @@ object SettingsReadAloudScreen : SearchableSettings {
     @Composable
     override fun getPreferences(): List<Preference> {
         val screenModel = rememberScreenModel { ReadAloudSettingsScreenModel() }
+        val navigator = LocalNavigator.currentOrThrow
         val state by screenModel.state.collectAsState()
         val context = LocalContext.current
         var showProfileDialog by remember { mutableStateOf(false) }
@@ -218,6 +222,11 @@ object SettingsReadAloudScreen : SearchableSettings {
             Preference.PreferenceGroup(
                 title = stringResource(MR.strings.tts_section_advanced),
                 preferenceItems = listOf(
+                    Preference.PreferenceItem.TextPreference(
+                        title = stringResource(MR.strings.label_text_recognition),
+                        subtitle = stringResource(MR.strings.pref_ocr_model),
+                        onClick = { navigator.push(OcrQueueScreen) },
+                    ),
                     Preference.PreferenceItem.TextPreference(
                         title = stringResource(MR.strings.tts_engine_information),
                         subtitle = engineInfoSummary(state),

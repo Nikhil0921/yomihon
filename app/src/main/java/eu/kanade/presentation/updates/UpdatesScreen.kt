@@ -39,7 +39,6 @@ import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.screens.LoadingScreen
-import tachiyomi.presentation.core.theme.active
 import java.time.LocalDate
 import kotlin.time.Duration.Companion.seconds
 
@@ -159,7 +158,7 @@ private fun UpdatesAppBar(
                     AppBar.Action(
                         title = stringResource(MR.strings.action_filter),
                         icon = Icons.Outlined.FilterList,
-                        iconTint = if (hasFilters) MaterialTheme.colorScheme.active else LocalContentColor.current,
+                        iconTint = if (hasFilters) MaterialTheme.colorScheme.tertiary else LocalContentColor.current,
                         onClick = onFilterClicked,
                     ),
                     AppBar.Action(

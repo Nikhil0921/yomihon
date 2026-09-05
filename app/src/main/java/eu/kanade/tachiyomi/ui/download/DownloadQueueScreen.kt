@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.ui.download
 
 import android.view.LayoutInflater
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -52,6 +51,7 @@ import kotlinx.collections.immutable.toPersistentList
 import tachiyomi.core.common.util.lang.launchUI
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.Pill
+import tachiyomi.presentation.core.components.material.PILL_ALPHA
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
@@ -104,12 +104,11 @@ object DownloadQueueScreen : Screen() {
                                 overflow = TextOverflow.Ellipsis,
                             )
                             if (downloadCount > 0) {
-                                val pillAlpha = if (isSystemInDarkTheme()) 0.12f else 0.08f
                                 Pill(
                                     text = "$downloadCount",
                                     modifier = Modifier.padding(start = 4.dp),
                                     color = androidx.compose.material3.MaterialTheme.colorScheme.onBackground
-                                        .copy(alpha = pillAlpha),
+                                        .copy(alpha = PILL_ALPHA),
                                     fontSize = 14.sp,
                                 )
                             }

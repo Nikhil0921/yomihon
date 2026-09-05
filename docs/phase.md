@@ -5,32 +5,41 @@
 > A phase is COMPLETED only when its verification steps have actually been run
 > and recorded in `docs/memory.md`.
 
-Current phase pointer: **P0 ZONE exclusion reliability fix (2026-09-03 #3)
-  code COMPLETE + gates green — pure-rect page-anchored ZONE rules for all
-  scopes (COMBINED now opt-in via text field), original-dims guard against
-  split/rotate page transforms, per-rule OCR-ZONE diagnostics. APK built
-  (arm64, 12:42); device repeat-matrix verification PENDING user. UNCOMMITTED.**
+Current phase pointer: **v0.5.2 RELEASED 2026-09-03 (tag + 5 ABI APKs,
+versionCode 28). Post-release, UNCOMMITTED, device verification PENDING
+user: UI follow-up set 2 (2026-09-04) — Library Continue + Browse Search tab
+REVERTED per user device feedback, Feed management centralized into new
+ManageFeedsScreen (reorder/enable/delete), FeedScreen header stripped to
+name+listing. Gates green; APK installed.**
+  Prior: UI/UX modernization set 1 (2026-09-03) — floating nav pill, OCR
+  exclusion phrase EDIT + collapsed rule rows + identity labels, Feed filter
+  chips, More-tab GroupHeader sections. Gates green. UNCOMMITTED.
+  Prior: P0 ZONE exclusion reliability fix (2026-09-03 #3) code COMPLETE +
+  gates green — pure-rect page-anchored ZONE rules for all scopes (COMBINED
+  now opt-in via optional text field; prefill REMOVED — match text starts
+  empty), original-dims guard against split/rotate page transforms,
+  per-rule OCR-ZONE diagnostics. Device repeat-matrix verification PENDING
+  user. UNCOMMITTED.
   Prior: OCR exclusion regression-fix set #2 (2026-09-03) code COMPLETE +
   gates green — crop-OCR engine redirect (Legacy JP model
   caused garbage), boxMostlyInside selection filter (outside-region text
   leak), PHRASE token-concat matching, WebtoonTransitionHolder leak fix
   (184.7MB), single-flight detect. APK 0.5.1-8255 installed; device
-  verification (tests A–J) PENDING user run. UNCOMMITTED.**
+  verification (tests A–J) PENDING user run. UNCOMMITTED.
   Prior: OCR exclusion regression-fix set COMPLETED
   (2026-09-02, all 4 gates green) — toggle param-swap fix, WORD/PHRASE
   matcher rework (NFKC fold + token-concat runs + whitespace-strip phrase),
-  manage-sheet global-rule visibility, exclusion diagnostics, selected-area
-  auto-detect (cached-first + crop-OCR fallback). UNCOMMITTED, device pass
-  pending (checklist in memory.md 2026-09-02 block).
+  manage-sheet global-rule visibility, exclusion diagnostics. UNCOMMITTED,
+  device pass recorded (see memory.md 2026-09-02/03 blocks).
   Prior: Post-device-test audit set COMPLETED (2026-09-01, all 4 gates green)
   — repeated-speech fixes, OCR exclusion redesign (ZONE/WORD/PHRASE/COMBINED +
   19.sqm), speed-adaptive prefetch, stop-during-prepare, reader interaction
   toggles, ellipsis pause; committed by user as 1b810ccde.
   Phase 10A COMPLETED (2026-08-31, device-verified, build 0.5.0-8250);
   Phases A–I multi-feature set COMMITTED as c70e32252; v0.5.1 released.
-  Phase 10B backlog remains (per-voice profiles, cloud/neural providers,
-  expressive speech). Phase 9 COMPLETED (2026-08-29). Phase 8 device pass
-  COMPLETE (2026-08-28). All prior fix sets committed.
+  Phase 10B backlog remains (per-voice tuning beyond profiles, cloud/neural
+  providers, expressive speech). Phase 9 COMPLETED (2026-08-29). Phase 8
+  device pass COMPLETE (2026-08-28). All prior fix sets committed.
 PRODUCT PIVOT 2026-08-25: English is the primary v1 Read-Aloud language;
   Japanese TTS moved to Phase 10B.
 
@@ -261,8 +270,8 @@ PRODUCT PIVOT 2026-08-25: English is the primary v1 Read-Aloud language;
 
 ## Phase 10A — Advanced system TTS voice configuration
 
-- **Status**: COMPLETED (2026-08-31). Code Tasks 1–6 done 2026-08-30
-  (spotlessCheck + testDebugUnitTest + :app:compileDebugKotlin GREEN per
+- **Status**: COMPLETED (2026-08-31, released in v0.5.x). Code Tasks 1–6 done
+  2026-08-30 (spotlessCheck + testDebugUnitTest + :app:compileDebugKotlin GREEN per
   task reports; verifySqlDelightMigration not needed — no DB change).
   Task 7 DEVICE PASS DONE 2026-08-31, build 0.5.0-8250 on SM_M066B:
   USER CONFIRMED all manual checks PASS — Read Aloud playback, language/
@@ -272,11 +281,10 @@ PRODUCT PIVOT 2026-08-25: English is the primary v1 Read-Aloud language;
   voice-restore path logged ×4, 0 FATAL exceptions, single engine connection
   per session). Follow-up improvement same session: voice-picker SEARCH
   (BasicListPreference `searchable` flag → ListPreferenceWidget filter
-  field; gates green, APK installed). All work UNCOMMITTED awaiting user
-  commit.
+  field; gates green, APK installed). Committed by user as 0480778fd.
 - **Objective**: user-configurable system TTS engine/voice/language with
   calibration + preview, reader behavior unchanged.
-- **Files affected** (all UNCOMMITTED): `:domain` —
+- **Files affected**: `:domain` —
   `TtsVoicePreferences.kt` (+`TtsVoicePreferencesTest`, 5 cases) new,
   `TtsEngine.kt` extended (getEngines/getVoices/setEnginePackage +
   TtsEngineInfo/TtsVoiceInfo); `:app` — `AndroidTtsEngine.kt` (engine-package-
@@ -286,6 +294,7 @@ PRODUCT PIVOT 2026-08-25: English is the primary v1 Read-Aloud language;
   `MainActivity.kt`, `Constants.kt`, `ReaderSettingsDialog.kt`,
   `ReadAloudPage.kt`, `ReaderActivity.kt` (both dialog call sites), DI
   (`DomainModule.kt`, `PreferenceModule.kt`); `:i18n` base strings +18 keys.
+  (Committed by user as 0480778fd, released in v0.5.0.)
 - **Completion criteria**: device verification of the full flow (above)
   executed + recorded in `docs/memory.md`; then user review + commit.
 - **Tests required**: `TtsVoicePreferencesTest` (unit, done); full

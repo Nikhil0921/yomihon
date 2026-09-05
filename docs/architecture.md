@@ -1,9 +1,10 @@
 # Yomihon — Architecture
 
 > Status: living document. Describes HOW the system is built.
-> Documents the ACTUAL architecture first, then the planned TTS architecture.
+> Documents the ACTUAL architecture (Read-Aloud TTS v1 + Phase 10A voice
+> config + 2026-09-01 multi-feature set shipped in v0.5.x; latest release v0.5.2).
 > WHAT belongs in `docs/prd.md`; rules in `docs/rules.md`; progress in `docs/memory.md`.
-> All paths verified against the repository (branch `main`, v0.4.0).
+> All paths verified against the repository (branch `main`, v0.5.2, versionCode 28).
 
 ---
 
@@ -21,7 +22,7 @@ flowchart LR
         UI[Compose UI / Voyager Screens<br/>eu.kanade.presentation.*, tachiyomi.i18n strings]
         VM[ScreenModels / ViewModels<br/>StateFlow State + Channel Event]
         APPSVC[App services<br/>download, cache, ocr scan, extension, track]
-        IMPL[Repository impls<br/>+ AndroidTtsEngine planned]
+        IMPL[Repository impls<br/>+ AndroidTtsEngine]
     end
     subgraph domain[:domain]
         INT[Interactors]
@@ -85,13 +86,13 @@ Process start
       → patchInjekt(); Injekt.importModule(PreferenceModule) / (AppModule) / (DomainModule)
       → Coil image loader factory (OkHttp client from NetworkHelper)
   → MainActivity (single activity, ui/main/)
-      → Voyager Navigator → HomeScreen (tabs: Library, History, Updates, Browse, More)
-  → Library / Browse(source/extension) / History / Updates / More(settings…)
+      → Voyager Navigator → HomeScreen (tabs: Library, History, Updates, Browse, Feed, More)
+  → Library / Browse(source/extension) / History / Updates / Feed / More(settings…)
   → MangaScreen → Chapters → ReaderActivity (explicit Activity, not Voyager)
       → ReaderViewModel.init(manga, chapter)
           → ChapterLoader → page loaders → Viewer rendering
           → OCR early-init; tap-to-lookup / region selection / background scans
-      → [planned] Read-Aloud TTS on top of cached/scanned OCR results
+          → Read-Aloud TTS on top of cached/scanned OCR results
 ```
 
 Cross-cutting services started from screens/jobs: `DownloadManager`,
@@ -127,10 +128,12 @@ Flow:
    a priority queue (RETRY > DEFAULT > ADJACENT), preload next 4 pages, images
    cached to disk (`ChapterCache`, DiskLruCache 100 MiB).
 4. **Display**: `ViewerChapters` wrapped in adapters; `PagerViewer` (ViewPager)
-   or `WebtoonViewer` (RecyclerView) render pages via Coil +
-   `ReaderPageImageView` (subsampling for tall images). Page changes call
-   `activity.onPageSelected(page)` → `ReaderViewModel.onPageSelected` persists
-   progress, marks read, tracks, triggers downloads, emits `Event.PageChanged`.
+    or `WebtoonViewer` (RecyclerView) render pages via Coil +
+    `ReaderPageImageView` (subsampling for tall images). Page changes call
+    `activity.onPageSelected(page)` → `ReaderViewModel.onPageSelected` persists
+    progress, marks read, tracks, triggers downloads, emits `Event.PageChanged`
+    (TTS navigation debounced 250 ms for user swipes; advance confirmations
+    land immediately).
 5. **Navigation**: toolbar/keyboard `loadNextChapter`/`loadPreviousChapter`;
    adjacent chapters preloaded (`preload`); transitions rendered between chapters;
    dual-page split and InsertPage handled inside pager adapters.
@@ -157,12 +160,18 @@ Engines live in `data/src/main/java/mihon/data/ocr/`; contracts/models in
 Entry points
   A. Tap-to-lookup     : cached OcrPageResult hit-test → Dialog.OcrResult
   B. Region selection  : bottom-bar button or long-press → drag rect
-                         → viewer.resolveSelectionCaptures → ReaderSelectionCropper
-                         → OcrProcessor.getText(bitmap.toOcrImage())
-                         → flattenOcrTextForQuery → dictionary search
+                          → viewer.resolveSelectionCaptures → ReaderSelectionCropper
+                          → OcrProcessor.getText(bitmap.toOcrImage())
+                          → flattenOcrTextForQuery → dictionary search
   C. Background scan   : OcrScanManager queue → OcrScanJob (WorkManager)
-                         → OcrChapterScanner (per page: resolve bitmap → ScanPageOcr)
-  D. [planned] TTS     : GetCachedPageOcr / ScanPageOcr per page → segmenter → speech
+                          → OcrChapterScanner (per page: resolve bitmap → ScanPageOcr)
+  D. Exclusion zones    : drag-select → SaveExclusionZone → scope dialog
+                          (PAGE pure zone; CHAPTER/MANGA/SOURCE optional text
+                          → COMBINED) → ocr_exclusion_zones table → applied at
+                          TTS speech-acquisition time only (tap/dictionary OCR
+                          intentionally unaffected)
+  E. Read-aloud TTS    : GetCachedPageOcr / ScanPageOcr per page → speech
+                          pipeline → segmenter → speech
 
 Engine pipeline (repository-serialized)
   OcrRepositoryImpl.scanPage(model, …)
@@ -186,16 +195,55 @@ Ordering rules & caveats (important for TTS):
 - GLENS orders vertical bubbles right→left/top→bottom then horizontal top→bottom
   and strips furigana geometrically (`GlensOcrEngine.filterRuby`). OWOCR derives
   orientation from `writing_direction`.
-- The local detect+recognize path (`scanLocally`) currently uses raw detection
-  index as `order` with hardcoded Horizontal orientation, and its detection
-  engine stub always throws (`UnavailableDetOcrEngine` TODO) so it redirects to
-  Glens when fallbacks are enabled. **Known gap**: do not silently re-order;
-  document instead (see prd.md §Future).
+- The local detect+recognize path (`scanLocally`) uses raw detection index as
+  `order` with hardcoded Horizontal orientation; its detection engine stub
+  always throws (`UnavailableDetOcrEngine`) so it redirects to Glens when
+  fallbacks are enabled. Since 2026-09-03 `recognizeText` (crop/selection OCR)
+  applies the same LEGACY/FAST→GLENS redirect — the JP-vocab Legacy model no
+  longer runs on arbitrary English crops (`ponytail:` note marks the drop
+  point when a real `DetOcrEngine` lands). **Known gap**: local scans still
+  lack Glens-style ordering — do not silently re-order; document instead
+  (see prd.md §Future).
 - Cache returns regions sorted by `region_order`; latest model wins per page.
 
 Error handling: `OcrException` hierarchy (InitializationError, ConnectionError,
 DetectionUnavailable); reader maps outcomes to `Event.OcrNoTextFound /
 OcrMemoryError / OcrInitializationError / OcrError` → toasts.
+
+### 4.1 OCR exclusion system (actual, shipped v0.5.2)
+
+Single table `ocr_exclusion_zones` (migrations `18.sqm` create + `19.sqm`
+rebuild; `data/src/main/sqldelight/tachiyomi/data/ocr_exclusion_zones.sq`):
+`manga_id` (0 = global text rule), `source_id`, `chapter_id` (NULL for
+MANGA/SOURCE rules — no cascade), `page_index`, `scope`
+(PAGE/CHAPTER/MANGA/SOURCE), normalized rect, `enabled`, `match_type`
+(ZONE/WORD/PHRASE/COMBINED), `match_text`, `rule_name`.
+
+- **ZONE**: pure-rect, page-anchored for ALL scopes (own chapterId for
+  PAGE/CHAPTER, mangaId/sourceId for MANGA/SOURCE); legacy rows with NULL
+  `page_index` are DORMANT (visible + deletable, never matched).
+- **WORD**: global standalone-token run match — NFKC-normalized, case-folded,
+  rule tokens concatenated must equal a consecutive run of region tokens
+  ("K-manga.com" ≡ [k,manga,com]; "KeyManga" ≡ "Key Manga"; "ion" ≠
+  "combination").
+- **PHRASE**: NFKC-fold + lowercase + whitespace-stripped substring, with
+  token-concat containment fallback — separator/punctuation tolerant both
+  directions ("discord gg" matches "discord.gg").
+- **COMBINED**: opt-in only (non-blank match text on save); rect overlap AND
+  phrase match within scope.
+- Matching is per-region (phrases split across two regions are NOT excluded —
+  documented v1 semantics); applied in `TtsPlaybackController.acquireSentences`
+  via `awaitForSpeech` (rules re-queried per page, so mid-session adds apply
+  next page). Pure matcher: `OcrExclusionMatcher` + `ExclusionMatchContext`
+  (`:domain`), 35 unit cases.
+- UI: reader drag-select save flow (`OcrExclusionZoneDialogs`), manga-scoped
+  manage sheet, full Settings screen (`SettingsOcrExclusionsScreen`,
+  `Destination.OcrExclusions` id 5) with per-rule edit (words/phrases,
+  `updateMatchText`), identity labels, expand/collapse, legacy markers.
+- Backup/restore: `BackupOcrExclusionZone` proto (additive, old backups
+  decode); restorer dedupes and skips invalid scopes/matchTypes.
+- Zone creation rejects pages where displayed dims ≠ original image dims
+  (dual-page split / rotateToFit) — honest error beats silently-wrong rect.
 
 ML model assets are gitignored and absent from fresh clones
 (`app/src/main/assets/ocr/*`, `app/src/main/assets/ocr_fast/*`,
@@ -204,25 +252,34 @@ pinned sha256 (`.github/workflows/build.yml`).
 
 ---
 
-## 5. TTS flow (planned — approved design from root `architect.md`)
+## 5. TTS flow (actual — v1 shipped + Phase 10A + 2026-09 hardening)
 
 ```text
 [▶ tapped] → ReaderViewModel.startTts()
   → TtsPlaybackController.start()                    (viewModelScope, :app)
       ├─ AndroidTtsEngine.initialize()               (main thread, CompletableDeferred bridge)
-      ├─ preflight isLanguageAvailable(JAPANESE)     → else Error(NoJapaneseVoice)
+      ├─ voice config re-applied from FRESH prefs on every initialize
       ├─ requestAudioFocus(AUDIOFOCUS_GAIN)
       └─ per page N:
            1. TEXT     GetCachedPageOcr.await(chapterId, N)         ← ocr_cache.db
                          miss → OcrPageSourceResolver.resolve(...)
                                   → openBitmap → ScanPageOcr (persists) → recycle bitmap
-           2. SEGMENT  List<OcrRegion> → SentenceSegmenter.toTtsSentences()   (pure, :domain)
-           3. SPEAK    engine.speak("pN-sI", sentence.text)          (suspends until done/error)
-           4. ADVANCE  TtsAdvancePolicy.computeAdvance(...)          (pure, :domain)
+           2. SPEECH   SpeechPipeline.toSpeakableSentences(regions)   (pure, :domain)
+                         dedupeOverlappingDuplicates (text+IoU overlap)
+                         → classify (SpeechRegionClassifier)
+                         → filter (SpeechRegionFilterConfig)
+                         → clean (SpeechCleaner, post-NFKC)
+                         → exclusions (OcrExclusionMatcher, speed-aware)
+                         → SentenceSegmenter.toTtsSentences()
+           3. SPEAK    engine.speak("pN-sI-c{dispatch}", sentence.text) (suspends until done/error)
+           4. ADVANCE  TtsAdvancePolicy.computeAdvance(...)           (pure, :domain)
                          NextPage    → Event.TtsAdvancePage(N+1) → activity.moveToPageIndex
                          NextChapter → Event.TtsAdvanceChapter  → activity.loadNextChapter
                          Finish      → state=Finished, abandon focus
-           [prefetch] ensure-OCR job for N+1; cancelled on any page change
+           [prefetch] sequential prefetch of up to 3 pages ahead (depth
+                       speed-aware: 1 @ <1.5x, 2 @ 1.5–2.5x, 3 @ ≥2.5x;
+                       mid-page escalation at sentenceIndex == size/2 when
+                       rate ≥ 2x); cancelled on any page change
 ```
 
 Layering (extensible for future engines):
@@ -233,15 +290,18 @@ ReaderViewModel                    :app  ui/reader/ReaderViewModel (ttsState in 
 TtsPlaybackController              :app  ui/reader/tts/  (orchestration only)
 TtsEngine interface                :domain mihon/domain/tts/engine/TtsEngine.kt
 SentenceSegmenter / AdvancePolicy  :domain mihon/domain/tts/       (pure, unit-tested)
+Speech pipeline (clean/classify/   :domain mihon/domain/tts/speech/ (pure, unit-tested)
+  filter/dedup + geometry helpers)
 TtsPreferences                     :domain mihon/domain/tts/service/TtsPreferences.kt
 TtsVoicePreferences + selection    :domain mihon/domain/tts/service/TtsVoicePreferences.kt
+TtsVoiceProfile model              :domain mihon/domain/tts/service/ (JSON pref list)
 AndroidTtsEngine                   :app  data/tts/AndroidTtsEngine.kt
   └─ android.speech.tts.TextToSpeech + AudioManager/AudioFocusRequest (framework)
 Read-aloud settings screen/model   :app  ui/setting/readaloud + presentation settings screen
 future: CloudTtsEngine / NeuralTtsEngine implement TtsEngine without touching reader
 ```
 
-Phase 10A additions to `TtsEngine` (voice configuration contracts):
+Phase 10A additions to `TtsEngine` (voice configuration contracts, shipped):
 
 - `suspend getEngines(): List<TtsEngineInfo>` — installed engines
   (`packageName`, `label`, `isSystemDefault`); empty when uninitialized.
@@ -252,7 +312,7 @@ Phase 10A additions to `TtsEngine` (voice configuration contracts):
   system default. If currently initialized with a different package, the
   implementation releases the instance so the next initialize rebuilds.
 
-`AndroidTtsEngine` config pipeline (Phase 10A):
+`AndroidTtsEngine` config pipeline (Phase 10A, shipped):
 
 - Construction seeds `enginePackage` / `voiceName` / `languageTag` fields from
   `TtsVoicePreferences`; `activeEnginePackage` snapshots the package a live
@@ -280,6 +340,54 @@ reader narration use the same `AndroidTtsEngine` singleton; preview calls
 reader narration speaks with `QUEUE_FLUSH` and always wins; interrupted
 narration pauses honestly via the existing controller.
 
+### 5.1 Speech pipeline (2026-09-01 Phases A–C, shipped v0.5.2)
+
+Pure chain in `mihon.domain.tts.speech` (`SpeechPipeline.toSpeakableSentences`),
+applied ONLY to speech — original OCR regions stay immutable (dictionary/
+tap-overlay/search see full text):
+
+1. `dedupeOverlappingDuplicates` — drops later regions whose normalized text
+   exactly duplicates an earlier kept region AND strictly overlaps its bbox;
+   duplicate text in disjoint bubbles survives (cross-tile seam duplicates).
+2. `SpeechRegionClassifier` heuristics → DIALOGUE / SOUND_EFFECT /
+   EXPRESSION / NARRATION / DECORATIVE (blank, symbol-only, foreign script on
+   page-script mismatch, wide-thin terminal-less). Designed for future
+   metadata swap-in (`OcrRegion` untouched).
+3. `SpeechRegionFilter` — per-type speak toggles (sfx/expressions default
+   off), foreign-script skip (script-based LATIN/CJK hint, multilingual).
+4. `SpeechCleaner` — punctuation-only skip (post-normalization so emphatic
+   dialogue survives), conservative OCR-garbage detector, excessive-punct
+   run normalization, whitespace collapse, ellipsis→pause.
+5. `SentenceSegmenter` — unchanged terminal-punct rules (below).
+
+Cleanup runs BEFORE segmentation (punct runs normalize first);
+post-segment punctuation-only slices dropped. Prefs in `TtsPreferences`
+(`pref_tts_skip_punctuation_only`, `pref_tts_skip_ocr_garbage`,
+`pref_tts_normalize_punctuation`, `pref_tts_ellipsis_to_pause`,
+`pref_tts_speak_sfx`, `pref_tts_speak_expressions`,
+`pref_tts_skip_foreign_script`, `pref_tts_speech_script`) — all backed up.
+
+Tests: `SpeechCleanerTest` (11), `SpeechPipelineDedupTest` (9),
+`SpeechRegionClassifierTest` (7), `SpeechRegionFilterTest` (9),
+`BoxMostlyInsideTest` (7), `SentenceSegmenterTest` (15),
+`TtsAdvancePolicyTest` (10), `OcrExclusionMatcherTest` (35),
+`TtsVoicePreferencesTest` (5).
+
+### 5.2 Voice profiles (2026-09-01 Phase E, shipped v0.5.2)
+
+`TtsVoiceProfile` (`@Serializable`: id, name, enginePackage, voiceName,
+languageTag, rate, pitch) stored as JSON in one pref (`pref_tts_voice_profiles`)
++ active id pref. `ReadAloudSettingsScreenModel` exposes save/delete/apply
+(apply writes component prefs + rate/pitch + `setEnginePackage` + reload).
+UI: "Voice profiles" group in `SettingsReadAloudScreen`.
+
+### 5.3 Speech rate 50–300% (Phase F, shipped)
+
+Rate slider 50..300 in both reader tab and main settings; engine-side no
+clamp. `TtsPlaybackBar` shows a video-player-style speed chip + dropdown
+(0.5–3x) writing the shared rate pref; controller's live collector applies
+to the engine mid-session.
+
 Future-provider extensibility: cloud/neural engines are new `TtsEngine`
 implementations bound by an Injekt factory swap in `DomainModule`; playback
 controller and reader stay untouched.
@@ -287,7 +395,9 @@ controller and reader stay untouched.
 Design rules (binding):
 
 - Ordering: consume regions in stored order; never re-sort in the segmenter.
-- Segmentation never merges across regions; terminal punct `。！？!?‼⁇⁉⁈` only.
+- Segmentation never merges across regions; terminal punct `。！？!?‼⁇⁉⁈` only
+  (plus English rules: ASCII `.` terminal only before whitespace/EOL,
+  dot-runs glued, decimals safe).
 - Controller never touches `Viewer` directly — advances go through existing
   `Event`s handled by `ReaderActivity.moveToPageIndex/loadNextChapter`;
   user swipes mid-playback win (rebuild queue for new page).
@@ -297,6 +407,14 @@ Design rules (binding):
 - Lifecycle matrix (pause on onStop, continue through rotation, shutdown on
   finish/onCleared, audio-focus handling) — see prd.md §F6 and root architect.md.
 - No new caching layer in v1; no foreground service/MediaSession/permissions.
+- Duplicate-speech hardening (2026-09-01, shipped): per-dispatch monotonic
+  utterance ids (`p{n}_s{i}_c{dispatch}`), identity-checked pending-callback
+  removal, `resume()` calls `engine.stop()` after job cancel (zombie flush),
+  resumeIndex set to next sentence before suspension points, page-sentence
+  overflow advances instead of resetting.
+- Webtoon hardening (shipped): region-level auto-scroll via
+  `TtsEvent.ScrollToRegion`, advance-confirm via
+  `findFirstVisibleItemPosition`, pause/resume page-awareness.
 
 ---
 
@@ -309,30 +427,38 @@ yomihon/
 │       ├── eu/kanade/tachiyomi/
 │       │   ├── App.kt                  # Application: Injekt bootstrap, Coil factory
 │       │   ├── di/                     # AppModule, PreferenceModule (Injekt)
-│       │   ├── ui/                     # Voyager screens: main/, library/, history/,
-│       │   │                           #   updates/, browse/, more/, reader/, download/,
-│       │   │                           #   setting/, dictionary/, manga/, migration/…
+│       │   ├── ui/                     # Voyager screens: main/, home/, library/, history/,
+│       │   │                           #   updates/, browse/, feed/, more/, reader/, download/,
+│       │   │                           #   setting/ (incl. readaloud/, ocrexclusions/),
+│       │   │                           #   dictionary/ (DictionaryLookupScreen), manga/, migration/…
 │       │   │   └── reader/             # ReaderActivity, ReaderViewModel, viewer/, loader/,
-│       │   │                           #   model/, setting/
+│       │   │                           #   model/, setting/, tts/ (TtsPlaybackController)
 │       │   ├── data/                   # cache/(ChapterCache,CoverCache), download/, backup/,
 │       │   │                           #   ocr/(OcrScanJob,OcrScanManager,OcrChapterScanner),
-│       │   │                           #   dictionary/(audio import jobs), coil/, track/, saver/
+│       │   │                           #   tts/(AndroidTtsEngine), dictionary/(audio import jobs),
+│       │   │                           #   coil/, track/, saver/
 │       │   ├── extension/              # ExtensionManager, ExtensionLoader, installers
 │       │   └── network/                # TrustedFileDownloader (stack itself in :core:common)
-│       ├── eu/kanade/domain/           # DomainModule.kt (Injekt repos+interactors)
-│       ├── eu/kanade/presentation/     # Compose UI per feature incl. theme/, reader/
+│       ├── eu/kanade/domain/           # DomainModule.kt (Injekt repos+interactors),
+│       │                               #   dictionary/DictionaryPreferences
+│       ├── eu/kanade/presentation/     # Compose UI per feature incl. theme/, reader/,
+│       │                               #   feed/ (FeedScreen, ManageFeedsScreen), library/
 │       └── mihon/                      # core/designsystem, core/migration, feature/{migration,ocr,…}
 ├── domain/src/main/java/
 │   ├── tachiyomi/domain/               # category/chapter/history/library/manga/release/
 │   │                                   #   source/track/updates/storage/download/backup services
-│   └── mihon/domain/                   # ocr/ (model, repository, interactor, service/OcrPreferences),
-│                                       #   dictionary/ (models, parser, audio/), ankidroid/, panel/,
-│                                       #   extension/, upcoming/
+│   └── mihon/domain/                   # ocr/ (model, repository, interactor, exclusion
+│                                       #   zones+matcher, service/OcrPreferences), tts/
+│                                       #   (engine, speech pipeline, segmenter, policy,
+│                                       #   prefs, voice profiles), dictionary/ (models,
+│                                       #   parser, audio/), ankidroid/, panel/, extension/,
+│                                       #   upcoming/, feed/
 ├── data/src/main/
 │   ├── java/mihon/data/ocr/            # OcrRepositoryImpl, engines, TextPostprocessor,
-│   │                                   #   PrioritizedTaskQueue, OcrEngineLocks, OcrCacheStore
+│   │                                   #   PrioritizedTaskQueue, OcrEngineLocks, OcrCacheStore,
+│   │                                   #   OcrExclusionZoneRepositoryImpl
 │   ├── java/tachiyomi/data/            # repository impls, DatabaseAdapter
-│   ├── sqldelight/tachiyomi/           # main .sq files + migrations/1..17.sqm
+│   ├── sqldelight/tachiyomi/           # main .sq files + migrations/1..19.sqm
 │   └── sqldelight-ocr/tachiyomi/data/ocr/ocr_cache.sq
 ├── source-api/src/                     # commonMain eu.kanade.tachiyomi.source contracts
 ├── source-local/src/                   # expect/actual LocalSource
@@ -351,7 +477,7 @@ yomihon/
 
 ---
 
-## 7. File responsibilities (TTS-related)
+## 7. File responsibilities (TTS/speech-related)
 
 ### Existing files being reused (no duplication)
 
@@ -363,47 +489,48 @@ yomihon/
 | `domain/.../mihon/domain/ocr/model/OcrModels.kt` | `OcrRegion` input to segmentation; normalization fns |
 | `data/.../mihon/data/ocr/TextPostprocessor.kt` | Already-normalized region text |
 | `app/.../ui/reader/ReaderViewModel.kt` | Host controller; `State.ttsState`; event emission |
-| `app/.../ui/reader/ReaderActivity.kt` | Event handling (`moveToPageIndex` ~l.1111, `loadNextChapter` ~l.1122), overlay composition |
-| `app/.../presentation/reader/OcrLoadingIndicator.kt` | Visual template for the playback bar |
-| `app/.../presentation/reader/settings/ReaderSettingsDialog.kt` | Tab host for new settings page |
+| `app/.../ui/reader/ReaderActivity.kt` | Event handling (`moveToPageIndex`, `loadNextChapter`), overlay composition, exclusion-zone capture |
 | `app/.../di/AppModule.kt`-style modules (`DomainModule.kt`, `di/PreferenceModule.kt`) | DI registration points |
 | `domain/.../mihon/domain/dictionary/audio/DictionaryAudioPlayer.kt` | Interface-in-domain precedent (pattern only; left untouched) |
 
-### New files planned
+### TTS/speech feature files (all shipped; v1 + 10A + 2026-09 sets)
 
 | File | Responsibility |
 |---|---|
-| `domain/src/main/java/mihon/domain/tts/engine/TtsEngine.kt` | Framework-free engine contract: initialize, language availability, suspend speak(utteranceId,text), rate/pitch, audio-focus hooks, stop, shutdown |
-| `domain/src/main/java/mihon/domain/tts/SentenceSegmenter.kt` | Pure `List<OcrRegion>.toTtsSentences(): List<TtsSentence>` (region-boundary-respecting split) |
-| `domain/src/main/java/mihon/domain/tts/TtsAdvancePolicy.kt` | Pure advance decision function (NextPage/NextChapter/Finish/PauseAtPageEnd) |
-| `domain/src/main/java/mihon/domain/tts/service/TtsPreferences.kt` | rate, pitch, auto page turn, auto next chapter, keep-screen-on prefs |
-| `domain/src/test/java/mihon/domain/tts/SentenceSegmenterTest.kt` | Segmenter suite |
-| `domain/src/test/java/mihon/domain/tts/TtsAdvancePolicyTest.kt` | Policy suite |
-| `app/src/main/java/eu/kanade/tachiyomi/data/tts/AndroidTtsEngine.kt` | `TextToSpeech` + audio focus implementation of `TtsEngine` |
-| `app/src/main/java/eu/kanade/tachiyomi/ui/reader/tts/TtsPlaybackController.kt` | Orchestration: text→segment→speak→advance loop, prefetch, arbitration |
-| `app/src/main/java/eu/kanade/presentation/reader/TtsPlaybackBar.kt` | Mini playback pill |
-| `app/src/main/java/eu/kanade/presentation/reader/settings/ReadAloudSettingsPage.kt` | Settings tab content |
-| `domain/src/main/java/mihon/domain/tts/service/TtsVoicePreferences.kt` | (10A) engine/voice/language string prefs + `reset()`; sealed `TtsVoiceSelection` + pure `resolveVoiceSelection` fallback |
-| `domain/src/test/java/mihon/domain/tts/service/TtsVoicePreferencesTest.kt` | (10A) selection fallback suite (5 cases) |
-| `app/src/main/java/eu/kanade/tachiyomi/ui/setting/readaloud/ReadAloudSettingsScreenModel.kt` | (10A) StateScreenModel: load/selection/preview/reset; initializes engine, feeds pickers |
-| `app/src/main/java/eu/kanade/presentation/more/settings/screen/SettingsReadAloudScreen.kt` | (10A) SearchableSettings screen: engine/language/locale/voice pickers, calibration, preview, advanced group |
+| `domain/.../mihon/domain/tts/engine/TtsEngine.kt` | Framework-free engine contract: initialize, getEngines/getVoices/setEnginePackage, suspend speak, rate/pitch, focus hooks, stop, shutdown |
+| `domain/.../mihon/domain/tts/SentenceSegmenter.kt` | Pure `List<OcrRegion>.toTtsSentences()` (region-boundary-respecting split, EN+JP terminal rules) |
+| `domain/.../mihon/domain/tts/TtsAdvancePolicy.kt` | Pure advance decision function (NextPage/NextChapter/Finish/PauseAtPageEnd) |
+| `domain/.../mihon/domain/tts/speech/SpeechPipeline.kt` | Pure speech prep chain: dedup (text+IoU) → classify → filter → clean → segment; geometry helpers (`boxesOverlap`, `boxMostlyInside`, `boundingBoxIoU`) |
+| `domain/.../mihon/domain/tts/speech/SpeechCleaner.kt` | Punct-only skip, OCR-garbage detector, punct-run normalization, whitespace collapse |
+| `domain/.../mihon/domain/tts/speech/SpeechRegionClassifier.kt` | Heuristic region classification (DIALOGUE/SFX/EXPRESSION/NARRATION/DECORATIVE) |
+| `domain/.../mihon/domain/tts/speech/SpeechRegionFilter.kt` | Per-type speak toggles + foreign-script skip (script-based) |
+| `domain/.../mihon/domain/tts/service/TtsPreferences.kt` | rate, pitch, auto page turn, auto next chapter, keep-screen-on, speech-cleanup + classification prefs |
+| `domain/.../mihon/domain/tts/service/TtsVoicePreferences.kt` | engine/voice/language string prefs + `reset()`; sealed `TtsVoiceSelection` + pure `resolveVoiceSelection`; `TtsVoiceProfile` model |
+| `domain/.../mihon/domain/ocr/…` (exclusion) | `OcrExclusionZone`, `OcrExclusionScope`, `OcrExclusionMatcher` (pure), interactors (Get/Add/Delete/SetEnabled/UpdateText/subscribe) |
+| `app/.../data/tts/AndroidTtsEngine.kt` | `TextToSpeech` + audio focus implementation of `TtsEngine`; engine-package-aware creation, initialize-time config re-apply |
+| `app/.../ui/reader/tts/TtsPlaybackController.kt` | Orchestration: text→speech→speak→advance loop, exclusions at acquire, speed-aware prefetch, arbitration, action logging |
+| `app/.../presentation/reader/TtsPlaybackBar.kt` | Floating playback pill (speed chip + dropdown, prev/play-pause/next/stop, sentence text, position, retry) |
+| `app/.../presentation/reader/settings/ReadAloudPage.kt` | Reader quick-settings tab (rate slider, toggles, deep-link row) |
+| `app/.../ui/setting/readaloud/ReadAloudSettingsScreenModel.kt` | StateScreenModel: engine init, pickers, preview, reset, voice profiles |
+| `app/.../presentation/more/settings/screen/SettingsReadAloudScreen.kt` | "Read aloud & voice" screen: engine/language/locale/voice pickers (voice searchable), calibration, preview, profiles, advanced |
+| `app/.../presentation/more/settings/screen/SettingsOcrExclusionsScreen.kt` + `ui/setting/ocrexclusions/` | OCR exclusion rules management screen (words/phrases/zones, edit, toggle, delete) |
+| `app/.../presentation/feed/FeedScreen.kt` + `ManageFeedsScreen.kt`, `ui/feed/{FeedTab,FeedScreenModel}.kt` | Feed tab: multi-source popular/latest grid, filter chips; central feed management screen |
+| `app/.../ui/dictionary/DictionaryLookupScreen.kt` | Standalone dictionary lookup screen (More tab entry) |
 
-Modified files (integration points): `DomainModule.kt` (engine binding,
-+ `TtsVoicePreferences` in 10A), `PreferenceModule.kt` (prefs binding, +
-`TtsVoicePreferences` factory in 10A), `ReaderViewModel.kt` (controller host,
-`ttsState`, new Events, stop-on-finish), `ReaderActivity.kt` (new event branches,
-bar rendering, onStop pause, keep-screen-on; 10A: both reader-settings dialog
-call sites gained the voice-settings deep-link), `ReaderSettingsDialog.kt`
-(new tab; 10A: `onOpenVoiceSettings` pass-through), `ReaderBottomBar.kt`
-(entry icon), `i18n base strings.xml` (snake_case keys; +18 TTS keys in 10A).
-Phase 10A also modified: `TtsEngine.kt` (+`getEngines`/`getVoices`/
-`setEnginePackage` + `TtsEngineInfo`/`TtsVoiceInfo`), `AndroidTtsEngine.kt`
-(voice-config pipeline, above), `SettingsMainScreen.kt` (root row after
-Reader), `SettingsScreen.kt` (`Destination.ReadAloud` id 4 + both fallback
-branches), `MainActivity.kt` (`SHORTCUT_VOICE_SETTINGS` intent case:
-popUntilRoot + push), `Constants.kt` (shortcut constant),
-`ReadAloudPage.kt` (pitch slider relocated to main settings; advanced-voice-
-settings nav row), `SettingsSearchScreen.kt` (screen registration).
+Modified integration points: `DomainModule.kt` (engine/exclusion bindings),
+`PreferenceModule.kt` (TTS + voice prefs), `ReaderViewModel.kt` (controller
+host, `ttsState`, Events, exclusion save/detect), `ReaderActivity.kt` (event
+branches, bar rendering, onStop pause, keep-screen-on, zone capture),
+`ReaderSettingsDialog.kt` (Read aloud tab + deep-link), `ReaderBottomBar.kt`
+(entry icon), `HomeScreen.kt` (Tab.Feed), `MoreScreen.kt` (Dictionary row +
+GroupHeader sections), `SettingsMainScreen.kt` (Read aloud & voice + OCR
+exclusions rows), `SettingsScreen.kt` (`Destination.ReadAloud` id 4 +
+`Destination.OcrExclusions` id 5), `MainActivity.kt`
+(`SHORTCUT_VOICE_SETTINGS`), `SettingsSearchScreen.kt` (registration),
+`NavigationBar.kt` (presentation-core, floating pill nav),
+`ocr_exclusion_zones.sq` + `18.sqm`/`19.sqm`, i18n base strings (TTS +
+exclusion + feed keys), backup models/creators/restorers (exclusion zones,
+new prefs auto-included).
 
 ---
 
@@ -452,19 +579,20 @@ TTS:    settings (TtsPreferences Flow) → controller params; controller → tts
     ChapterCache/CoverCache, NetworkHelper, JavaScriptEngine, SourceManager,
     ExtensionManager, Download*, TrackerManager, ImageSaver…
   - `eu.kanade.domain.DomainModule` — repository impl bindings + interactor factories
-    (e.g., OCR block ~l.289–309; `DictionaryAudioPlayerImpl` ~l.281–282)
+    (OCR + exclusion-zone bindings incl. `TtsEngine` factory; `DictionaryAudioPlayerImpl`)
 - Registration style: `addSingleton(app)`, `addSingletonFactory<T> { … }` (lazy),
   `addFactory { … }` (interactors), `addSingleton<Interface> { get<Impl>() }`.
 - Injection: constructor params resolved by Injekt; `Injekt.get<T>()` /
   `injectLazy()` at edges (activities, application).
-- TTS integration point: `addSingletonFactory<TtsEngine> { AndroidTtsEngine(get<Application>()) }`
-  in DomainModule + `addSingletonFactory { TtsPreferences(get()) }` in PreferenceModule.
+- TTS bindings (shipped): `addSingletonFactory<TtsEngine> { AndroidTtsEngine(get<Application>()) }`
+  in DomainModule + `addSingletonFactory { TtsPreferences(get()) }` /
+  `{ TtsVoicePreferences(get()) }` in PreferenceModule.
 
 ## 12. Storage
 
 | Store | Tech | Location/notes |
 |---|---|---|
-| Main DB | SQLDelight `Database` (`tachiyomi.db`, androidx sqlite driver, FK on) | mangas, chapters, categories, history, manga_sync, sources, extension_store, saved_search, excluded_scanlators, 7 dictionary tables; views: libraryView/historyView/updatesView; migrations `1.sqm…17.sqm` |
+| Main DB | SQLDelight `Database` (`tachiyomi.db`, androidx sqlite driver, FK on) | mangas, chapters, categories, history, manga_sync, sources, extension_store, saved_search, excluded_scanlators, ocr_exclusion_zones, 7 dictionary tables; views: libraryView/historyView/updatesView; migrations `1.sqm…19.sqm` (18–19: OCR exclusion zones + rule-model rebuild) |
 | OCR cache DB | SQLDelight `OcrCacheDatabase` (`ocr_cache.db`) | `ocr_pages` + `ocr_regions`; latest-model-wins; schema-outdated file deletion instead of .sqm |
 | Preferences | SharedPreferences via `PreferenceStore` | default shared prefs; Flow-exposing wrappers |
 | Chapter cache | DiskLruCache 100 MiB | `cacheDir/chapter_disk_cache` (page lists JSON + images) |
@@ -495,7 +623,12 @@ Schema-change protocol: new `.sqm` migration + `./gradlew verifySqlDelightMigrat
   (`libs.bundles.test`). Present only in `:app`, `:data`, `:domain`, `:core:common`.
   Examples: `data/src/test/java/mihon/data/ocr/PrioritizedTaskQueueTest.kt`,
   `domain/src/test/java/tachiyomi/domain/chapter/service/ChapterRecognitionTest.kt`,
-  `app/src/test/.../OcrScanManagerTest.kt`, `SentenceParserTest.kt`.
+  `app/src/test/.../OcrScanManagerTest.kt`, `SentenceParserTest.kt`; TTS/speech
+  suites: `SentenceSegmenterTest` (15), `TtsAdvancePolicyTest` (10),
+  `SpeechCleanerTest` (11), `SpeechPipelineDedupTest` (9),
+  `SpeechRegionClassifierTest` (7), `SpeechRegionFilterTest` (9),
+  `BoxMostlyInsideTest` (7), `OcrExclusionMatcherTest` (35),
+  `TtsVoicePreferencesTest` (5) — all under `domain/src/test/`.
   Run: `./gradlew testDebugUnitTest` (build types, not flavors); single class:
   `./gradlew :domain:testDebugUnitTest --tests "…"`.
 - **Instrumentation**: `app/src/androidTest/.../OcrRepositoryImplTest.kt`

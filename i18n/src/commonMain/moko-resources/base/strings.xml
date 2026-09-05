@@ -89,6 +89,7 @@
     <string name="action_enable_all">Enable all</string>
     <string name="action_disable_all">Disable all</string>
     <string name="action_edit">Edit</string>
+    <string name="action_expand">Expand</string>
     <string name="action_add">Add</string>
     <string name="action_update_category">Update category</string>
     <string name="action_open_random_manga">Open random entry</string>
@@ -251,6 +252,8 @@
     <string name="theme_yotsuba">Yotsuba</string>
     <string name="theme_tidalwave">Tidal Wave</string>
     <string name="pref_dark_theme_pure_black">Pure black dark mode</string>
+    <string name="pref_theme_translucent">Translucent UI</string>
+    <string name="pref_theme_translucent_summary">Apply a subtle translucent surface treatment to navigation, sheets, and bars</string>
     <string name="pref_relative_format">Relative timestamps</string>
     <!-- "Today" instead of "2023-12-31" -->
     <string name="pref_relative_format_summary">\"%1$s\" instead of \"%2$s\"</string>
@@ -1306,6 +1309,10 @@
     <string name="ocr_exclusion_match_text_label">Only exclude when this text is found</string>
     <string name="ocr_exclusion_match_text_optional">Optional — leave empty to always exclude this area</string>
     <string name="ocr_exclusion_rule_hint">Word and phrase rules apply to all manga. Zones apply only where you created them.</string>
+    <string name="ocr_exclusion_legend_word">Word: never OCR this exact word, everywhere</string>
+    <string name="ocr_exclusion_legend_phrase">Phrase: never OCR this text, everywhere</string>
+    <string name="ocr_exclusion_legend_zone">Zone: ignore a page area, no text matching</string>
+    <string name="ocr_exclusion_legend_combined">Zone with text: ignore a page area only when it contains this text</string>
     <string name="ocr_exclusion_invalid_text">Enter some text first</string>
     <string name="ocr_exclusion_empty">No exclusion rules yet</string>
     <string name="tts_section_voice_profiles">Voice profiles</string>
@@ -1359,4 +1366,13 @@
     <string name="donationCampaign.paragraph3">Regardless, Mihon will continue to be maintained by me and the volunteers, and it will stay open source.</string>
     <string name="donationCampaign.contactPlatform">Discord</string>
     <string name="donationCampaign.dismiss">Dismiss</string>
+    <string name="label_continue_reading">Continue</string>
+    <string name="action_edit_rule">Edit</string>
+    <string name="ocr_exclusion_edit_rule">Edit rule</string>
+    <string name="ocr_exclusion_lines">%1$d lines</string>
+    <string name="ocr_exclusion_edit_saved">Rule updated</string>
+    <string name="feed_all_sources">All sources</string>
+    <string name="feed_manage">Manage sources</string>
+    <string name="feed_manage_empty">No feeds to manage yet</string>
+    <string name="feed_manage_reorder">Reorder feeds</string>
 </resources>

@@ -29,34 +29,39 @@ object SettingsReaderScreen : SearchableSettings {
         val readerPref = remember { Injekt.get<ReaderPreferences>() }
 
         return listOf(
-            Preference.PreferenceItem.ListPreference(
-                preference = readerPref.defaultReadingMode,
-                entries = ReadingMode.entries.drop(1)
-                    .associate { it.flagValue to stringResource(it.stringRes) },
-                title = stringResource(MR.strings.pref_viewer_type),
-            ),
-            Preference.PreferenceItem.ListPreference(
-                preference = readerPref.doubleTapAnimSpeed,
-                entries = mapOf(
-                    1 to stringResource(MR.strings.double_tap_anim_speed_0),
-                    500 to stringResource(MR.strings.double_tap_anim_speed_normal),
-                    250 to stringResource(MR.strings.double_tap_anim_speed_fast),
+            Preference.PreferenceGroup(
+                title = stringResource(MR.strings.pref_category_general),
+                preferenceItems = listOf(
+                    Preference.PreferenceItem.ListPreference(
+                        preference = readerPref.defaultReadingMode,
+                        entries = ReadingMode.entries.drop(1)
+                            .associate { it.flagValue to stringResource(it.stringRes) },
+                        title = stringResource(MR.strings.pref_viewer_type),
+                    ),
+                    Preference.PreferenceItem.ListPreference(
+                        preference = readerPref.doubleTapAnimSpeed,
+                        entries = mapOf(
+                            1 to stringResource(MR.strings.double_tap_anim_speed_0),
+                            500 to stringResource(MR.strings.double_tap_anim_speed_normal),
+                            250 to stringResource(MR.strings.double_tap_anim_speed_fast),
+                        ),
+                        title = stringResource(MR.strings.pref_double_tap_anim_speed),
+                    ),
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = readerPref.showReadingMode,
+                        title = stringResource(MR.strings.pref_show_reading_mode),
+                        subtitle = stringResource(MR.strings.pref_show_reading_mode_summary),
+                    ),
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = readerPref.showNavigationOverlayOnStart,
+                        title = stringResource(MR.strings.pref_show_navigation_mode),
+                        subtitle = stringResource(MR.strings.pref_show_navigation_mode_summary),
+                    ),
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = readerPref.pageTransitions,
+                        title = stringResource(MR.strings.pref_page_transitions),
+                    ),
                 ),
-                title = stringResource(MR.strings.pref_double_tap_anim_speed),
-            ),
-            Preference.PreferenceItem.SwitchPreference(
-                preference = readerPref.showReadingMode,
-                title = stringResource(MR.strings.pref_show_reading_mode),
-                subtitle = stringResource(MR.strings.pref_show_reading_mode_summary),
-            ),
-            Preference.PreferenceItem.SwitchPreference(
-                preference = readerPref.showNavigationOverlayOnStart,
-                title = stringResource(MR.strings.pref_show_navigation_mode),
-                subtitle = stringResource(MR.strings.pref_show_navigation_mode_summary),
-            ),
-            Preference.PreferenceItem.SwitchPreference(
-                preference = readerPref.pageTransitions,
-                title = stringResource(MR.strings.pref_page_transitions),
             ),
             getDisplayGroup(readerPreferences = readerPref),
             getEInkGroup(readerPreferences = readerPref),

@@ -6,9 +6,13 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -18,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -44,8 +49,14 @@ fun OcrResultPopup(
         val density = LocalDensity.current
         val marginPx = with(density) { 8.dp.toPx() }
         val gapPx = marginPx
-        val viewportWidthPx = constraints.maxWidth.toFloat()
-        val viewportHeightPx = constraints.maxHeight.toFloat()
+        // Inset-aware viewport: never place the popup under status/nav bars or cutout.
+        val layoutDirection = LocalLayoutDirection.current
+        val horizontalInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)
+        val verticalInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical)
+        val viewportWidthPx = constraints.maxWidth.toFloat() -
+            (horizontalInsets.getLeft(density, layoutDirection) + horizontalInsets.getRight(density, layoutDirection))
+        val viewportHeightPx = constraints.maxHeight.toFloat() -
+            (verticalInsets.getTop(density) + verticalInsets.getBottom(density))
         val preferredPopupWidthPx = with(density) {
             settings.widthDp.dp.toPx().coerceAtMost((viewportWidthPx - (marginPx * 2)).coerceAtLeast(1f))
         }

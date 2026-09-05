@@ -39,7 +39,6 @@ import tachiyomi.presentation.core.components.RadioItem
 import tachiyomi.presentation.core.components.SortItem
 import tachiyomi.presentation.core.components.TriStateItem
 import tachiyomi.presentation.core.i18n.stringResource
-import tachiyomi.presentation.core.theme.active
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -177,7 +176,7 @@ fun ScanlatorFilterItem(
             imageVector = Icons.Outlined.PeopleAlt,
             contentDescription = null,
             tint = if (active) {
-                MaterialTheme.colorScheme.active
+                MaterialTheme.colorScheme.tertiary
             } else {
                 LocalContentColor.current
             },

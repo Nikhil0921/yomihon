@@ -61,3 +61,9 @@ class SetOcrExclusionZoneEnabled(
 ) {
     suspend fun await(id: Long, enabled: Boolean) = repository.setEnabled(id, enabled)
 }
+
+class UpdateOcrExclusionZoneText(
+    private val repository: OcrExclusionZoneRepository,
+) {
+    suspend fun await(id: Long, matchText: String) = repository.updateMatchText(id, matchText)
+}

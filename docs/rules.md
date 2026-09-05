@@ -126,7 +126,9 @@ no new image/audio libraries.
 - Future engines must be addable without modifying reader logic
   (interface + Injekt binding swap).
 - Segmentation/ordering rules are fixed (see prd.md F2): region order is truth;
-  never merge across regions; terminal punct `。！？!?‼⁇⁉⁈` only; `.`/`...` not terminal.
+  never merge across regions; CJK terminal punct `。！？!?‼⁇⁉⁈` always; ASCII
+  `.` terminal ONLY as a single dot before whitespace/EOL (dot-runs `...` and
+  decimals are never terminal — English rules added 2026-08-25).
 
 ## 7. Error handling
 

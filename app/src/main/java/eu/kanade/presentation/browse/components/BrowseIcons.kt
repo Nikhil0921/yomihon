@@ -15,7 +15,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -33,6 +32,7 @@ import eu.kanade.tachiyomi.extension.model.Extension
 import eu.kanade.tachiyomi.extension.util.ExtensionLoader
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.domain.source.model.Source
+import tachiyomi.presentation.core.components.material.CoverPlaceholderColor
 import tachiyomi.source.local.isLocal
 
 private val defaultModifier = Modifier
@@ -90,7 +90,7 @@ fun ExtensionIcon(
             AsyncImage(
                 model = extension.iconUrl,
                 contentDescription = null,
-                placeholder = ColorPainter(Color(0x1F888888)),
+                placeholder = ColorPainter(CoverPlaceholderColor),
                 error = rememberResourceBitmapPainter(id = R.drawable.cover_error),
                 modifier = modifier
                     .clip(MaterialTheme.shapes.extraSmall),

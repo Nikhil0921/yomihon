@@ -79,7 +79,6 @@ import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
@@ -101,6 +100,7 @@ import tachiyomi.presentation.core.components.material.TextButton
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.theme.itemTitle
 import tachiyomi.presentation.core.util.clickableNoIndication
 import tachiyomi.presentation.core.util.secondaryItemAlpha
 import uy.kohesive.injekt.Injekt
@@ -740,7 +740,7 @@ private fun RowScope.MangaActionButton(
             Text(
                 text = title,
                 color = color,
-                fontSize = 12.sp,
+                style = LocalTextStyle.current.merge(MaterialTheme.typography.itemTitle),
                 textAlign = TextAlign.Center,
             )
         }

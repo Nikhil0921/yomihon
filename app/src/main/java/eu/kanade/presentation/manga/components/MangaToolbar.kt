@@ -23,7 +23,6 @@ import eu.kanade.presentation.components.DownloadDropdownMenu
 import eu.kanade.presentation.manga.DownloadAction
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
-import tachiyomi.presentation.core.theme.active
 
 @Composable
 fun MangaToolbar(
@@ -73,7 +72,7 @@ fun MangaToolbar(
                 )
             }
 
-            val filterTint = if (hasFilters) MaterialTheme.colorScheme.active else LocalContentColor.current
+            val filterTint = if (hasFilters) MaterialTheme.colorScheme.tertiary else LocalContentColor.current
             AppBarActions(
                 actions = buildList {
                     if (isActionMode) {

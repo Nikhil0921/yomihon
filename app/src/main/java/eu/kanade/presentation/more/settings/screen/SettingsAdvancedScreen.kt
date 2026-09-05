@@ -90,40 +90,45 @@ object SettingsAdvancedScreen : SearchableSettings {
         val libraryPreferences = remember { Injekt.get<LibraryPreferences>() }
 
         return listOf(
-            Preference.PreferenceItem.TextPreference(
-                title = stringResource(MR.strings.pref_dump_crash_logs),
-                subtitle = stringResource(MR.strings.pref_dump_crash_logs_summary),
-                onClick = {
-                    scope.launch {
-                        CrashLogUtil(context).dumpLogs()
-                    }
-                },
-            ),
-            Preference.PreferenceItem.SwitchPreference(
-                preference = networkPreferences.verboseLogging,
-                title = stringResource(MR.strings.pref_verbose_logging),
-                subtitle = stringResource(MR.strings.pref_verbose_logging_summary),
-                onValueChanged = {
-                    context.toast(MR.strings.requires_app_restart)
-                    true
-                },
-            ),
-            Preference.PreferenceItem.TextPreference(
-                title = stringResource(MR.strings.pref_debug_info),
-                onClick = { navigator.push(DebugInfoScreen()) },
-            ),
-            Preference.PreferenceItem.TextPreference(
-                title = stringResource(MR.strings.pref_onboarding_guide),
-                onClick = { navigator.push(OnboardingScreen()) },
-            ),
-            Preference.PreferenceItem.TextPreference(
-                title = stringResource(MR.strings.pref_manage_notifications),
-                onClick = {
-                    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                    }
-                    context.startActivity(intent)
-                },
+            Preference.PreferenceGroup(
+                title = stringResource(MR.strings.pref_category_general),
+                preferenceItems = listOf(
+                    Preference.PreferenceItem.TextPreference(
+                        title = stringResource(MR.strings.pref_dump_crash_logs),
+                        subtitle = stringResource(MR.strings.pref_dump_crash_logs_summary),
+                        onClick = {
+                            scope.launch {
+                                CrashLogUtil(context).dumpLogs()
+                            }
+                        },
+                    ),
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = networkPreferences.verboseLogging,
+                        title = stringResource(MR.strings.pref_verbose_logging),
+                        subtitle = stringResource(MR.strings.pref_verbose_logging_summary),
+                        onValueChanged = {
+                            context.toast(MR.strings.requires_app_restart)
+                            true
+                        },
+                    ),
+                    Preference.PreferenceItem.TextPreference(
+                        title = stringResource(MR.strings.pref_debug_info),
+                        onClick = { navigator.push(DebugInfoScreen()) },
+                    ),
+                    Preference.PreferenceItem.TextPreference(
+                        title = stringResource(MR.strings.pref_onboarding_guide),
+                        onClick = { navigator.push(OnboardingScreen()) },
+                    ),
+                    Preference.PreferenceItem.TextPreference(
+                        title = stringResource(MR.strings.pref_manage_notifications),
+                        onClick = {
+                            val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                            }
+                            context.startActivity(intent)
+                        },
+                    ),
+                ),
             ),
             getBackgroundActivityGroup(),
             getDataGroup(),

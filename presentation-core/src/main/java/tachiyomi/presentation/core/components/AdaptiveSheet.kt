@@ -47,6 +47,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
+import tachiyomi.presentation.core.theme.asChromeContainer
 import kotlin.math.roundToInt
 
 @Composable
@@ -96,7 +97,7 @@ fun AdaptiveSheet(
                     .padding(vertical = 16.dp)
                     .then(modifier),
                 shape = MaterialTheme.shapes.extraLarge,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh.asChromeContainer(),
                 content = {
                     BackHandler(
                         enabled = enableImplicitDismiss && remember { derivedStateOf { alpha > 0f } }.value,
@@ -181,7 +182,7 @@ fun AdaptiveSheet(
                     .navigationBarsPadding()
                     .statusBarsPadding(),
                 shape = MaterialTheme.shapes.extraLarge,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh.asChromeContainer(),
                 content = {
                     BackHandler(
                         enabled = enableImplicitDismiss && anchoredDraggableState.targetValue == 0,

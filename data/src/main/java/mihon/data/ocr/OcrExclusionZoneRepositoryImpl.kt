@@ -105,6 +105,12 @@ class OcrExclusionZoneRepositoryImpl(
         }
     }
 
+    override suspend fun updateMatchText(id: Long, matchText: String) {
+        withContext(Dispatchers.IO) {
+            database.ocr_exclusion_zonesQueries.updateMatchText(id = id, matchText = matchText)
+        }
+    }
+
     private fun zoneMapper(
         _id: Long,
         mangaId: Long,

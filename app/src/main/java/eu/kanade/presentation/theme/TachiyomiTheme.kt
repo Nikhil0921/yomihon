@@ -5,6 +5,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import eu.kanade.domain.ui.UiPreferences
@@ -24,6 +25,7 @@ import eu.kanade.presentation.theme.colorscheme.TealTurqoiseColorScheme
 import eu.kanade.presentation.theme.colorscheme.TidalWaveColorScheme
 import eu.kanade.presentation.theme.colorscheme.YinYangColorScheme
 import eu.kanade.presentation.theme.colorscheme.YotsubaColorScheme
+import tachiyomi.presentation.core.theme.LocalTranslucentSurfaces
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -37,6 +39,7 @@ fun TachiyomiTheme(
     BaseTachiyomiTheme(
         appTheme = appTheme ?: uiPreferences.appTheme.get(),
         isAmoled = amoled ?: uiPreferences.themeDarkAmoled.get(),
+        isTranslucent = uiPreferences.translucentTheme.get(),
         content = content,
     )
 }
@@ -46,27 +49,32 @@ fun TachiyomiPreviewTheme(
     appTheme: AppTheme = AppTheme.DEFAULT,
     isAmoled: Boolean = false,
     content: @Composable () -> Unit,
-) = BaseTachiyomiTheme(appTheme, isAmoled, content)
+) = BaseTachiyomiTheme(appTheme, isAmoled, isTranslucent = false, content = content)
 
 @Composable
 private fun BaseTachiyomiTheme(
     appTheme: AppTheme,
     isAmoled: Boolean,
+    isTranslucent: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
     val isDark = isSystemInDarkTheme()
-    MaterialExpressiveTheme(
-        colorScheme = remember(appTheme, isDark, isAmoled) {
-            getThemeColorScheme(
-                context = context,
-                appTheme = appTheme,
-                isDark = isDark,
-                isAmoled = isAmoled,
-            )
-        },
-        content = content,
-    )
+    androidx.compose.runtime.CompositionLocalProvider(
+        LocalTranslucentSurfaces provides isTranslucent,
+    ) {
+        MaterialExpressiveTheme(
+            colorScheme = remember(appTheme, isDark, isAmoled) {
+                getThemeColorScheme(
+                    context = context,
+                    appTheme = appTheme,
+                    isDark = isDark,
+                    isAmoled = isAmoled,
+                )
+            },
+            content = content,
+        )
+    }
 }
 
 private fun getThemeColorScheme(

@@ -48,8 +48,12 @@ fun ReaderSettingsDialog(
         ) { page ->
             val window = (LocalView.current.parent as? DialogWindowProvider)?.window
 
+            // The color-filter page previews filters over the page itself: drop the
+            // dialog dim so the preview is accurate, and identify it by content
+            // (tab title) rather than page index.
+            val isColorFilterPage = tabTitles[page] == stringResource(MR.strings.custom_filter)
             LaunchedEffect(pagerState.currentPage) {
-                if (pagerState.currentPage == 2) {
+                if (isColorFilterPage) {
                     window?.setDimAmount(0f)
                     onHideMenus()
                 } else {

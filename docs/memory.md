@@ -10,21 +10,23 @@
 ## Current project state
 
 ```text
-Project:        Yomihon fork (v0.5.1, vc27) — Android manga reader + OCR/language tooling
-Repo state:     branch main @ b8858545a + UNCOMMITTED multi-phase feature set
-                (2026-09-01, see "[COMPLETED 2026-09-01 — Phases A–I]" block).
-                v0.5.1 RELEASE PUBLISHED 2026-08-31 (tag v0.5.1, 5 ABI APKs).
+Project:        Yomihon fork (v0.5.2, vc28) — Android manga reader + OCR/language tooling
+Repo state:     branch main @ 0286d9081 (v0.5.2 release) + UNCOMMITTED
+                post-release sets: P0 zone-prefill fix + UI modernization
+                set 1 + UI follow-up set 2 + set 3 design-audit
+                implementation (2026-09-03/04, see Completed work +
+                Agent handoff). v0.5.2 RELEASE PUBLISHED 2026-09-03 (tag
+                v0.5.2, 5 ABI APKs; includes exclusion rules, speech
+                cleanup, voice profiles, 3x rate, Feed tab).
 Untracked:      .opencode/ + .device-pass/ (gitignored), .codegraph/ (index,
                 gitignored)
-Primary goal:   Multi-phase roadmap: intelligent speech cleanup, region
-                classification, OCR exclusion zones, voice profiles, 3x rate,
-                dictionary nav cleanup, Feed feature
-Current phase:  2026-09-01 session — Phases A–I implemented, all gates green
-                (spotlessCheck + testDebugUnitTest + verifySqlDelightMigration
-                + :app:assembleDebug), UNCOMMITTED, device pass NOT run.
-Current status: New DB migration 18.sqm verified; TTS regression surface
-                untouched (speak/advance/pause paths intact, pipeline only
-                filters regions before segmentation).
+Primary goal:    Stabilize post-v0.5.2: device verification of uncommitted
+                UI sets, then Phase 10B backlog as PRD-gated work
+Current phase:  Post-release stabilization — UI sets uncommitted, device
+                pass NOT run.
+Current status: TTS v1 + 10A + 2026-09-01 multi-feature set all shipped in
+                v0.5.2; docs (architecture/prd/design/phase) re-audited and
+                aligned 2026-09-04.
 ```
 
 ## Current objective
@@ -654,6 +656,34 @@ Device clock = host + ~5h29m (log timestamps 12:54+ ↔ file mtime ~07:30).
 ## In progress
 
 ```text
+v0.5.2 RELEASE PUBLISHED 2026-09-03 (tag v0.5.2, 5 ABI APKs, Latest).
+- Version bumped 0.5.2/28 (commit 0286d9081 "chore(release): bump version to
+  0.5.2 (versionCode 28)" + CHANGELOG.md entry), tagged, pushed, release
+  created via gh with full notes: Feed tab, OCR exclusion rules (all types,
+  NFKC-robust matching), speech cleanup/classification prefs, rate 50–300%,
+  dictionary entry, 10 bug fixes (toggle row swap, pure-ZONE semantics,
+  prefill removal, split-page coord rejection, leak fixes, etc.).
+- Built LOCAL (release.yml fork-gated github.repository == 'yomihon/yomihon'
+  → all jobs skip on fork; releases MUST be built+published locally, same
+  as v0.5.0/v0.5.1):
+  docker -u vscode, both volumes, -Xmx4g, assembleRelease
+  -Pinclude-telemetry -Penable-updater → BUILD SUCCESSFUL 13m53s.
+  aapt2 verified versionCode=28 versionName=0.5.2; 6 ML models packaged.
+- BUILD ISSUE (resolved): root-owned dirs in data/build + domain/build
+  intermediates (residue from a past root container run, Aug 28) failed
+  copyReleaseJniLibsProjectAndLocalJars / checkReleaseAarMetadata
+  "Failed to create parent directory". Fix: one-off root container
+  `chown -R 1000:1000 /workspace` (no sudo on host). If it recurs, same fix.
+- APKs staged: /tmp/yomihon-{abi}-v0.5.2.apk (also at
+  app/build/outputs/apk/release/). Release:
+  https://github.com/Nikhil0921/yomihon/releases/tag/v0.5.2
+- In-app updater: points at this fork (7e0d52697) — v0.5.2 users get
+  future update prompts.
+NOTE: main @ 0286d9081; all prior feature/fix commits (c70e32252,
+1b810ccde, baf7f679b, 4543cf453) now part of release. Docs update
+(memory.md this block) is post-release, uncommitted.
+```
+
 P0 followup: ZONE-exclusion "prefill regression" FIX — code done, device
 verify pending. Device logs (excl3-final.log, 20:10-20:26) proved all 6
 new zone-drag rules (34,36,37,38,39,46) saved type=COMBINED: dialog
@@ -674,6 +704,239 @@ NOTE: old COMBINED rules 34-46 from bad session still in device DB —
 must be deleted/re-created blank for pure-zone behavior. PHRASE/WORD
 rules confirmed working in same log (3/19 etc.) — "phrase broken" cases
 were COMBINED-by-prefill zones, not phrase rules.
+```
+
+```text
+[COMPLETED 2026-09-03 — UI/UX modernization set 1, UNCOMMITTED]
+
+Scope: frontend modernization only; zero business-logic changes. Audited
+first (2 explore agents: screens/theme/nav + settings/OCR/TTS), then
+presentation-layer edits:
+
+1. Bottom nav: presentation-core NavigationBar.kt → floating elevated
+   pill (surfaceContainer, RoundedCornerShape(28.dp), 12dp horizontal
+   inset, 8dp bottom inset, navBars windowInsets inside pill). All
+   themes/accents unaffected (token-driven).
+2. Library Continue section: LibraryContent.kt new param continueItems;
+   LibraryTab computes via derivedStateOf from EXISTING LibraryScreenModel
+   state (favorites filtered unread>0 && lastRead>0, sorted lastRead desc,
+   take(10)) — no SM/repo changes. Rows = surfaceContainerLow cards,
+   cover + title + unread-count plural + FilledTonalIconButton resume
+   (reuses existing getNextUnreadChapter path via onContinueReadingClicked).
+   Hidden during selection/search/active-filters.
+3. OCR exclusion phrase EDIT (full chain, NO schema change — new query
+   only): ocr_exclusion_zones.sq +updateMatchText; repo iface+impl;
+   UpdateOcrExclusionZoneText interactor; DomainModule binding; SM
+   updateTextRule(id,text) (trim, blank-reject); UI EditRuleDialog
+   (multiline, pre-filled, remember(rule.id)). verifySqlDelightMigration
+   GREEN (query-only, no migration needed).
+4. OCR exclusions UI: phrases/words collapsed by default (first line +
+   "N lines" subtitle, expand arrow + row click toggles, animateContentSize,
+   rememberSaveable(zone.id)); zone coords shown only when expanded;
+   edit TextButton inside expanded state (words+phrases only); delete now
+   error-tinted IconButton. Zone identity resolution: SM injects
+   GetManga/GetChapter/SourceManager, builds identities map
+   zoneId→"Manga · Chapter"/manga title/source name, rendered as primary
+   labelMedium first line on every RuleRow.
+5. Feed selector: FeedScreenModel State +selectedSourceId/+listingOverride
+   (+visibleFeeds computed filter; sections cache untouched — no refetch on
+   filter). FeedScreen FeedFilterBar: All-sources + per-source FilterChips
+   (horizontalScroll, shown when ≥2 feed sources) + All/Popular/Latest
+   chips (shown when feeds have both listings). visibleFeeds replaces feeds
+   in grid. AddFeedDialog/empty/headers untouched.
+6. Browse Search tab: new SearchTab.kt (globalsearch pkg) — existing
+   GlobalSearchScreenModel + NEW public GlobalSearchTabContent wrapper
+   (presentation/browse/GlobalSearchScreen.kt; content-only, no nested
+   Scaffold) mounted as TabbedScreen tab 0; search bar = TabbedScreen's
+   shared SearchToolbar (searchEnabled=true), typing ≥2 chars triggers
+   screenModel.search() (existing infra). BrowseTab now routes searchQuery
+   by currentPage (0=search SM, else extensions SM); showExtension() page
+   index 1→2. Sources/Extensions/Migrate tabs untouched.
+7. More tab: HorizontalDivider group separators → GroupHeader (titleSmall,
+   primary color) sections: General / Library / Settings.
+
+i18n base additions (strings.xml): label_continue_reading, action_edit_rule,
+ocr_exclusion_edit_rule, ocr_exclusion_lines, feed_all_sources,
+action_expand; plurals.xml: continue_reading_unread. No locale hand-edits.
+
+GATES GREEN 2026-09-03 (devcontainer JDK17, -Xmx4g, both volumes):
+  spotlessApply → spotlessCheck + testDebugUnitTest +
+  verifySqlDelightMigration BUILD SUCCESSFUL 2m27s; :app:assembleDebug
+  BUILD SUCCESSFUL 3m15s (APKs built 20:30). :app:compileDebugKotlin green
+  after fixes (NavigationBarDefaults ref, asMangaCover import, unreadCount
+  Long→Int, GroupHeader moved to top level, searchTab import).
+
+Files changed (13): presentation-core/.../material/NavigationBar.kt,
+  app/.../presentation/library/components/LibraryContent.kt,
+  app/.../tachiyomi/ui/library/LibraryTab.kt,
+  data/src/main/sqldelight/tachiyomi/data/ocr_exclusion_zones.sq,
+  domain/.../ocr/repository/OcrExclusionZoneRepository.kt,
+  data/.../ocr/OcrExclusionZoneRepositoryImpl.kt,
+  domain/.../ocr/interactor/OcrExclusionZoneInteractors.kt,
+  app/.../domain/DomainModule.kt,
+  app/.../setting/ocrexclusions/SettingsOcrExclusionsScreenModel.kt,
+  app/.../settings/screen/SettingsOcrExclusionsScreen.kt,
+  app/.../presentation/feed/FeedScreen.kt, app/.../ui/feed/{FeedTab,FeedScreenModel}.kt,
+  app/.../ui/browse/BrowseTab.kt,
+  app/.../ui/browse/source/globalsearch/SearchTab.kt (new),
+  app/.../presentation/browse/GlobalSearchScreen.kt,
+  app/.../presentation/more/MoreScreen.kt, i18n base strings/plurals.
+
+Device verification PENDING user (matrix): Continue section renders ≤10 +
+resume works, all theme colors OK on nav pill, phrase expand/edit roundtrip
+(edit survives + matcher still excludes), zone identity lines correct,
+Feed chips filter + Popular/Latest toggle, Browse search tab searches +
+result navigation, More grouping, no regressions in updates/history/source
+browse/migrate/TTS/OCR playback.
+```
+
+```text
+[COMPLETED 2026-09-04 — docs design audit: aligned docs/* with shipped v0.5.2, UNCOMMITTED]
+- Audited all docs/*.md against the codebase (git log @0286d9081, file tree,
+  .sq/migrations, prefs, tests, screens). Docs were 1–4 days stale: they
+  described TTS as planned/in-progress and omitted everything from the
+  2026-09-01..04 sessions.
+- architecture.md: header v0.5.2; app-flow tabs (+Feed); reader flow
+  (onPageSelected TTS debounce note); OCR flow entry D=exclusion zones,
+  E=TTS; recognizeText LEGACY/FAST→GLENS redirect documented; NEW §4.1 OCR
+  exclusion system (schema 18/19.sqm, ZONE/WORD/PHRASE/COMBINED semantics,
+  matcher/prefetch/backups/dims-guard); §5 rewritten planned→actual (speech
+  pipeline step 2, dispatch-id utterances, speed-aware prefetch); NEW §5.1
+  speech pipeline, §5.2 voice profiles, §5.3 rate 50–300; layering table +
+  speech/; §6 folder tree (feed/, ocrexclusions/, DictionaryLookupScreen,
+  tts/, migrations 1..19); §7 "New files planned" → shipped-file table;
+  §11 DI bindings shipped; §12 migrations 1..19 + ocr_exclusion_zones;
+  §14 test-suite inventory (counts).
+- prd.md: §1.1 v0.5.2/vc28; §1.3 use-case rows (Read Aloud, exclusions,
+  Feed, dictionary lookup); §1.4 floating nav + Feed tab; §1.6 shipped
+  statement; §2.6 pref classes (+TTS/Voice/Feed); NEW §2.8 TTS additions,
+  §2.9 Feed, §2.10 dictionary nav; §3 header SHIPPED; F4 rewritten (EN
+  pivot, 50–300%); §3.4 status MET note; §4 backlog = 10B; §6 status
+  COMPLETED (+ voice profiles row, rate range, committed hash).
+- design.md: §1 floating pill language; §2 surface token (elevation);
+  §6 shapes (floating pills vs full-width strips); §8 TtsPlaybackBar =
+  floating rounded pill (0.92f/560dp, z-order before dialogs) + speed chip
+  + dropdown; §10 animateContentSize; §11 responsive; §13 rate 50–300 +
+  voice profiles group + reader-tab slider range.
+- phase.md: pointer → v0.5.2 released + uncommitted UI sets (incl.
+  prefill-removal follow-up); 10A block: UNCOMMITTED→committed 0480778fd;
+  "per-voice profiles" backlog note updated (profiles landed, tuning
+  remains).
+- memory.md: header state block (v0.5.2 @0286d9081) + agent handoff block
+  updated (this block).
+- Verified every new claim against source; no code files touched; no
+  gates applicable (docs only).
+```
+
+```text
+[COMPLETED 2026-09-04 — UI follow-up set 2: revert Continue + Search tab, centralize Feed management, UNCOMMITTED]
+
+User-directed changes (device testing of set 1 found Continue + Browse
+Search broken):
+
+1. Library Continue section REMOVED: LibraryContent.kt reverted to
+   pre-Continue signature (continueItems param + ContinueReadingSection/
+   Row/continueSubtitle composables deleted); LibraryTab derivedStateOf
+   block removed (import too). Grid/tabs/continue-reading per-item button
+   (existing pref feature) untouched.
+2. Browse Search tab REMOVED: SearchTab.kt deleted; GlobalSearchTabContent
+   wrapper deleted from presentation GlobalSearchScreen.kt (internal
+   GlobalSearchContent back to prior shape); BrowseTab back to 3 tabs
+   (Sources/Extensions/Migrate) with original searchQuery routing to
+   Extensions SM + showExtension() page index back to 1. Global search
+   itself (Browse reselect + Sources toolbar action) untouched.
+3. Feed central management: NEW ManageFeedsScreen.kt (presentation/feed,
+   pushed Voyager Screen, AppBar + ScrollbarLazyColumn + EmptyScreen) —
+   one row per feed: source name + listing, up/down reorder, enable
+   Switch, delete; mutations reuse FeedScreenModel (prefs-backed, both
+   screens stay live). FeedScreen: FeedHeader stripped to name+listing
+   only (controls gone from main screen); TopAppBar gains Tune
+   "Manage sources" action beside + Add. Signature dropped 4 per-feed
+   callbacks (FeedTab no longer passes them). Filter chips (All/popular/
+   latest selector) unchanged.
+
+i18n base additions: feed_manage, feed_manage_empty, feed_manage_reorder.
+(label_continue_reading/continue_reading_unread plurals now unused — kept,
+harmless; action_expand/ocr edit keys still used by OCR screen.)
+
+GATES GREEN 2026-09-04 (devcontainer JDK17, -Xmx4g, both volumes):
+  spotlessApply; spotlessCheck + testDebugUnitTest + verifySqlDelightMigration
+  BUILD SUCCESSFUL 2m44s; :app:assembleDebug BUILD SUCCESSFUL 1m24s.
+  APK installed 02:2x on SM_M066B, app boots PID 19178, 0 FATAL in
+  fresh capture .device-pass/ui-modern-2.log (PID 82688, running).
+
+Files changed (7): presentation/library/components/LibraryContent.kt,
+  tachiyomi/ui/library/LibraryTab.kt,
+  presentation/browse/GlobalSearchScreen.kt,
+  tachiyomi/ui/browse/BrowseTab.kt,
+  presentation/feed/FeedScreen.kt, presentation/feed/ManageFeedsScreen.kt
+  (new), tachiyomi/ui/feed/FeedTab.kt, i18n base strings.xml.
+  (SearchTab.kt deleted.)
+
+Device verify PENDING user: Library clean (no Continue, grid normal),
+Browse 3 tabs (Sources/Extensions/Migrate search routing OK), Feed main
+screen headers control-free + Tune opens ManageFeedsScreen (toggle/
+reorder/delete reflect live on return).
+```
+
+```text
+[COMPLETED 2026-09-05 — deferred audit-fix set (separate from UI modernization
+set 3 + MangaScreen task), UNCOMMITTED]
+
+Scope: the 7 remaining design-audit deferred items ONLY. Audited first;
+3 items needed code, rest documented.
+
+1. Reselect/scroll-to-top: DEFERRED — audit §5 marks it NEEDS APPROVAL;
+   no approval recorded; current semantics intentionally kept (Library=
+   settings sheet, Updates=DownloadQueue, History=resume-last-chapter,
+   Feed=none, More=Settings). No change.
+2. OCR engine settings discoverability: FIXED via cross-link —
+   SettingsReadAloudScreen Advanced group gains "Text Recognition" row
+   (title label_text_recognition, subtitle pref_ocr_model, existing keys)
+   pushing existing OcrQueueScreen. No relocation, no duplication, no
+   second source of truth; OcrQueueScreen/MoreScreen untouched. Settings
+   screens pushing ui/ screens = existing precedent (CategoryScreen,
+   OnboardingScreen).
+3. ttsSpeechScript: NOT dead — consumed by TtsPreferences
+   speechRegionFilterConfig() (drives skipForeignScript semantics, default
+   LATIN); zero UI exposure (3 i18n keys unused-in-UI). Left unchanged;
+   optional future cleanup = expose picker or drop pref+keys together.
+   ocrTextSelectionEnabled: pref key gates OCR button visibility; key name
+   kept (rename = persistence risk); user-facing label already accurate
+   ("OCR text selection button", strings.xml:452). No change.
+4. TrackInfoDialogHome double-clip: FIXED — removed redundant trailing
+   .clip(RoundedCornerShape(6.dp)) after background+padding (inner clip
+   clipped content, not bg, and second radius fought shapes.medium).
+   Geometry preserved: shapes.medium + surfaceContainerHighest + 8dp
+   padding unchanged. RoundedCornerShape import dropped.
+5. Dictionary token micro-pass: FIXED — SearchBar textStyle 15.sp hack
+   → pure bodyLarge token. WordSelector 20.sp magnified OCR header =
+   deliberate (tap targets), kept. Delete icon in SettingsDictionaryScreen
+   already error-tinted (IconButtonDefaults contentColor=error); rest
+   token-clean. No redesign.
+6. HistoryItem: FIXED — Row .height(96.dp) → .heightIn(min = 96.dp);
+   text column now drives height (wraps at large font scale, no clip);
+   cover keeps fixed 96dp (identical visual, wrap-safe). IconButtons
+   (48dp) untouched; interaction behavior unchanged.
+7. Regression audit: no tab/nav files touched; MoreScreen OCR row
+   untouched (Settings cross-link is additive); OCR button pref path
+   untouched; TTS prefs untouched; TrackInfo geometry preserved.
+
+GATES GREEN 2026-09-05 (devcontainer JDK17, -Xmx4g, both volumes):
+  spotlessCheck + :app:compileDebugKotlin + :presentation-core:
+  compileDebugKotlin BUILD SUCCESSFUL 3m2s; testDebugUnitTest BUILD
+  SUCCESSFUL 3m3s. No DB/schema files touched → verifySqlDelightMigration
+  N/A.
+
+Files changed (4): presentation/track/TrackInfoDialogHome.kt (clip),
+  presentation/dictionary/components/DictionaryComponents.kt (15sp),
+  presentation/history/components/HistoryItem.kt (heightIn),
+  presentation/more/settings/screen/SettingsReadAloudScreen.kt
+  (+navigator import, +OcrQueueScreen import, +Advanced cross-link row).
+
+Device verify pending user: TrackInfo dialog visuals (shape unchanged,
+one clip), History row at default + large font scale, Read aloud
+Settings → Advanced → Text Recognition opens queue screen.
 ```
 
 Feature: Phase 10A advanced system TTS voice configuration — COMPLETE
@@ -2041,46 +2304,111 @@ Result:   BUILD SUCCESSFUL — full suite green incl. extended
 ## Agent handoff
 
 ```text
-Last agent:                 opencode (2026-09-03 — OCR exclusion regression
-                            #2: diagnostic-first investigation + fixes)
-Date:                       2026-09-03
-Task completed:             Phase 0 fresh device evidence (on-device logcat,
-                            LegacyOcrEngine crop proof, exclusion-miss log,
-                            LeakCanary 12.3s freeze + 131.5s analysis, device
-                            DB dump via run-as+python sqlite3). 3 parallel
-                            explore subagents + orchestrator verification.
-                            5 evidence-confirmed root causes fixed: crop-OCR
-                            engine asymmetry (LEGACY JP model → Glens
-                            redirect), any-overlap selection leak
-                            (boxMostlyInside 50%), PHRASE punctuation
-                            asymmetry (token-concat fallback), 184.7MB
-                            WebtoonTransitionHolder leak (detach-cancel),
-                            detect pile-up (single-flight + min-crop guard).
-                            LeakCanary-config approach investigated and
-                            DROPPED (API cannot prevent dumps; real leak
-                            fixed instead). Tests matcher 20→27 +
-                            BoxMostlyInsideTest 7. All 4 gates green.
-                            APK 0.5.1-8255 installed 12:54.
-Current task:               Verify-log analysis DONE (see verify2 block in
-                            Completed work — pipeline healthy, 2 new defects:
-                            main-thread page-list fetch, Glens-502 scan-path
-                            fallback gap). Pending: user review + commit of
-                            regression #2 fix set.
-Next recommended task:      Analyze verify log after user run: expect OCR(glens)
-                            on crop fallback (never OCR(legacy)), exclusion
-                            rules=X excluded>0 for word/phrase pages, 0
-                            LeakCanary dumps after reader exit (holder leak
-                            gone), no detect pile-up on rapid re-select.
-                            Then user review + commit.
-Files safe to modify:       docs/* ; app reader/tts/settings/viewer ; data OCR;
-                            i18n base strings.xml
-Known risks:                PHRASE spanning two OCR regions stays un-excluded
-                            (documented v1 semantics, pinned by test); mid-
-                            session rule adds apply from next page acquire;
-                            sub-10px selection crops return empty detect
-                            field by design; Known issue #13 LeakCanary
-                            Toast/Popup debug noise unchanged (ignored-
-                            matcher API cannot suppress dumps).
+Last agent:                 opencode (2026-09-04 — UI modernization
+                            implementation, approved plan in
+                            docs/design-audit.md)
+Date:                       2026-09-04
+Task completed:             Full presentation-only implementation of the
+                            approved design-audit plan (user approved all
+                            bug fixes + flat settings + Mica toggle;
+                            MangaScreen screen-model architecture
+                            explicitly excluded by user).
+                            STEP 1 foundation: Typography.itemTitle (12/18sp
+                            token, kills GridItemTitle hack ×2 sites),
+                            Constants PILL_ALPHA + CoverPlaceholderColor,
+                            ListGroupHeader→Typography.header (one header
+                            system: MoreScreen private header deleted,
+                            PreferenceGroupHeader re-pointed, Sources/
+                            Feed/OcrExclusions converge), ResizableSheet→
+                            extraLarge+surfaceContainerHigh (sheet
+                            geometry unified), amber `active` deleted →
+                            tertiary (5 callers), tracking 0xFF4CAF50 →
+                            tertiary, pillAlpha ×3→constant (Tabs/
+                            LibraryToolbar/queue screens ×2), placeholder
+                            gray ×2 → single constant, NavigationBar pill
+                            shape → token.
+                            STEP 2: FeedTab index 5→4, MoreTab 4→5
+                            (Voyager metadata matches TABS order);
+                            anim_feed_enter.xml added (Feed animated icon,
+                            300ms tilt morph).
+                            STEP 3: AppBar search 18sp hack removed.
+                            STEP 4: FeedScreen normalized — presentation
+                            AppBar+enterAlways scrollBehavior, shared
+                            EmptyScreen+Add action, CircularProgressIndicator
+                            section loading, error-tinted error text,
+                            AddFeedDialog "✓" concat → RadioButton+FilterChip,
+                            grid gutters → CommonMangaItemDefaults (4dp+8dp
+                            edges), FeedHeader → Typography.header,
+                            delete icon error-tinted in ManageFeeds too.
+                            STEP 5: Reader/Download/Advanced loose rows
+                            grouped under "General" PreferenceGroup;
+                            SettingsAnkiScreen added to settingScreens
+                            search index (OcrExclusions NOT — plain
+                            Screen, no getPreferences); Destination ids
+                            reordered (Dictionary=3 after Tracking=2).
+                            STEP 6: ReaderSettingsDialog dim-hack → tab
+                            title identity check (not index); OcrExclusions
+                            RuleRow type/scope → Badge chips
+                            (secondaryContainer); 4 TypeLegend strings +
+                            screen rows; reader OcrExclusionZonesSheet →
+                            Badge chips + error-tinted delete IconButton;
+                            SectionHeader → ListGroupHeader.
+                            STEP 7 reader overlays: DEAD outer composition
+                            tree + dead AppBars() fn DELETED (~210 lines);
+                            single live setComposeOverlay with z-order
+                            contract comment (8 layers); ReaderPageIndicator
+                            RESTORED into live tree (pref-gated feature
+                            revived); TTS pill hidden during ocrSelectionMode;
+                            OcrLoadingIndicator given pillClearancePx
+                            offset (never under bars/pill); OcrResultPopup
+                            viewport inset-aware (safeDrawing subtracted);
+                            OcrResultBottomSheet navBarsPadding.
+                            STEP 8: TTS pill container → asChromeContainer.
+                            NEW Mica/Translucent UI: UiPreferences.
+                            translucentTheme pref (pref_theme_translucent_key),
+                            Appearance toggle in theme group (+2 strings),
+                            LocalTranslucentSurfaces CompositionLocal,
+                            Color.asChromeContainer() (0.82 pre-blend over
+                            background — flat color, no per-frame blending,
+                            identical contrast both modes) consumed by
+                            NavigationBar pill, AdaptiveSheet ×2,
+                            ResizableSheet, TTS pill.
+                            NOT done (per user/exclusions): MangaScreen
+                            error state, reselect→scroll-to-top, OcrQueue
+                            relocation, ttsSpeechScript/ocrTextSelection
+                            pref renames, TrackInfoDialogHome double-clip
+                            (audit listed; not in approved scope of this
+                            pass), Dictionary/History token micro-passes
+                            (audit §9 order items 3/4 partially folded
+                            into Feed work).
+GATES:                      spotlessCheck + testDebugUnitTest +
+                            :app:compileDebugKotlin + :presentation-core:
+                            compileDebugKotlin ALL GREEN in devcontainer
+                            (vsc-yomihon-e24e3bd…, -Xmx4g) 2026-09-04.
+                            No DB changes → verifySqlDelightMigration N/A.
+Current task:               DONE — awaiting user device verification.
+Next recommended task:      1) User device-pass: theme sweep (light/dark/
+                            AMOLED/Monet/Monochrome × Mica on/off), reader
+                            page indicator + TTS pill + OCR bar z-order,
+                            Feed screen, settings search "anki", search
+                            dim behavior on color-filter tab. 2) Device-
+                            verify UI set 2 + Zone-repeat matrix (still
+                            pending from before). 3) Commit as UI
+                            modernization set 3.
+Files safe to modify:       app presentation/ui screens + settings + reader
+                            presentation; presentation-core components/
+                            theme; i18n base strings.xml. docs/* always.
+Known risks:                Mica = pre-blended flat color (no window blur
+                            — API<31 devices get same look, no real blur;
+                            documented in Translucent.kt); Feed animated
+                            icon is hand-authored vector (visual check on
+                            device recommended); ReaderActivity surgery
+                            large (~210 lines dead code removed) — reader
+                            smoke test essential (menus, TTS, OCR select,
+                            dialogs, page indicator). PHRASE spanning two
+                            OCR regions stays un-excluded (v1 semantics);
+                            Known issue #13 LeakCanary Toast/Popup noise
+                            unchanged.
 ```
 
 ---
