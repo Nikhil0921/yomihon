@@ -31,6 +31,8 @@ class FeedPreferences(
 
     fun gridColumns(): Preference<Int> = preferenceStore.getInt("pref_feed_grid_columns", 0)
 
+    fun compactGrid(): Preference<Boolean> = preferenceStore.getBoolean("pref_feed_compact_grid", false)
+
     private fun serializeFeeds(feeds: List<FeedItem>): String =
         feedJson.encodeToString(kotlinx.serialization.builtins.ListSerializer(FeedItem.serializer()), feeds)
 

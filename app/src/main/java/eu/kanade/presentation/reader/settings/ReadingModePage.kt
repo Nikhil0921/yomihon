@@ -1,7 +1,6 @@
 package eu.kanade.presentation.reader.settings
 
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -9,8 +8,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import eu.kanade.domain.manga.model.readerOrientation
 import eu.kanade.domain.manga.model.readingMode
 import eu.kanade.presentation.more.settings.widget.PreferenceGroupCard
@@ -21,7 +18,6 @@ import eu.kanade.tachiyomi.ui.reader.setting.ReadingMode
 import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonViewer
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.CheckboxItem
-import tachiyomi.presentation.core.components.HeadingItem
 import tachiyomi.presentation.core.components.SettingsChipRow
 import tachiyomi.presentation.core.components.SliderItem
 import tachiyomi.presentation.core.i18n.stringResource
@@ -30,11 +26,10 @@ import java.text.NumberFormat
 
 @Composable
 internal fun ColumnScope.ReadingModePage(screenModel: ReaderSettingsScreenModel) {
-    HeadingItem(MR.strings.pref_category_for_this_series)
     val manga by screenModel.mangaFlow.collectAsState()
 
     // Reader layout: one grouped selection surface for the mutually exclusive
-    // layout options (mode + orientation), inspired by grouped settings surfaces.
+    // layout options (mode + orientation).
     PreferenceGroupCard(title = stringResource(MR.strings.pref_group_reader_layout)) {
         val readingMode = remember(manga) { ReadingMode.fromPreference(manga?.readingMode?.toInt()) }
         SettingsChipRow(MR.strings.pref_category_reading_mode) {
@@ -69,18 +64,16 @@ internal fun ColumnScope.ReadingModePage(screenModel: ReaderSettingsScreenModel)
 
 @Composable
 private fun ColumnScope.PagerViewerSettings(screenModel: ReaderSettingsScreenModel) {
-    HeadingItem(MR.strings.pager_viewer)
+    PreferenceGroupCard(title = stringResource(MR.strings.pager_viewer)) {
+        val navigationModePager by screenModel.preferences.navigationModePager.collectAsState()
+        val pagerNavInverted by screenModel.preferences.pagerNavInverted.collectAsState()
+        TapZonesItems(
+            selected = navigationModePager,
+            onSelect = screenModel.preferences.navigationModePager::set,
+            invertMode = pagerNavInverted,
+            onSelectInvertMode = screenModel.preferences.pagerNavInverted::set,
+        )
 
-    val navigationModePager by screenModel.preferences.navigationModePager.collectAsState()
-    val pagerNavInverted by screenModel.preferences.pagerNavInverted.collectAsState()
-    TapZonesItems(
-        selected = navigationModePager,
-        onSelect = screenModel.preferences.navigationModePager::set,
-        invertMode = pagerNavInverted,
-        onSelectInvertMode = screenModel.preferences.pagerNavInverted::set,
-    )
-
-    PreferenceGroupCard(title = null) {
         val imageScaleType by screenModel.preferences.imageScaleType.collectAsState()
         SettingsChipRow(MR.strings.pref_image_scale_type) {
             ReaderPreferences.ImageScaleType.mapIndexed { index, it ->
@@ -124,7 +117,7 @@ private fun ColumnScope.PagerViewerSettings(screenModel: ReaderSettingsScreenMod
         )
     }
 
-    PreferenceGroupCard(title = stringResource(MR.strings.pref_dual_page_split)) {
+    PreferenceGroupCard(title = null) {
         val dualPageSplitPaged by screenModel.preferences.dualPageSplitPaged.collectAsState()
         CheckboxItem(
             label = stringResource(MR.strings.pref_dual_page_split),
@@ -157,18 +150,16 @@ private fun ColumnScope.PagerViewerSettings(screenModel: ReaderSettingsScreenMod
 private fun ColumnScope.WebtoonViewerSettings(screenModel: ReaderSettingsScreenModel) {
     val numberFormat = remember { NumberFormat.getPercentInstance() }
 
-    HeadingItem(MR.strings.webtoon_viewer)
+    PreferenceGroupCard(title = stringResource(MR.strings.webtoon_viewer)) {
+        val navigationModeWebtoon by screenModel.preferences.navigationModeWebtoon.collectAsState()
+        val webtoonNavInverted by screenModel.preferences.webtoonNavInverted.collectAsState()
+        TapZonesItems(
+            selected = navigationModeWebtoon,
+            onSelect = screenModel.preferences.navigationModeWebtoon::set,
+            invertMode = webtoonNavInverted,
+            onSelectInvertMode = screenModel.preferences.webtoonNavInverted::set,
+        )
 
-    val navigationModeWebtoon by screenModel.preferences.navigationModeWebtoon.collectAsState()
-    val webtoonNavInverted by screenModel.preferences.webtoonNavInverted.collectAsState()
-    TapZonesItems(
-        selected = navigationModeWebtoon,
-        onSelect = screenModel.preferences.navigationModeWebtoon::set,
-        invertMode = webtoonNavInverted,
-        onSelectInvertMode = screenModel.preferences.webtoonNavInverted::set,
-    )
-
-    PreferenceGroupCard(title = null) {
         val webtoonSidePadding by screenModel.preferences.webtoonSidePadding.collectAsState()
         SliderItem(
             value = webtoonSidePadding,
@@ -196,7 +187,7 @@ private fun ColumnScope.WebtoonViewerSettings(screenModel: ReaderSettingsScreenM
         )
     }
 
-    PreferenceGroupCard(title = stringResource(MR.strings.pref_dual_page_split)) {
+    PreferenceGroupCard(title = null) {
         val dualPageSplitWebtoon by screenModel.preferences.dualPageSplitWebtoon.collectAsState()
         CheckboxItem(
             label = stringResource(MR.strings.pref_dual_page_split),

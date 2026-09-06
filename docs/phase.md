@@ -6,15 +6,19 @@
 > and recorded in `docs/memory.md`.
 
 Current phase pointer: **Post-v0.5.2 stabilization. UNCOMMITTED, device
-verification PENDING user (two stacked change sets): (a) post-modernization
-feature set (2026-09-06) — bottom nav Library→Recent→Feed→Browse→More
-(Updates+History destinations removed, index metadata corrected, shortcuts
-remapped), new Recent tab (Continue/History/Updates internal tabs, reusing
-existing screens + data), Feed v2 (compact source dropdown + listing chips,
-customize dialog with grid columns/selector toggles/default listing, explicit
-per-feed Load-more paging), reader-settings IA grouping (Reader layout group,
-Toolbar&display/Behavior groups); (b) UI modernization set 4 (2026-09-06)
-grouped settings surfaces + reader frost. All gates green both sets.**
+verification PENDING user (three stacked layers): (a) correction pass
+(2026-09-06, this pointer) over the post-modernization feature set —
+Recent screen structure (one "Recent" AppBar title + inset-safe tab
+row, no duplicate History/Updates titles), reselect semantics (Recent
+→ resume last-read via GetNextChapters, Feed → source selector),
+Continue sort/downloaded-only controls, Feed grid style Normal/Compact
++ restructured customize dialog, Global Search defaults All +
+Has-results, reader-settings pages fully grouped (PreferenceGroupCard,
+solid surfaces); (b) post-modernization feature set (2026-09-06) —
+bottom nav Library→Recent→Feed→Browse→More, Recent tab IA, Feed v2
+paging, reader-settings groups (committed by user as e89104296);
+(c) UI modernization set 4 (2026-09-06) grouped settings surfaces +
+reader frost. All gates green all layers.**
   Prior: UI/UX modernization set 1 (2026-09-03) — floating nav pill, OCR
   exclusion phrase EDIT + collapsed rule rows + identity labels, Feed filter
   chips, More-tab GroupHeader sections. Gates green. UNCOMMITTED.

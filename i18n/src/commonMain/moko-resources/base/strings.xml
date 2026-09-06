@@ -425,6 +425,7 @@
     <string name="pref_crop_borders">Crop borders</string>
     <string name="pref_custom_brightness">Custom brightness</string>
     <string name="pref_grayscale">Grayscale</string>
+    <string name="pref_filter_effects">Effects</string>
     <string name="pref_inverted_colors">Inverted</string>
     <string name="pref_custom_color_filter">Custom color filter</string>
     <string name="pref_color_filter_mode">Color filter blend mode</string>
@@ -1384,6 +1385,10 @@
     <string name="feed_load_more">Load more</string>
     <string name="feed_end_of_list">You\'re all caught up</string>
     <string name="feed_grid_columns">Grid columns</string>
+    <string name="feed_grid_style_normal">Normal grid</string>
+    <string name="feed_grid_style_compact">Compact grid</string>
+    <string name="feed_sources_section">Sources</string>
+    <string name="pref_group_speech">Speech</string>
     <string name="pref_group_reader_layout">Reader layout</string>
     <string name="pref_group_behavior">Behavior</string>
     <string name="pref_group_toolbar">Toolbar &amp; display</string>

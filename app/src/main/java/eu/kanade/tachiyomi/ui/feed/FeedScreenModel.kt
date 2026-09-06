@@ -65,6 +65,8 @@ class FeedScreenModel(
 
     val gridColumns = feedPreferences.gridColumns().asState(screenModelScope)
 
+    val compactGrid = feedPreferences.compactGrid().asState(screenModelScope)
+
     init {
         screenModelScope.launch {
             launch {
@@ -204,6 +206,10 @@ class FeedScreenModel(
 
     fun setGridColumns(columns: Int) {
         feedPreferences.gridColumns().set(columns)
+    }
+
+    fun setCompactGrid(compact: Boolean) {
+        feedPreferences.compactGrid().set(compact)
     }
 
     fun retry(feed: FeedItem) {

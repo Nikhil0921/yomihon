@@ -17,17 +17,23 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.zIndex
+import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
+import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.recent.continuereading.continueTab
 import eu.kanade.tachiyomi.ui.recent.history.recentHistoryTab
 import eu.kanade.tachiyomi.ui.recent.updates.recentUpdatesTab
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -35,6 +41,9 @@ import tachiyomi.presentation.core.components.material.TabText
 import tachiyomi.presentation.core.i18n.stringResource
 
 data object RecentTab : Tab {
+
+    // Reselect = resume the last-read manga (inherited from the old History tab).
+    private val resumeLastChapterReadEvent = Channel<Unit>()
 
     override val options: TabOptions
         @Composable
@@ -48,9 +57,14 @@ data object RecentTab : Tab {
             )
         }
 
+    override suspend fun onReselect(navigator: Navigator) {
+        resumeLastChapterReadEvent.send(Unit)
+    }
+
     @Composable
     override fun Content() {
         val snackbarHostState = remember { SnackbarHostState() }
+        val resumeHostState = remember { SnackbarHostState() }
         val tabs = listOf(
             continueTab(),
             recentHistoryTab(snackbarHostState),
@@ -60,7 +74,15 @@ data object RecentTab : Tab {
         val scope = rememberCoroutineScope()
         val context = LocalContext.current
 
+        // One screen-level title; the Scaffold's AppBar handles the status-bar
+        // inset so the tab row starts below the safe area.
         Scaffold(
+            topBar = { scrollBehavior ->
+                AppBar(
+                    title = stringResource(MR.strings.label_recent),
+                    scrollBehavior = scrollBehavior,
+                )
+            },
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         ) { padding ->
             Column(
@@ -86,7 +108,7 @@ data object RecentTab : Tab {
                 HorizontalPager(
                     modifier = Modifier.fillMaxSize(),
                     state = state,
-                    verticalAlignment = androidx.compose.ui.Alignment.Top,
+                    verticalAlignment = Alignment.Top,
                 ) { page ->
                     tabs[page].content(padding, snackbarHostState, state)
                 }
@@ -95,6 +117,14 @@ data object RecentTab : Tab {
 
         LaunchedEffect(Unit) {
             (context as? MainActivity)?.ready = true
+        }
+
+        // Reselect: open/resume the last-read manga via the existing
+        // HistoryScreenModel resume mechanism.
+        LaunchedEffect(Unit) {
+            resumeLastChapterReadEvent.receiveAsFlow().collectLatest {
+                resumeLastReadChapter(context, resumeHostState)
+            }
         }
     }
 }

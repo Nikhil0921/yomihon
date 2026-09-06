@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.ui.recent.continuereading
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -62,7 +64,32 @@ private fun Screen.ContinueContent() {
         state.items.isEmpty() -> EmptyScreen(MR.strings.recent_continue_empty)
         else -> {
             FastScrollLazyColumn {
-                items(state.items) { item ->
+                // Compact page-level controls; content stays the hero.
+                item(key = "continue_controls") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                horizontal = MaterialTheme.padding.medium,
+                                vertical = MaterialTheme.padding.extraSmall,
+                            ),
+                        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+                    ) {
+                        ContinueSort.entries.forEach { sort ->
+                            FilterChip(
+                                selected = state.sort == sort,
+                                onClick = { screenModel.setSort(sort) },
+                                label = { Text(stringResource(sort.labelRes)) },
+                            )
+                        }
+                        FilterChip(
+                            selected = state.downloadedOnly,
+                            onClick = { screenModel.setDownloadedOnly(!state.downloadedOnly) },
+                            label = { Text(stringResource(MR.strings.label_downloaded_only)) },
+                        )
+                    }
+                }
+                items(state.items, key = { it.manga.manga.id }) { item ->
                     ContinueItemRow(
                         item = item.manga,
                         onClickCover = { navigator.push(MangaScreen(item.manga.manga.id)) },

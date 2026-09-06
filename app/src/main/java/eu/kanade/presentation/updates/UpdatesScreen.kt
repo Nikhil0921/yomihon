@@ -151,7 +151,9 @@ private fun UpdatesAppBar(
 ) {
     AppBar(
         modifier = modifier,
-        title = stringResource(MR.strings.label_recent_updates),
+        // No title: hosted under the Recent screen title; action mode still
+        // shows its counter.
+        title = null,
         actions = {
             AppBarActions(
                 listOf(

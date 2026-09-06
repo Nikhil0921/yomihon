@@ -2226,8 +2226,111 @@ positional merge); segmenter must mirror tap-highlight behavior.
 ```
 
 ```text
-[COMPLETED 2026-09-06 — POST-MODERNIZATION FEATURE SET (IA: Recent tab +
-nav reorder + Feed v2 + reader settings groups), UNCOMMITTED]
+[COMPLETED 2026-09-06 — USER-DIRECTED CORRECTION PASS over the
+post-modernization set, UNCOMMITTED]
+
+Spec: user's "POST-IMPLEMENTATION CORRECTION" specification (session
+prompt) — previous implementation NOT accepted; structural fixes only,
+no visual-polish masking. Prior set committed by user as e89104296
+("feat: Implement Recent tab and navigation reordering; enhance Feed
+management") — this correction pass stacks on it.
+
+1. RECENT SCREEN STRUCTURE (spec §5/§6/§30):
+   - RecentTab gained screen-level AppBar(title=label_recent) via the
+     shared Scaffold — tab row now starts BELOW the status-bar/cutout
+     safe inset (AppBar consumes it; no magic paddings).
+   - HistoryScreen (presentation): SearchToolbar title REMOVED (search +
+     clear-history action remain). UpdateScreen (presentation): AppBar
+     title REMOVED, action mode + actions remain. No duplicate titles:
+     exactly one "Recent" title, tab labels not repeated as headers.
+   - History/Updates keep own inner Scaffolds (Tachiyomi Scaffold
+     consumed-inset handling prevents double insets).
+2. RESELECT SEMANTICS (spec §4):
+   - Library: unchanged (existing settings-sheet requestOpenSettingsSheet).
+   - Recent: NEW onReselect → resume last-read manga. Reuses old
+     HistoryTab mechanism verbatim: GetNextChapters.await(onlyUnread=
+     false).firstOrNull() + ReaderActivity.newIntent + no_next_chapter
+     snackbar fallback. New RecentReselect.kt (suspend helper, Injekt
+     GetNextChapters). Channel pattern from old HistoryTab.
+   - Feed: NEW onReselect → opens source-selector dropdown directly
+     (state hoisted to FeedTab, passed to FeedScreen;
+     openSourceSelectorEvent channel). NOT ManageFeeds, NOT customize.
+   - Browse (GlobalSearch), More (Settings): unchanged, verified.
+3. CONTINUE (spec §7/§8): semantics confirmed correct (Library ∩
+   hasStarted(readCount>0) ∩ unread>0 = started-reading-and-resumable,
+   history-derived via chapters table — NOT favorites+unread alone).
+   Added compact page-level controls (FilterChip row, lazy item):
+   sort Last read / Alphabetically (existing sort i18n keys) +
+   Downloaded only filter (downloadManager.isChapterDownloaded via
+   nextChapter). In-memory only. No giant toolbar.
+4. FEED (spec §12–§16):
+   - Grid style: second independent display option — Normal grid
+     (MangaComfortableGridItem, title under cover) vs Compact grid
+     (MangaCompactGridItem, title INSIDE cover bottom overlay — spec's
+     exact compact semantics, reused Library components). New pref
+     pref_feed_compact_grid (Boolean, default false) + SM asState.
+   - FeedHeader now ListGroupHeader (shared section-header hierarchy).
+   - Customize dialog restructured: Display (grid columns + grid style) /
+     Sources (source-selector switch) / Listing (default listing chips +
+     listing-selector switch) — existing components only.
+   - "All sources" selection confirmed configurable + deselectable
+     (in-memory per session; no invented persistence).
+   - Load more/Loading/Error states: shared components already
+     (CircularProgressIndicator/EmptyScreen/TextButton retry) — kept.
+5. GLOBAL SEARCH DEFAULTS (spec §19): SearchScreenModel.State
+   sourceFilter default PinnedOnly → All; SourcePreferences
+   has_filters_toggle_state default false → true (Has-results ON).
+   Persisted user choice still wins over defaults. Pinned NOT
+   auto-enabled.
+6. READER SETTINGS (spec §22–§28): all four pages now grouped via
+   PreferenceGroupCard (existing solid grouped-surface widget, no
+   frost — §24 verified: asFrostedModal is opaque pre-blend; settings
+   surfaces solid):
+   - ReadingModePage: Reader layout card (mode+orientation) + named
+     Paged/Long-strip cards (TapZones inside) + dual-page cards
+     (title=null — rows self-labeled; duplicate-text fix). Loose
+     HeadingItems removed.
+   - GeneralPage: unchanged groups from prior set (already compliant).
+   - ReadAloudPage: Speech (rate + auto-page-turn/auto-next-chapter/
+     keep-screen-on) / Speech cleanup / Spoken content / OCR & text
+     recognition / Advanced voice row. Existing keys + new
+     pref_group_speech.
+   - ColorFilterPage: Brightness / Color filter / Effects groups
+     (new key pref_filter_effects). No fake categories; RGBA sliders
+     and mode chips stay inside Color filter group.
+
+i18n base additions: feed_grid_style_normal, feed_grid_style_compact,
+feed_sources_section, pref_group_speech, pref_filter_effects. No locale
+hand-edits.
+
+GATES GREEN 2026-09-06 (docker devcontainer JDK17, -Xmx4g, both
+volumes): spotlessApply + spotlessCheck + testDebugUnitTest +
+verifySqlDelightMigration + :app:assembleDebug BUILD SUCCESSFUL 2m53s.
+NO DB/schema change. APK 0.5.2-8259 arm64 installed on SM_M066B;
+clean relaunch (PID 20072), 0 FATAL in logcat.
+
+Files changed (15 + 1 new):
+  NEW: app/.../ui/recent/RecentReselect.kt
+  EDIT: RecentTab.kt (AppBar + reselect), ContinueTab.kt (controls row),
+    ContinueScreenModel.kt (sort/downloaded-only),
+    HistoryScreen.kt (title removed), UpdatesScreen.kt (title removed),
+    FeedTab.kt (reselect wiring + state hoist), FeedScreen.kt (compact
+    grid, hoisted selector, dialog restructure, ListGroupHeader),
+    FeedScreenModel.kt (+compactGrid), FeedPreferences.kt (+compactGrid),
+    SearchScreenModel.kt (default All), SourcePreferences.kt
+    (has-results default true), ReadingModePage.kt / ReadAloudPage.kt /
+    ColorFilterPage.kt (grouping), GeneralSettingsPage.kt (vertical-nav
+    card title=null), i18n base strings.xml (+5 keys).
+
+Device verification PENDING user (spec §31 matrix): Library reselect →
+settings sheet; Recent reselect → last-read opens (empty case =
+no_next_chapter snackbar); Feed reselect → dropdown; Browse reselect →
+Global Search w/ All + Has-results, Pinned off; More reselect →
+Settings; Recent status-bar/cutout clear; Continue sort/downloaded
+chips; History/Updates no duplicate titles; Feed compact grid title
+inside cover; customize dialog groups; Reader settings 4 tabs grouped,
+spacing consistent, no frost.
+```
 
 User-directed information-architecture + functional set (NOT a visual
 redesign; M3 baseline untouched). Audited first (3 parallel read-only
@@ -2560,73 +2663,67 @@ Result:   BUILD SUCCESSFUL — all suites green (193+ domain tests unchanged;
 ## Agent handoff
 
 ```text
-Last agent:                 opencode (2026-09-06 — post-modernization
-                            feature set: Recent tab IA, nav reorder,
-                            Feed v2, reader settings groups)
+Last agent:                 opencode (2026-09-06 — user-directed
+                            correction pass over the post-modernization
+                            feature set)
 Date:                       2026-09-06
-Task completed:              Per user spec: (1) bottom nav → Library/
-                            Recent/Feed/Browse/More with full index/
-                            metadata correction (class-based Voyager
-                            addressing verified; TabOptions.index now
-                            0-4; MoreTab 5u→4u fixed; shortcuts
-                            consolidated; SHORTCUT_UPDATES/HISTORY →
-                            Tab.Recent). (2) Recent destination =
-                            PrimaryTabRow+HorizontalPager hosting
-                            Continue (new: favorites unread>0 sorted
-                            lastRead desc, reuses getNextUnread resume)
-                            + History + Updates (verbatim tab logic
-                            relocated; UpdatesTab/HistoryTab deleted).
-                            (3) Feed v2: compact dropdown source
-                            selector + inline listing chips, customize
-                            dialog (grid columns Auto/2-5, selector
-                            toggles, default listing), explicit
-                            per-feed Load-more paging (hasNextPage,
-                            append+dedup, retry, end label; NO auto
-                            infinite scroll), 4 new FeedPreferences
-                            keys. (4) Reader settings IA: Reader-layout
-                            grouped surface + Toolbar&display/Behavior/
-                            dual-page/flash PreferenceGroupCards; TTS/
-                            OCR/ColorFilter pages + all pref keys
-                            untouched; NO toolbar drag-drop (deferred).
-                            KEY LESSON: Voyager rememberScreenModel +
-                            MigrateMangaDialog are Screen extensions —
-                            content fns must be Screen extensions
-                            (BrowseTab pattern).
+Task completed:              Per user "POST-IMPLEMENTATION CORRECTION"
+                            spec: (1) Recent screen structure: screen-level
+                            AppBar "Recent" (inset-safe, status bar/
+                            cutout respected via Scaffold), HistoryScreen +
+                            UpdateScreen titles REMOVED (no duplicate
+                            titles; actions/action-modes kept). (2)
+                            Reselect semantics: Recent → resume last-read
+                            manga (old HistoryTab mechanism reused verbatim:
+                            GetNextChapters.await(onlyUnread=false) +
+                            ReaderActivity.newIntent + no_next_chapter
+                            snackbar; RecentReselect.kt); Feed → source
+                            selector dropdown opens (state hoisted in
+                            FeedTab); Library/Browse/More verified
+                            unchanged. (3) Continue: semantics confirmed
+                            history-derived (unread>0 ∩ hasStarted);
+                            compact control row added (sort Last-read/
+                            Alphabetical + Downloaded-only filter). (4)
+                            Feed: grid style pref Normal/Compact
+                            (MangaCompactGridItem = title inside cover
+                            bottom, reused Library component); customize
+                            dialog restructured Display/Sources/Listing;
+                            ListGroupHeader for feed sections; All-sources
+                            configurable + deselectable. (5) Global search
+                            defaults: All + Has-results (persisted choice
+                            wins), Pinned NOT default. (6) Reader settings:
+                            all 4 pages grouped into PreferenceGroupCards
+                            (ReadingMode/General/ReadAloud/ColorFilter),
+                            solid surfaces, no frost, existing pref keys
+                            untouched. No sub-agent failures (no sub-agents
+                            used; single orchestrator).
 GATES:                      spotlessCheck + testDebugUnitTest +
                             verifySqlDelightMigration + :app:
                             assembleDebug ALL GREEN 2026-09-06 (docker,
-                            -Xmx4g, both volumes) 2m33s. No DB change.
-Current task:               DONE — awaiting user device verification +
-                            commit (stacked on uncommitted set 4).
-Next recommended task:      Device pass matrix: nav order + active
-                            indicator + badge on Recent; Recent 3 sub-
-                            tabs (Continue resume/empty, History,
-                            Updates incl. selection-mode bottom-nav
-                            hide); launcher + notification shortcuts →
-                            Recent; Feed dropdown/chips/customize/
-                            Load-more/retry/end-of-list/per-feed state;
-                            reader layout group + existing TTS/OCR/
-                            color-filter behavior unchanged. Then
-                            commit (nav+Recent+Feed+reader-settings as
-                            one feature set or split as user prefers).
+                            -Xmx4g, both volumes) 2m53s. No DB change.
+                            APK 0.5.2-8259 installed, clean boot, 0 FATAL.
+Current task:               DONE — awaiting user device verification
+                            (spec §31 matrix) + commit.
+Next recommended task:      User runs spec §31 device pass: reselects ×5,
+                            Recent cutout/inset, Continue chips, Feed
+                            compact grid + customize groups, Global Search
+                            defaults, Reader settings 4-tab grouping
+                            inspection (§32 quality gate). Then commit.
 Files safe to modify:       app presentation/ui screens + settings + reader
                             presentation; presentation-core components/
                             theme; i18n base strings.xml. docs/* always.
-Known risks:                Recent sub-screens keep own Scaffolds (nested
-                            scaffold insets inside pager — verify no
-                            double bottom inset on device); Continue N+1
-                            getNextUnread over resumable list is lazy-
-                            per-collect (bounded by library size; fine
-                            ≤ few hundred); feed Load-more page math
-                            assumes ~20/page (ponytail-marked);
-                            HistoryTab snackbar was tab-singleton before,
-                            now shared per Recent scaffold (equivalent
-                            lifecycle); dropped reselect semantics
-                            (Updates→DownloadQueue, History→resume-
-                            last) — intentional, queue reachable via
-                            More; default listing pref applies until
-                            user first changes listing chips (session
-                            semantics, not persisted override).
+Known risks:                Recent reselect + RecentTab shared snackbar:
+                            reselect snackbar uses its own host state while
+                            tab pages share the scaffold host — both render
+                            (no conflict) but reselect feedback while on
+                            a page with its own snackbar shows in-page;
+                            verify visually. Global-search has-results
+                            default flip: users who NEVER toggled it now
+                            start with Has-results ON (spec-mandated).
+                            Feed compact grid: MangaCompactGridItem has
+                            no onClickContinueReading slot wired (unused).
+                            UpdateScreen title=null: empty AppBar space —
+                            acceptable (actions right-aligned).
 ```
 
 ---

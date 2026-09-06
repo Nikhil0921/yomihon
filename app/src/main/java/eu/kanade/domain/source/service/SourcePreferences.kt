@@ -59,9 +59,11 @@ class SourcePreferences(
         emptySet(),
     )
 
+    // Default true: global search opens broad (has-results view). Users can
+    // still toggle it off; the persisted choice wins over this default.
     val globalSearchFilterState: Preference<Boolean> = preferenceStore.getBoolean(
         Preference.appStateKey("has_filters_toggle_state"),
-        false,
+        true,
     )
 
     val migrationSources: Preference<List<Long>> = preferenceStore.getLongArray("migration_sources", emptyList())
