@@ -1,6 +1,8 @@
 package eu.kanade.presentation.more
 
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
@@ -21,6 +23,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.dp
+import eu.kanade.presentation.more.settings.widget.PreferenceGroupCard
 import eu.kanade.presentation.more.settings.widget.SwitchPreferenceWidget
 import eu.kanade.presentation.more.settings.widget.TextPreferenceWidget
 import eu.kanade.tachiyomi.R
@@ -28,7 +31,6 @@ import eu.kanade.tachiyomi.ui.more.DownloadQueueState
 import eu.kanade.tachiyomi.ui.more.OcrQueueState
 import tachiyomi.core.common.Constants
 import tachiyomi.i18n.MR
-import tachiyomi.presentation.core.components.ListGroupHeader
 import tachiyomi.presentation.core.components.ScrollbarLazyColumn
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.pluralStringResource
@@ -62,151 +64,133 @@ fun MoreScreen(
                     iconPadding = PaddingValues(vertical = 32.dp),
                 )
             }
-            item { ListGroupHeader(stringResource(MR.strings.pref_category_general)) }
+            // One section = one card surface; rows are non-lazy inside (small counts)
             item {
-                SwitchPreferenceWidget(
-                    title = stringResource(MR.strings.label_downloaded_only),
-                    subtitle = stringResource(MR.strings.downloaded_only_summary),
-                    icon = Icons.Outlined.CloudOff,
-                    checked = downloadedOnly,
-                    onCheckedChanged = onDownloadedOnlyChange,
-                )
+                PreferenceGroupCard(title = stringResource(MR.strings.pref_category_general)) {
+                    SwitchPreferenceWidget(
+                        title = stringResource(MR.strings.label_downloaded_only),
+                        subtitle = stringResource(MR.strings.downloaded_only_summary),
+                        icon = Icons.Outlined.CloudOff,
+                        checked = downloadedOnly,
+                        onCheckedChanged = onDownloadedOnlyChange,
+                    )
+                    SwitchPreferenceWidget(
+                        title = stringResource(MR.strings.pref_incognito_mode),
+                        subtitle = stringResource(MR.strings.pref_incognito_mode_summary),
+                        icon = ImageVector.vectorResource(R.drawable.ic_glasses_24dp),
+                        checked = incognitoMode,
+                        onCheckedChanged = onIncognitoModeChange,
+                    )
+                }
             }
+            item { Spacer(modifier = Modifier.height(12.dp)) }
             item {
-                SwitchPreferenceWidget(
-                    title = stringResource(MR.strings.pref_incognito_mode),
-                    subtitle = stringResource(MR.strings.pref_incognito_mode_summary),
-                    icon = ImageVector.vectorResource(R.drawable.ic_glasses_24dp),
-                    checked = incognitoMode,
-                    onCheckedChanged = onIncognitoModeChange,
-                )
-            }
-
-            item { ListGroupHeader(stringResource(MR.strings.pref_category_library)) }
-
-            item {
-                val downloadQueueState = downloadQueueStateProvider()
-                TextPreferenceWidget(
-                    title = stringResource(MR.strings.label_download_queue),
-                    subtitle = when (downloadQueueState) {
-                        DownloadQueueState.Stopped -> null
-                        is DownloadQueueState.Paused -> {
-                            val pending = downloadQueueState.pending
-                            if (pending == 0) {
-                                stringResource(MR.strings.paused)
-                            } else {
-                                "${stringResource(MR.strings.paused)} • ${
-                                    pluralStringResource(
-                                        MR.plurals.download_queue_summary,
-                                        count = pending,
-                                        pending,
-                                    )
-                                }"
+                PreferenceGroupCard(title = stringResource(MR.strings.pref_category_library)) {
+                    val downloadQueueState = downloadQueueStateProvider()
+                    TextPreferenceWidget(
+                        title = stringResource(MR.strings.label_download_queue),
+                        subtitle = when (downloadQueueState) {
+                            DownloadQueueState.Stopped -> null
+                            is DownloadQueueState.Paused -> {
+                                val pending = downloadQueueState.pending
+                                if (pending == 0) {
+                                    stringResource(MR.strings.paused)
+                                } else {
+                                    "${stringResource(MR.strings.paused)} • ${
+                                        pluralStringResource(
+                                            MR.plurals.download_queue_summary,
+                                            count = pending,
+                                            pending,
+                                        )
+                                    }"
+                                }
                             }
-                        }
-                        is DownloadQueueState.Downloading -> {
-                            val pending = downloadQueueState.pending
-                            pluralStringResource(MR.plurals.download_queue_summary, count = pending, pending)
-                        }
-                    },
-                    icon = Icons.Outlined.GetApp,
-                    onPreferenceClick = onClickDownloadQueue,
-                )
-            }
-            item {
-                val ocrQueueState = ocrQueueStateProvider()
-                TextPreferenceWidget(
-                    title = stringResource(MR.strings.label_text_recognition),
-                    subtitle = when (ocrQueueState) {
-                        OcrQueueState.Stopped -> null
-                        is OcrQueueState.Paused -> {
-                            val pending = ocrQueueState.pending
-                            if (pending == 0) {
-                                stringResource(MR.strings.paused)
-                            } else {
-                                "${stringResource(MR.strings.paused)} • ${
-                                    pluralStringResource(
-                                        MR.plurals.download_queue_summary,
-                                        count = pending,
-                                        pending,
-                                    )
-                                }"
+                            is DownloadQueueState.Downloading -> {
+                                val pending = downloadQueueState.pending
+                                pluralStringResource(MR.plurals.download_queue_summary, count = pending, pending)
                             }
-                        }
-                        is OcrQueueState.Running -> {
-                            val pending = ocrQueueState.pending
-                            pluralStringResource(MR.plurals.download_queue_summary, count = pending, pending)
-                        }
-                    },
-                    icon = Icons.Outlined.DocumentScanner,
-                    onPreferenceClick = onClickOcrQueue,
-                )
+                        },
+                        icon = Icons.Outlined.GetApp,
+                        onPreferenceClick = onClickDownloadQueue,
+                    )
+                    val ocrQueueState = ocrQueueStateProvider()
+                    TextPreferenceWidget(
+                        title = stringResource(MR.strings.label_text_recognition),
+                        subtitle = when (ocrQueueState) {
+                            OcrQueueState.Stopped -> null
+                            is OcrQueueState.Paused -> {
+                                val pending = ocrQueueState.pending
+                                if (pending == 0) {
+                                    stringResource(MR.strings.paused)
+                                } else {
+                                    "${stringResource(MR.strings.paused)} • ${
+                                        pluralStringResource(
+                                            MR.plurals.download_queue_summary,
+                                            count = pending,
+                                            pending,
+                                        )
+                                    }"
+                                }
+                            }
+                            is OcrQueueState.Running -> {
+                                val pending = ocrQueueState.pending
+                                pluralStringResource(MR.plurals.download_queue_summary, count = pending, pending)
+                            }
+                        },
+                        icon = Icons.Outlined.DocumentScanner,
+                        onPreferenceClick = onClickOcrQueue,
+                    )
+                    TextPreferenceWidget(
+                        title = stringResource(MR.strings.categories),
+                        icon = Icons.AutoMirrored.Outlined.Label,
+                        onPreferenceClick = onClickCategories,
+                    )
+                    TextPreferenceWidget(
+                        title = stringResource(MR.strings.label_stats),
+                        icon = Icons.Outlined.QueryStats,
+                        onPreferenceClick = onClickStats,
+                    )
+                    TextPreferenceWidget(
+                        title = stringResource(MR.strings.label_data_storage),
+                        icon = Icons.Outlined.Storage,
+                        onPreferenceClick = onClickDataAndStorage,
+                    )
+                    TextPreferenceWidget(
+                        title = stringResource(MR.strings.label_dictionary),
+                        icon = Icons.AutoMirrored.Outlined.MenuBook,
+                        onPreferenceClick = onClickDictionaryLookup,
+                    )
+                    TextPreferenceWidget(
+                        title = stringResource(MR.strings.pref_category_dictionaries),
+                        icon = Icons.AutoMirrored.Outlined.LibraryBooks,
+                        onPreferenceClick = onClickDictionary,
+                    )
+                }
             }
+            item { Spacer(modifier = Modifier.height(12.dp)) }
             item {
-                TextPreferenceWidget(
-                    title = stringResource(MR.strings.categories),
-                    icon = Icons.AutoMirrored.Outlined.Label,
-                    onPreferenceClick = onClickCategories,
-                )
-            }
-            item {
-                TextPreferenceWidget(
-                    title = stringResource(MR.strings.label_stats),
-                    icon = Icons.Outlined.QueryStats,
-                    onPreferenceClick = onClickStats,
-                )
-            }
-            item {
-                TextPreferenceWidget(
-                    title = stringResource(MR.strings.label_data_storage),
-                    icon = Icons.Outlined.Storage,
-                    onPreferenceClick = onClickDataAndStorage,
-                )
-            }
-            item {
-                TextPreferenceWidget(
-                    title = stringResource(MR.strings.label_dictionary),
-                    icon = Icons.AutoMirrored.Outlined.MenuBook,
-                    onPreferenceClick = onClickDictionaryLookup,
-                )
-            }
-            item {
-                TextPreferenceWidget(
-                    title = stringResource(MR.strings.pref_category_dictionaries),
-                    icon = Icons.AutoMirrored.Outlined.LibraryBooks,
-                    onPreferenceClick = onClickDictionary,
-                )
-            }
-
-            item { ListGroupHeader(stringResource(MR.strings.label_settings)) }
-
-            item {
-                TextPreferenceWidget(
-                    title = stringResource(MR.strings.label_settings),
-                    icon = Icons.Outlined.Settings,
-                    onPreferenceClick = onClickSettings,
-                )
-            }
-            item {
-                TextPreferenceWidget(
-                    title = stringResource(MR.strings.label_support_us),
-                    icon = Icons.Default.VolunteerActivism,
-                    onPreferenceClick = onClickSupport,
-                )
-            }
-            item {
-                TextPreferenceWidget(
-                    title = stringResource(MR.strings.pref_category_about),
-                    icon = Icons.Outlined.Info,
-                    onPreferenceClick = onClickAbout,
-                )
-            }
-            item {
-                TextPreferenceWidget(
-                    title = stringResource(MR.strings.label_help),
-                    icon = Icons.AutoMirrored.Outlined.HelpOutline,
-                    onPreferenceClick = { uriHandler.openUri(Constants.URL_HELP) },
-                )
+                PreferenceGroupCard(title = stringResource(MR.strings.label_settings)) {
+                    TextPreferenceWidget(
+                        title = stringResource(MR.strings.label_settings),
+                        icon = Icons.Outlined.Settings,
+                        onPreferenceClick = onClickSettings,
+                    )
+                    TextPreferenceWidget(
+                        title = stringResource(MR.strings.label_support_us),
+                        icon = Icons.Default.VolunteerActivism,
+                        onPreferenceClick = onClickSupport,
+                    )
+                    TextPreferenceWidget(
+                        title = stringResource(MR.strings.pref_category_about),
+                        icon = Icons.Outlined.Info,
+                        onPreferenceClick = onClickAbout,
+                    )
+                    TextPreferenceWidget(
+                        title = stringResource(MR.strings.label_help),
+                        icon = Icons.AutoMirrored.Outlined.HelpOutline,
+                        onPreferenceClick = { uriHandler.openUri(Constants.URL_HELP) },
+                    )
+                }
             }
         }
     }

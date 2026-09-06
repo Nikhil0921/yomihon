@@ -178,7 +178,7 @@ private fun SearchResult(
                                 if (p.enabled) {
                                     p.preferenceItems.asSequence()
                                         .filter { it.enabled && it.title.isNotBlank() }
-                                        .map { p.title to it }
+                                        .map { p.title.takeIf { t -> t.isNotBlank() } to it }
                                 } else {
                                     emptySequence()
                                 }

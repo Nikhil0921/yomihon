@@ -3,17 +3,20 @@ package eu.kanade.tachiyomi.ui.feed
 import androidx.compose.runtime.Immutable
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
+import eu.kanade.core.preference.asState
 import eu.kanade.domain.feed.model.FeedItem
 import eu.kanade.domain.feed.model.FeedListing
 import eu.kanade.domain.feed.service.FeedPreferences
 import eu.kanade.domain.source.interactor.GetEnabledSources
 import eu.kanade.tachiyomi.source.CatalogueSource
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import logcat.LogPriority
 import mihon.domain.manga.model.toDomainManga
+import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
@@ -22,7 +25,12 @@ import uy.kohesive.injekt.api.get
 
 sealed interface FeedSectionResult {
     data object Loading : FeedSectionResult
-    data class Success(val mangas: List<Manga>) : FeedSectionResult
+    data class Success(
+        val mangas: List<Manga>,
+        val hasMore: Boolean,
+        val isLoadingMore: Boolean = false,
+        val error: String? = null,
+    ) : FeedSectionResult
     data class Error(val message: String?) : FeedSectionResult
 }
 
@@ -42,6 +50,9 @@ class FeedScreenModel(
         val showAddDialog: Boolean = false,
         val selectedSourceId: Long? = null,
         val listingOverride: FeedListing? = null,
+        val showSourceSelector: Boolean = true,
+        val showListingSelector: Boolean = true,
+        val defaultListing: FeedListing? = null,
     ) {
         val visibleFeeds: List<FeedItem>
             get() = feeds.filter { feed ->
@@ -50,56 +61,115 @@ class FeedScreenModel(
             }
     }
 
+    private var sectionJobs: MutableMap<FeedItem, Job> = mutableMapOf()
+
+    val gridColumns = feedPreferences.gridColumns().asState(screenModelScope)
+
     init {
         screenModelScope.launch {
-            feedPreferences.feeds().changes().collect { feeds ->
-                mutableState.update { it.copy(feeds = feeds) }
-                loadSections(feeds)
+            launch {
+                feedPreferences.feeds().changes().collect { feeds ->
+                    mutableState.update { it.copy(feeds = feeds) }
+                    loadSections(feeds)
+                }
             }
-        }
-        screenModelScope.launch {
-            val sources = getEnabledSources.subscribe()
-            sources.collect { list ->
-                mutableState.update {
-                    it.copy(isLoading = false, sources = list.filterNot { s -> s.isStub })
+            launch {
+                combine(
+                    feedPreferences.showSourceSelector().changes(),
+                    feedPreferences.showListingSelector().changes(),
+                    feedPreferences.defaultListing().changes(),
+                ) { showSource, showListing, defaultListing ->
+                    Triple(showSource, showListing, defaultListing)
+                }.collect { (showSource, showListing, defaultListing) ->
+                    mutableState.update {
+                        it.copy(
+                            showSourceSelector = showSource,
+                            showListingSelector = showListing,
+                            defaultListing = defaultListing,
+                            listingOverride = it.listingOverride ?: defaultListing,
+                        )
+                    }
+                }
+            }
+            launch {
+                val sources = getEnabledSources.subscribe()
+                sources.collect { list ->
+                    mutableState.update {
+                        it.copy(isLoading = false, sources = list.filterNot { s -> s.isStub })
+                    }
                 }
             }
         }
     }
 
     private fun loadSections(feeds: List<FeedItem>) {
-        screenModelScope.launch {
-            val enabled = feeds.filter { it.enabled }
-            mutableState.update { state ->
-                state.copy(
-                    sections = enabled.associateWith { state.sections[it] ?: FeedSectionResult.Loading },
-                )
+        val enabled = feeds.filter { it.enabled }
+        // Keep sections for feeds that still exist; drop the rest.
+        mutableState.update { state ->
+            state.copy(
+                sections = enabled.associateWith { state.sections[it] ?: FeedSectionResult.Loading },
+            )
+        }
+        enabled.forEach { feed ->
+            if (state.value.sections[feed] is FeedSectionResult.Success) return@forEach
+            sectionJobs.remove(feed)?.cancel()
+            sectionJobs[feed] = screenModelScope.launch {
+                val result = fetchSection(feed, page = 1)
+                mutableState.update { it.copy(sections = it.sections + (feed to result)) }
             }
-            enabled.map { feed ->
-                async {
-                    val result = fetchSection(feed)
-                    mutableState.update { it.copy(sections = it.sections + (feed to result)) }
-                }
-            }.awaitAll()
         }
     }
 
-    private suspend fun fetchSection(feed: FeedItem): FeedSectionResult {
+    /**
+     * Explicitly loads the next page for one feed/listing. State-controlled:
+     * no prefetch, no auto-infinite scroll.
+     */
+    fun loadMore(feed: FeedItem) {
+        val section = state.value.sections[feed] as? FeedSectionResult.Success ?: return
+        if (section.isLoadingMore || !section.hasMore) return
+        sectionJobs.remove(feed)?.cancel()
+        sectionJobs[feed] = screenModelScope.launch {
+            mutableState.update {
+                it.copy(sections = it.sections + (feed to section.copy(isLoadingMore = true)))
+            }
+            val nextPageNumber = section.mangas.size / PAGE_SIZE + 2
+            val result = fetchSection(feed, page = nextPageNumber, appendTo = section)
+            mutableState.update { it.copy(sections = it.sections + (feed to result)) }
+        }
+    }
+
+    private suspend fun fetchSection(
+        feed: FeedItem,
+        page: Int,
+        appendTo: FeedSectionResult.Success? = null,
+    ): FeedSectionResult {
         val source = sourceManager.get(feed.sourceId) as? CatalogueSource
             ?: return FeedSectionResult.Error(null)
         return try {
-            val page = when (feed.listing) {
-                FeedListing.POPULAR -> source.getPopularManga(1)
-                FeedListing.LATEST -> source.getLatestUpdates(1)
+            val pageResult = when (feed.listing) {
+                FeedListing.POPULAR -> source.getPopularManga(page)
+                FeedListing.LATEST -> source.getLatestUpdates(page)
             }
-            val mangas = page.mangas
+            val freshMangas = pageResult.mangas
                 .map { it.toDomainManga(source.id) }
-                .distinctBy { it.url }
                 .let { networkToLocalManga(it) }
-            FeedSectionResult.Success(mangas)
+            val mangas = if (appendTo == null) {
+                freshMangas.distinctBy { it.url }
+            } else {
+                (appendTo.mangas + freshMangas).distinctBy { it.url }
+            }
+            FeedSectionResult.Success(
+                mangas = mangas,
+                hasMore = pageResult.hasNextPage,
+            )
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            FeedSectionResult.Error(e.message)
+            logcat(LogPriority.DEBUG) { "Feed fetch failed source=${feed.sourceId} page=$page" }
+            if (appendTo != null) {
+                appendTo.copy(isLoadingMore = false)
+            } else {
+                FeedSectionResult.Error(e.message)
+            }
         }
     }
 
@@ -117,6 +187,32 @@ class FeedScreenModel(
 
     fun selectListing(listing: FeedListing?) {
         mutableState.update { it.copy(listingOverride = listing) }
+    }
+
+    fun setDefaultListing(listing: FeedListing?) {
+        feedPreferences.defaultListing().set(listing)
+        mutableState.update { it.copy(listingOverride = listing) }
+    }
+
+    fun toggleSourceSelector(show: Boolean) {
+        feedPreferences.showSourceSelector().set(show)
+    }
+
+    fun toggleListingSelector(show: Boolean) {
+        feedPreferences.showListingSelector().set(show)
+    }
+
+    fun setGridColumns(columns: Int) {
+        feedPreferences.gridColumns().set(columns)
+    }
+
+    fun retry(feed: FeedItem) {
+        sectionJobs.remove(feed)?.cancel()
+        mutableState.update { it.copy(sections = it.sections + (feed to FeedSectionResult.Loading)) }
+        sectionJobs[feed] = screenModelScope.launch {
+            val result = fetchSection(feed, page = 1)
+            mutableState.update { it.copy(sections = it.sections + (feed to result)) }
+        }
     }
 
     fun addFeed(sourceId: Long, listing: FeedListing) {
@@ -150,5 +246,11 @@ class FeedScreenModel(
         val item = feeds.removeAt(index)
         feeds.add(target, item)
         feedPreferences.feeds().set(feeds)
+    }
+
+    private companion object {
+        // ponytail: page-size assumption for append page math; per-feed server sizes vary,
+        // swap for a stored page counter if a source returns uneven pages.
+        const val PAGE_SIZE = 20
     }
 }

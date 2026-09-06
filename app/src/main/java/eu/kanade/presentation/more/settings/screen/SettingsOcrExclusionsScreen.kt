@@ -16,7 +16,6 @@ import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +39,7 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import dev.icerock.moko.resources.StringResource
 import eu.kanade.presentation.components.AppBar
+import eu.kanade.presentation.more.settings.widget.PreferenceGroupCard
 import eu.kanade.presentation.util.LocalBackPress
 import eu.kanade.tachiyomi.ui.setting.ocrexclusions.SettingsOcrExclusionsScreenModel
 import eu.kanade.tachiyomi.util.system.toast
@@ -48,7 +48,6 @@ import mihon.domain.ocr.model.OcrExclusionScope
 import mihon.domain.ocr.model.OcrExclusionZone
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.Badge
-import tachiyomi.presentation.core.components.ListGroupHeader
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
@@ -136,68 +135,72 @@ object SettingsOcrExclusionsScreen : Screen {
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                     )
                 }
-                item {
-                    SectionHeader(stringResource(MR.strings.ocr_exclusion_section_words))
-                    TypeLegend(MR.strings.ocr_exclusion_legend_word)
-                    if (words.isEmpty()) {
-                        EmptyHint()
-                    }
-                    words.forEach {
-                        RuleRow(
-                            zone = it,
-                            identity = state.identities[it.id],
-                            onToggleEnabled = screenModel::setEnabled,
-                            onDelete = screenModel::delete,
-                            onEdit = { editRule = it },
-                        )
-                    }
-                    AddRow(stringResource(MR.strings.ocr_exclusion_add_word)) {
-                        addDialogType = OcrExclusionMatchType.WORD
-                    }
-                }
-                item {
-                    SectionHeader(stringResource(MR.strings.ocr_exclusion_section_phrases))
-                    TypeLegend(MR.strings.ocr_exclusion_legend_phrase)
-                    if (phrases.isEmpty()) {
-                        EmptyHint()
-                    }
-                    phrases.forEach {
-                        RuleRow(
-                            zone = it,
-                            identity = state.identities[it.id],
-                            onToggleEnabled = screenModel::setEnabled,
-                            onDelete = screenModel::delete,
-                            onEdit = { editRule = it },
-                        )
-                    }
-                    AddRow(stringResource(MR.strings.ocr_exclusion_add_phrase)) {
-                        addDialogType = OcrExclusionMatchType.PHRASE
+                item(key = "section-words") {
+                    PreferenceGroupCard(
+                        title = stringResource(MR.strings.ocr_exclusion_section_words),
+                        modifier = Modifier.padding(bottom = 12.dp),
+                    ) {
+                        TypeLegend(MR.strings.ocr_exclusion_legend_word)
+                        if (words.isEmpty()) {
+                            EmptyHint()
+                        }
+                        words.forEach {
+                            RuleRow(
+                                zone = it,
+                                identity = state.identities[it.id],
+                                onToggleEnabled = screenModel::setEnabled,
+                                onDelete = screenModel::delete,
+                                onEdit = { editRule = it },
+                            )
+                        }
+                        AddRow(stringResource(MR.strings.ocr_exclusion_add_word)) {
+                            addDialogType = OcrExclusionMatchType.WORD
+                        }
                     }
                 }
-                item {
-                    SectionHeader(stringResource(MR.strings.ocr_exclusion_section_zones))
-                    TypeLegend(MR.strings.ocr_exclusion_legend_zone)
-                    TypeLegend(MR.strings.ocr_exclusion_legend_combined)
-                    if (zones.isEmpty()) {
-                        EmptyHint()
+                item(key = "section-phrases") {
+                    PreferenceGroupCard(
+                        title = stringResource(MR.strings.ocr_exclusion_section_phrases),
+                        modifier = Modifier.padding(bottom = 12.dp),
+                    ) {
+                        TypeLegend(MR.strings.ocr_exclusion_legend_phrase)
+                        if (phrases.isEmpty()) {
+                            EmptyHint()
+                        }
+                        phrases.forEach {
+                            RuleRow(
+                                zone = it,
+                                identity = state.identities[it.id],
+                                onToggleEnabled = screenModel::setEnabled,
+                                onDelete = screenModel::delete,
+                                onEdit = { editRule = it },
+                            )
+                        }
+                        AddRow(stringResource(MR.strings.ocr_exclusion_add_phrase)) {
+                            addDialogType = OcrExclusionMatchType.PHRASE
+                        }
                     }
-                    zones.forEach {
-                        RuleRow(
-                            zone = it,
-                            identity = state.identities[it.id],
-                            onToggleEnabled = screenModel::setEnabled,
-                            onDelete = screenModel::delete,
-                            onEdit = null,
-                        )
+                }
+                item(key = "section-zones") {
+                    PreferenceGroupCard(title = stringResource(MR.strings.ocr_exclusion_section_zones)) {
+                        TypeLegend(MR.strings.ocr_exclusion_legend_zone)
+                        TypeLegend(MR.strings.ocr_exclusion_legend_combined)
+                        if (zones.isEmpty()) {
+                            EmptyHint()
+                        }
+                        zones.forEach {
+                            RuleRow(
+                                zone = it,
+                                identity = state.identities[it.id],
+                                onToggleEnabled = screenModel::setEnabled,
+                                onDelete = screenModel::delete,
+                                onEdit = null,
+                            )
+                        }
                     }
                 }
             }
         }
-    }
-
-    @Composable
-    private fun SectionHeader(title: String) {
-        ListGroupHeader(title)
     }
 
     @Composable
@@ -343,7 +346,6 @@ object SettingsOcrExclusionsScreen : Screen {
                 )
             }
         }
-        HorizontalDivider()
     }
 
     @Composable

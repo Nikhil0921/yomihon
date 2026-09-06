@@ -29,7 +29,7 @@ data object FeedTab : Tab {
             val isSelected = LocalTabNavigator.current.current.key == key
             val image = AnimatedImageVector.animatedVectorResource(R.drawable.anim_feed_enter)
             return TabOptions(
-                index = 4u,
+                index = 2u,
                 title = stringResource(MR.strings.label_feed),
                 icon = rememberAnimatedVectorPainter(image, isSelected),
             )
@@ -39,6 +39,7 @@ data object FeedTab : Tab {
     override fun Content() {
         val screenModel = rememberScreenModel { FeedScreenModel() }
         val state by screenModel.state.collectAsState()
+        val gridColumns by screenModel.gridColumns
         val navigator = LocalNavigator.currentOrThrow
 
         FeedScreen(
@@ -50,6 +51,13 @@ data object FeedTab : Tab {
             onSelectSource = { screenModel.selectSource(it) },
             onSelectListing = { screenModel.selectListing(it) },
             onDismissAddDialog = { screenModel.dismissAddDialog() },
+            onLoadMore = { screenModel.loadMore(it) },
+            onRetry = { screenModel.retry(it) },
+            gridColumns = gridColumns,
+            onChangeGridColumns = { screenModel.setGridColumns(it) },
+            onToggleSourceSelector = { screenModel.toggleSourceSelector(it) },
+            onToggleListingSelector = { screenModel.toggleListingSelector(it) },
+            onSelectDefaultListing = { screenModel.setDefaultListing(it) },
         )
 
         val context = LocalContext.current

@@ -48,9 +48,14 @@ object SettingsAnkiScreen : SearchableSettings {
 
         if (state.isLoading) {
             return listOf(
-                Preference.PreferenceItem.CustomPreference(title = stringResource(MR.strings.loading)) {
-                    CircularProgressIndicator()
-                },
+                Preference.PreferenceGroup(
+                    title = "",
+                    preferenceItems = listOf(
+                        Preference.PreferenceItem.CustomPreference(title = stringResource(MR.strings.loading)) {
+                            CircularProgressIndicator()
+                        },
+                    ),
+                ),
             )
         }
 
@@ -65,34 +70,33 @@ object SettingsAnkiScreen : SearchableSettings {
             }
         }
 
-        when {
-            !state.isApiAvailable -> {
-                preferences.add(
-                    Preference.PreferenceItem.TextPreference(
-                        title = stringResource(MR.strings.anki_add_not_available),
-                        subtitle = stringResource(MR.strings.anki_not_available),
-                    ),
-                )
-            }
-            !state.hasPermission -> {
-                preferences.add(
-                    Preference.PreferenceItem.TextPreference(
-                        title = stringResource(MR.strings.anki_permission_required),
-                        subtitle = stringResource(MR.strings.anki_permission_grant),
-                        onClick = {
-                            permissionLauncher.launch("com.ichi2.anki.permission.READ_WRITE_DATABASE")
-                        },
-                    ),
-                )
-            }
-            else -> {
-                preferences.add(
-                    Preference.PreferenceItem.InfoPreference(
-                        title = stringResource(MR.strings.anki_connected),
-                    ),
-                )
-            }
-        }
+        preferences.add(
+            Preference.PreferenceGroup(
+                title = "",
+                preferenceItems = when {
+                    !state.isApiAvailable -> listOf(
+                        Preference.PreferenceItem.TextPreference(
+                            title = stringResource(MR.strings.anki_add_not_available),
+                            subtitle = stringResource(MR.strings.anki_not_available),
+                        ),
+                    )
+                    !state.hasPermission -> listOf(
+                        Preference.PreferenceItem.TextPreference(
+                            title = stringResource(MR.strings.anki_permission_required),
+                            subtitle = stringResource(MR.strings.anki_permission_grant),
+                            onClick = {
+                                permissionLauncher.launch("com.ichi2.anki.permission.READ_WRITE_DATABASE")
+                            },
+                        ),
+                    )
+                    else -> listOf(
+                        Preference.PreferenceItem.InfoPreference(
+                            title = stringResource(MR.strings.anki_connected),
+                        ),
+                    )
+                },
+            ),
+        )
 
         if (state.isApiAvailable && state.hasPermission) {
             preferences.add(getDeckNoteConfig(state, screenModel))

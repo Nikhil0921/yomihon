@@ -106,8 +106,13 @@ object SettingsDataScreen : SearchableSettings {
         val storagePreferences = Injekt.get<StoragePreferences>()
 
         return listOf(
-            getStorageLocationPref(storagePreferences = storagePreferences),
-            Preference.PreferenceItem.InfoPreference(stringResource(MR.strings.pref_storage_location_info)),
+            Preference.PreferenceGroup(
+                title = "",
+                preferenceItems = listOf(
+                    getStorageLocationPref(storagePreferences = storagePreferences),
+                    Preference.PreferenceItem.InfoPreference(stringResource(MR.strings.pref_storage_location_info)),
+                ),
+            ),
 
             getBackupAndRestoreGroup(backupPreferences = backupPreferences),
             getDataGroup(),

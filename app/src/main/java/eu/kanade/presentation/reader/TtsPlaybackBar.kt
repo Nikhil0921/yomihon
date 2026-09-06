@@ -6,7 +6,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,7 +48,7 @@ import eu.kanade.tachiyomi.ui.reader.tts.TtsPhase
 import eu.kanade.tachiyomi.ui.reader.tts.TtsPlaybackState
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
-import tachiyomi.presentation.core.theme.asChromeContainer
+import tachiyomi.presentation.core.theme.asFloatingChrome
 
 private val pillShape = RoundedCornerShape(28.dp)
 
@@ -86,8 +85,7 @@ fun TtsPlaybackBar(
                 .background(
                     MaterialTheme.colorScheme
                         .surfaceColorAtElevation(3.dp)
-                        .copy(alpha = if (isSystemInDarkTheme()) 0.9f else 0.95f)
-                        .asChromeContainer(),
+                        .asFloatingChrome(),
                 )
                 .padding(horizontal = 16.dp, vertical = 4.dp),
         ) {

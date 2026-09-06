@@ -187,7 +187,39 @@ Placement mirrors established reader patterns:
   approach of `ReaderOcrOverlayRenderer` (normalized coords → view coords,
   WCAG-safe strokes) so it stays consistent with tap-to-lookup visuals.
 
-## 13. Read aloud & voice settings screen (Phase 10A)
+## 13. Frosted Surface System (2026-09 UI modernization set 4)
+
+Layered on M3 Expressive — material treatment on selected surfaces, never
+the whole app. Semantic roles (presentation-core `theme/Translucent.kt`),
+all gated by the existing "Translucent UI" appearance preference with an
+opaque Material fallback:
+
+| Role | Function | Treatment |
+|---|---|---|
+| Floating chrome | Reader bars/tray/navigator, TTS pill, OCR loading strip — surfaces floating over the manga artwork | `asFloatingChrome()`: real 0.85 alpha; artwork behind IS the frost |
+| Frosted modal | AdaptiveSheet, ResizableSheet, TabbedDialog tabs — sheets above flat content | `asChromeContainer()`/`asFrostedModal()`: opaque pre-blend with background |
+| Solid surface | Settings groups, lists, long-form content | plain Material surface tokens — never frosted |
+
+Hard rules: no frost-on-frost nesting; no frost on long-form/readable
+panels (settings, OCR popup, About); reader performance > blur strength —
+there is NO true backdrop blur (artwork is a sibling View under the Compose
+overlay; Compose blur cannot sample it; View RenderEffect on the fullscreen
+viewer was rejected on perf). "Frost" = real-alpha over artwork where a
+backdrop exists, pre-blend elsewhere, opaque when the preference is off.
+
+### Grouped settings surfaces
+
+ONE conceptual group = ONE visual surface: `PreferenceGroupCard`
+(`surfaceContainerLow`, `shapes.large`, header inside the surface,
+rows flat within, tonal only — no shadow, no frost, no per-row cards).
+Adopted by PreferenceScreen (all SearchableSettings screens),
+SettingsMainScreen sections, MoreScreen, AboutScreen, OCR exclusions.
+Section semantics over card count; spacing rhythm 16/12dp. Monochrome
+scheme = shape-only delineation (all container tones identical, by
+design). Screen title > section header > row title > supporting text
+hierarchy preserved via existing `Typography.header`/roles.
+
+## 14. Read aloud & voice settings screen (Phase 10A)
 
 Entry: Settings root row "Read aloud & voice" (VolumeUp icon, after Reader),
 reader quick-settings "Advanced voice settings" row (deep-link), settings

@@ -31,6 +31,7 @@ import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.TabText
 import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.theme.asFrostedModal
 
 object TabbedDialogPaddings {
     val Horizontal = 24.dp
@@ -57,7 +58,7 @@ fun TabbedDialog(
                 PrimaryTabRow(
                     modifier = Modifier.weight(1f),
                     selectedTabIndex = pagerState.currentPage,
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.asFrostedModal(),
                     divider = {},
                 ) {
                     tabTitles.fastForEachIndexed { index, tab ->

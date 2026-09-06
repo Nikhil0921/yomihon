@@ -1375,4 +1375,16 @@
     <string name="feed_manage">Manage sources</string>
     <string name="feed_manage_empty">No feeds to manage yet</string>
     <string name="feed_manage_reorder">Reorder feeds</string>
+    <string name="label_recent">Recent</string>
+    <string name="recent_tab_continue">Continue</string>
+    <string name="recent_continue_empty">Nothing in progress. Start reading to see it here.</string>
+    <string name="feed_show_source_selector">Show source selector</string>
+    <string name="feed_show_listing_selector">Show listing selector</string>
+    <string name="feed_default_listing">Default listing</string>
+    <string name="feed_load_more">Load more</string>
+    <string name="feed_end_of_list">You\'re all caught up</string>
+    <string name="feed_grid_columns">Grid columns</string>
+    <string name="pref_group_reader_layout">Reader layout</string>
+    <string name="pref_group_behavior">Behavior</string>
+    <string name="pref_group_toolbar">Toolbar &amp; display</string>
 </resources>

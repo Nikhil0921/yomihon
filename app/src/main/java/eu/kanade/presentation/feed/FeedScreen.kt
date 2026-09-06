@@ -17,9 +17,15 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.ArrowDropDown
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.List
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -27,6 +33,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
@@ -71,8 +78,16 @@ fun FeedScreen(
     onSelectSource: (Long?) -> Unit,
     onSelectListing: (FeedListing?) -> Unit,
     onDismissAddDialog: () -> Unit,
+    onLoadMore: (FeedItem) -> Unit,
+    onRetry: (FeedItem) -> Unit,
+    gridColumns: Int,
+    onChangeGridColumns: (Int) -> Unit,
+    onToggleSourceSelector: (Boolean) -> Unit,
+    onToggleListingSelector: (Boolean) -> Unit,
+    onSelectDefaultListing: (FeedListing?) -> Unit,
 ) {
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
+    var showCustomizeDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -86,6 +101,11 @@ fun FeedScreen(
                                 title = stringResource(MR.strings.feed_manage),
                                 icon = Icons.Outlined.Tune,
                                 onClick = onManageFeedsClick,
+                            ),
+                            AppBar.Action(
+                                title = stringResource(MR.strings.action_settings),
+                                icon = Icons.Outlined.List,
+                                onClick = { showCustomizeDialog = true },
                             ),
                             AppBar.Action(
                                 title = stringResource(MR.strings.feed_add),
@@ -126,7 +146,7 @@ fun FeedScreen(
             )
             val bottom = padding.calculateBottomPadding()
             LazyVerticalGrid(
-                columns = GridCells.Adaptive(96.dp),
+                columns = if (gridColumns > 0) GridCells.Fixed(gridColumns) else GridCells.Adaptive(96.dp),
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(start = 8.dp, end = 8.dp, bottom = bottom),
                 verticalArrangement = Arrangement.spacedBy(CommonMangaItemDefaults.GridVerticalSpacer),
@@ -137,15 +157,24 @@ fun FeedScreen(
                         FeedHeader(feed, state)
                     }
                     when (val section = state.sections[feed]) {
-                        is FeedSectionResult.Success -> items(section.mangas) { manga ->
-                            MangaComfortableGridItem(
-                                coverData = manga.asMangaCover(),
-                                title = manga.title,
-                                onClick = { onMangaClick(manga.id) },
-                                onLongClick = { },
-                            )
+                        is FeedSectionResult.Success -> {
+                            items(section.mangas) { manga ->
+                                MangaComfortableGridItem(
+                                    coverData = manga.asMangaCover(),
+                                    title = manga.title,
+                                    onClick = { onMangaClick(manga.id) },
+                                    onLongClick = { },
+                                )
+                            }
+                            item(span = { GridItemSpan(maxLineSpan) }, contentType = { "feed_section_footer" }) {
+                                FeedSectionFooter(
+                                    section = section,
+                                    onRetry = { onRetry(feed) },
+                                    onLoadMore = { onLoadMore(feed) },
+                                )
+                            }
                         }
-                        is FeedSectionResult.Loading -> item(
+                        is FeedSectionResult.Loading, null -> item(
                             span = { GridItemSpan(maxLineSpan) },
                             contentType = { "feed_section_loading" },
                         ) {
@@ -156,17 +185,23 @@ fun FeedScreen(
                                 CircularProgressIndicator()
                             }
                         }
-                        else -> item(
+                        is FeedSectionResult.Error -> item(
                             span = { GridItemSpan(maxLineSpan) },
                             contentType = { "feed_section_error" },
                         ) {
-                            Text(
-                                text = (section as? FeedSectionResult.Error)?.message
-                                    ?: stringResource(MR.strings.unknown_error),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.padding(MaterialTheme.padding.medium),
-                            )
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(MaterialTheme.padding.medium),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Text(
+                                    text = section.message ?: stringResource(MR.strings.unknown_error),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                                TextButton(onClick = { onRetry(feed) }) {
+                                    Text(stringResource(MR.strings.action_retry))
+                                }
+                            }
                         }
                     }
                 }
@@ -181,68 +216,19 @@ fun FeedScreen(
             onDismiss = onDismissAddDialog,
         )
     }
-}
 
-@Composable
-private fun FeedFilterBar(
-    state: FeedScreenModel.State,
-    onSelectSource: (Long?) -> Unit,
-    onSelectListing: (FeedListing?) -> Unit,
-) {
-    val enabledFeeds = state.feeds.filter { it.enabled }
-    val feedSourceIds = enabledFeeds.map { it.sourceId }.distinct()
-    val feedSources = feedSourceIds.mapNotNull { id -> state.sources.firstOrNull { it.id == id } }
-    if (feedSources.size < 2 && state.listingOverride == null) return
-
-    Column {
-        if (feedSources.size >= 2) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = MaterialTheme.padding.medium),
-                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
-            ) {
-                FilterChip(
-                    selected = state.selectedSourceId == null,
-                    onClick = { onSelectSource(null) },
-                    label = { Text(stringResource(MR.strings.feed_all_sources)) },
-                )
-                feedSources.forEach { source ->
-                    FilterChip(
-                        selected = state.selectedSourceId == source.id,
-                        onClick = { onSelectSource(source.id) },
-                        label = { Text(source.visualName) },
-                    )
-                }
-            }
-        }
-        if (enabledFeeds.map { it.listing }.distinct().size > 1) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = MaterialTheme.padding.medium, vertical = MaterialTheme.padding.small),
-                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
-            ) {
-                FilterChip(
-                    selected = state.listingOverride == null,
-                    onClick = { onSelectListing(null) },
-                    label = { Text(stringResource(MR.strings.all)) },
-                )
-                FilterChip(
-                    selected = state.listingOverride == FeedListing.POPULAR,
-                    onClick = { onSelectListing(FeedListing.POPULAR) },
-                    label = { Text(stringResource(MR.strings.popular)) },
-                )
-                FilterChip(
-                    selected = state.listingOverride == FeedListing.LATEST,
-                    onClick = { onSelectListing(FeedListing.LATEST) },
-                    label = { Text(stringResource(MR.strings.latest)) },
-                )
-            }
-        }
-        HorizontalDivider()
+    if (showCustomizeDialog) {
+        FeedCustomizeDialog(
+            gridColumns = gridColumns,
+            onChangeGridColumns = onChangeGridColumns,
+            onToggleSourceSelector = onToggleSourceSelector,
+            onToggleListingSelector = onToggleListingSelector,
+            onSelectDefaultListing = onSelectDefaultListing,
+            showSourceSelector = state.showSourceSelector,
+            showListingSelector = state.showListingSelector,
+            defaultListing = state.defaultListing,
+            onDismiss = { showCustomizeDialog = false },
+        )
     }
 }
 
@@ -337,6 +323,202 @@ private fun AddFeedDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text(stringResource(MR.strings.action_cancel))
+            }
+        },
+    )
+}
+
+@Composable
+private fun FeedSectionFooter(
+    section: FeedSectionResult.Success,
+    onRetry: () -> Unit,
+    onLoadMore: () -> Unit,
+) {
+    Box(
+        modifier = Modifier.fillMaxWidth().padding(vertical = MaterialTheme.padding.small),
+        contentAlignment = Alignment.Center,
+    ) {
+        when {
+            section.isLoadingMore -> CircularProgressIndicator(strokeWidth = 3.dp)
+            !section.hasMore -> Text(
+                text = stringResource(MR.strings.feed_end_of_list),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            else -> TextButton(onClick = onLoadMore) {
+                Text(stringResource(MR.strings.feed_load_more))
+            }
+        }
+    }
+}
+
+@Composable
+private fun FeedFilterBar(
+    state: FeedScreenModel.State,
+    onSelectSource: (Long?) -> Unit,
+    onSelectListing: (FeedListing?) -> Unit,
+) {
+    val enabledFeeds = state.feeds.filter { it.enabled }
+    val feedSources = enabledFeeds.map { it.sourceId }.distinct()
+        .mapNotNull { id -> state.sources.firstOrNull { it.id == id } }
+    val hasListings = enabledFeeds.map { it.listing }.distinct().size > 1
+    val showSelectorRow = (state.showSourceSelector && feedSources.size >= 2) ||
+        (state.showListingSelector && hasListings)
+
+    if (!showSelectorRow) return
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = MaterialTheme.padding.medium, vertical = MaterialTheme.padding.extraSmall),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (state.showSourceSelector && feedSources.size >= 2) {
+            SourceSelectorDropdown(state = state, onSelectSource = onSelectSource)
+        }
+        if (state.showListingSelector && hasListings) {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small, Alignment.End),
+            ) {
+                FilterChip(
+                    selected = state.listingOverride == null,
+                    onClick = { onSelectListing(null) },
+                    label = { Text(stringResource(MR.strings.all)) },
+                )
+                FilterChip(
+                    selected = state.listingOverride == FeedListing.POPULAR,
+                    onClick = { onSelectListing(FeedListing.POPULAR) },
+                    label = { Text(stringResource(MR.strings.popular)) },
+                )
+                FilterChip(
+                    selected = state.listingOverride == FeedListing.LATEST,
+                    onClick = { onSelectListing(FeedListing.LATEST) },
+                    label = { Text(stringResource(MR.strings.latest)) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SourceSelectorDropdown(
+    state: FeedScreenModel.State,
+    onSelectSource: (Long?) -> Unit,
+) {
+    val enabledFeeds = state.feeds.filter { it.enabled }
+    val feedSources = enabledFeeds.map { it.sourceId }.distinct()
+        .mapNotNull { id -> state.sources.firstOrNull { it.id == id } }
+    var expanded by remember { mutableStateOf(false) }
+    val selected = feedSources.firstOrNull { it.id == state.selectedSourceId }
+
+    Row(
+        modifier = Modifier.clickable { expanded = true },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = selected?.visualName ?: stringResource(MR.strings.feed_all_sources),
+            style = MaterialTheme.typography.header,
+        )
+        Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
+    }
+    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenuItem(
+            text = { Text(stringResource(MR.strings.feed_all_sources)) },
+            onClick = {
+                onSelectSource(null)
+                expanded = false
+            },
+            trailingIcon = {
+                if (selected == null) Icon(Icons.Outlined.Check, contentDescription = null)
+            },
+        )
+        feedSources.forEach { source ->
+            DropdownMenuItem(
+                text = { Text(source.visualName) },
+                onClick = {
+                    onSelectSource(source.id)
+                    expanded = false
+                },
+                trailingIcon = {
+                    if (selected?.id == source.id) Icon(Icons.Outlined.Check, contentDescription = null)
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun FeedCustomizeDialog(
+    gridColumns: Int,
+    onChangeGridColumns: (Int) -> Unit,
+    onToggleSourceSelector: (Boolean) -> Unit,
+    onToggleListingSelector: (Boolean) -> Unit,
+    onSelectDefaultListing: (FeedListing?) -> Unit,
+    showSourceSelector: Boolean,
+    showListingSelector: Boolean,
+    defaultListing: FeedListing?,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(MR.strings.action_settings)) },
+        text = {
+            Column {
+                Text(stringResource(MR.strings.feed_grid_columns), style = MaterialTheme.typography.header)
+                Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small)) {
+                    FilterChip(
+                        selected = gridColumns == 0,
+                        onClick = { onChangeGridColumns(0) },
+                        label = { Text(stringResource(MR.strings.label_auto)) },
+                    )
+                    listOf(2, 3, 4, 5).forEach { columns ->
+                        FilterChip(
+                            selected = gridColumns == columns,
+                            onClick = { onChangeGridColumns(columns) },
+                            label = { Text(columns.toString()) },
+                        )
+                    }
+                }
+                HorizontalDivider(modifier = Modifier.padding(vertical = MaterialTheme.padding.small))
+                ListItem(
+                    headlineContent = { Text(stringResource(MR.strings.feed_show_source_selector)) },
+                    trailingContent = {
+                        Switch(checked = showSourceSelector, onCheckedChange = onToggleSourceSelector)
+                    },
+                )
+                ListItem(
+                    headlineContent = { Text(stringResource(MR.strings.feed_show_listing_selector)) },
+                    trailingContent = {
+                        Switch(checked = showListingSelector, onCheckedChange = onToggleListingSelector)
+                    },
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = MaterialTheme.padding.small))
+                Text(stringResource(MR.strings.feed_default_listing), style = MaterialTheme.typography.header)
+                Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small)) {
+                    FilterChip(
+                        selected = defaultListing == null,
+                        onClick = { onSelectDefaultListing(null) },
+                        label = { Text(stringResource(MR.strings.all)) },
+                    )
+                    FilterChip(
+                        selected = defaultListing == FeedListing.POPULAR,
+                        onClick = { onSelectDefaultListing(FeedListing.POPULAR) },
+                        label = { Text(stringResource(MR.strings.popular)) },
+                    )
+                    FilterChip(
+                        selected = defaultListing == FeedListing.LATEST,
+                        onClick = { onSelectDefaultListing(FeedListing.LATEST) },
+                        label = { Text(stringResource(MR.strings.latest)) },
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(MR.strings.action_close))
             }
         },
     )

@@ -2,6 +2,9 @@ package eu.kanade.presentation.more.settings.screen
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -44,6 +47,7 @@ import dev.icerock.moko.resources.StringResource
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.presentation.more.settings.screen.about.AboutScreen
+import eu.kanade.presentation.more.settings.widget.PreferenceGroupCard
 import eu.kanade.presentation.more.settings.widget.TextPreferenceWidget
 import eu.kanade.presentation.util.LocalBackPress
 import eu.kanade.presentation.util.Screen
@@ -108,6 +112,7 @@ object SettingsMainScreen : Screen() {
             containerColor = containerColor,
             content = { contentPadding ->
                 val state = rememberLazyListState()
+                val sections = getSections()
                 val indexSelected = if (twoPane) {
                     items.indexOfFirst { it.screen::class == navigator.items.first()::class }
                         .takeIf { it >= 0 }
@@ -128,15 +133,13 @@ object SettingsMainScreen : Screen() {
                     state = state,
                     contentPadding = contentPadding,
                 ) {
-                    itemsIndexed(
-                        items = items,
-                        key = { _, item -> item.hashCode() },
-                    ) { index, item ->
-                        val selected = indexSelected == index
-                        var modifier: Modifier = Modifier
-                        var contentColor = LocalContentColor.current
-                        if (twoPane) {
-                            modifier = Modifier
+                    if (twoPane) {
+                        itemsIndexed(
+                            items = items,
+                            key = { _, item -> item.hashCode() },
+                        ) { index, item ->
+                            val selected = indexSelected == index
+                            var modifier: Modifier = Modifier
                                 .padding(horizontal = 8.dp)
                                 .clip(RoundedCornerShape(24.dp))
                                 .then(
@@ -146,18 +149,41 @@ object SettingsMainScreen : Screen() {
                                         Modifier
                                     },
                                 )
+                            var contentColor = LocalContentColor.current
                             if (selected) {
                                 contentColor = MaterialTheme.colorScheme.onSurfaceVariant
                             }
+                            CompositionLocalProvider(LocalContentColor provides contentColor) {
+                                TextPreferenceWidget(
+                                    modifier = modifier,
+                                    title = stringResource(item.titleRes),
+                                    subtitle = item.formatSubtitle(),
+                                    icon = item.icon,
+                                    onPreferenceClick = { navigator.navigate(item.screen, twoPane) },
+                                )
+                            }
                         }
-                        CompositionLocalProvider(LocalContentColor provides contentColor) {
-                            TextPreferenceWidget(
-                                modifier = modifier,
-                                title = stringResource(item.titleRes),
-                                subtitle = item.formatSubtitle(),
-                                icon = item.icon,
-                                onPreferenceClick = { navigator.navigate(item.screen, twoPane) },
-                            )
+                    } else {
+                        sections.forEachIndexed { sectionIndex, section ->
+                            item(key = "section-${section.titleRes}") {
+                                Column {
+                                    PreferenceGroupCard(
+                                        title = stringResource(section.titleRes),
+                                    ) {
+                                        section.items.forEach { item ->
+                                            TextPreferenceWidget(
+                                                title = stringResource(item.titleRes),
+                                                subtitle = item.formatSubtitle(),
+                                                icon = item.icon,
+                                                onPreferenceClick = { navigator.navigate(item.screen, twoPane) },
+                                            )
+                                        }
+                                    }
+                                    if (sectionIndex < sections.lastIndex) {
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -176,6 +202,48 @@ object SettingsMainScreen : Screen() {
         val icon: ImageVector,
         val screen: VoyagerScreen,
     )
+
+    private data class Section(
+        val titleRes: StringResource,
+        val items: List<Item>,
+    )
+
+    @Composable
+    private fun getSections(): List<Section> {
+        val items = getItems()
+        fun pick(vararg screens: VoyagerScreen) = items.filter { it.screen in screens }
+        return listOf(
+            Section(
+                titleRes = MR.strings.pref_category_appearance,
+                items = pick(SettingsAppearanceScreen),
+            ),
+            Section(
+                titleRes = MR.strings.pref_category_library,
+                items = pick(SettingsLibraryScreen, SettingsDownloadScreen),
+            ),
+            Section(
+                titleRes = MR.strings.pref_category_reader,
+                items = pick(
+                    SettingsReaderScreen,
+                    SettingsReadAloudScreen,
+                    SettingsOcrExclusionsScreen,
+                    SettingsAnkiScreen,
+                ),
+            ),
+            Section(
+                titleRes = MR.strings.pref_category_tracking,
+                items = pick(SettingsTrackingScreen, SettingsBrowseScreen),
+            ),
+            Section(
+                titleRes = MR.strings.label_data_storage,
+                items = pick(SettingsDataScreen, SettingsSecurityScreen, SettingsAdvancedScreen),
+            ),
+            Section(
+                titleRes = MR.strings.pref_category_about,
+                items = pick(AboutScreen),
+            ),
+        )
+    }
 
     @Composable
     private fun getItems() = listOf(

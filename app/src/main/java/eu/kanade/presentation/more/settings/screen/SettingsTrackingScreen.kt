@@ -125,15 +125,20 @@ object SettingsTrackingScreen : SearchableSettings {
         }
 
         return listOf(
-            Preference.PreferenceItem.SwitchPreference(
-                preference = trackPreferences.autoUpdateTrack,
-                title = stringResource(MR.strings.pref_auto_update_manga_sync),
-            ),
-            Preference.PreferenceItem.ListPreference(
-                preference = trackPreferences.autoUpdateTrackOnMarkRead,
-                entries = AutoTrackState.entries
-                    .associateWith { stringResource(it.titleRes) },
-                title = stringResource(MR.strings.pref_auto_update_manga_on_mark_read),
+            Preference.PreferenceGroup(
+                title = stringResource(MR.strings.pref_category_general),
+                preferenceItems = listOf(
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = trackPreferences.autoUpdateTrack,
+                        title = stringResource(MR.strings.pref_auto_update_manga_sync),
+                    ),
+                    Preference.PreferenceItem.ListPreference(
+                        preference = trackPreferences.autoUpdateTrackOnMarkRead,
+                        entries = AutoTrackState.entries
+                            .associateWith { stringResource(it.titleRes) },
+                        title = stringResource(MR.strings.pref_auto_update_manga_on_mark_read),
+                    ),
+                ),
             ),
             Preference.PreferenceGroup(
                 title = stringResource(MR.strings.services),

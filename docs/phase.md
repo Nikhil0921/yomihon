@@ -5,12 +5,16 @@
 > A phase is COMPLETED only when its verification steps have actually been run
 > and recorded in `docs/memory.md`.
 
-Current phase pointer: **v0.5.2 RELEASED 2026-09-03 (tag + 5 ABI APKs,
-versionCode 28). Post-release, UNCOMMITTED, device verification PENDING
-user: UI follow-up set 2 (2026-09-04) — Library Continue + Browse Search tab
-REVERTED per user device feedback, Feed management centralized into new
-ManageFeedsScreen (reorder/enable/delete), FeedScreen header stripped to
-name+listing. Gates green; APK installed.**
+Current phase pointer: **Post-v0.5.2 stabilization. UNCOMMITTED, device
+verification PENDING user (two stacked change sets): (a) post-modernization
+feature set (2026-09-06) — bottom nav Library→Recent→Feed→Browse→More
+(Updates+History destinations removed, index metadata corrected, shortcuts
+remapped), new Recent tab (Continue/History/Updates internal tabs, reusing
+existing screens + data), Feed v2 (compact source dropdown + listing chips,
+customize dialog with grid columns/selector toggles/default listing, explicit
+per-feed Load-more paging), reader-settings IA grouping (Reader layout group,
+Toolbar&display/Behavior groups); (b) UI modernization set 4 (2026-09-06)
+grouped settings surfaces + reader frost. All gates green both sets.**
   Prior: UI/UX modernization set 1 (2026-09-03) — floating nav pill, OCR
   exclusion phrase EDIT + collapsed rule rows + identity labels, Feed filter
   chips, More-tab GroupHeader sections. Gates green. UNCOMMITTED.
@@ -320,6 +324,33 @@ PRODUCT PIVOT 2026-08-25: English is the primary v1 Read-Aloud language;
   rate/pitch tuning where technically appropriate.
 - **Rule**: each requires a PRD update + architecture review BEFORE coding
   (rules.md §10). None may regress v1/10A behavior.
+
+---
+
+## Deferred features (recorded 2026-09-06 — DO NOT implement without PRD/architecture review)
+
+These were intentionally NOT implemented in the 2026-09-06 post-modernization
+feature set and must not be forgotten:
+
+1. **Reader toolbar reordering** — reorder reader toolbar actions (drag &
+   drop, persist ordering, restore defaults, respect feature availability,
+   preserve mandatory/core actions). Current phase keeps toolbar VISIBILITY
+   controls only; the settings structure is ready for the ordering feature.
+2. **True backdrop blur investigation** — reader floating chrome currently
+   uses semantic color roles, NOT true backdrop blur (Compose cannot sample
+   the sibling artwork View; fullscreen RenderEffect was rejected on
+   performance grounds). Future work must FIRST prove feasibility: rendering
+   architecture, performance impact, battery impact, memory impact,
+   compatibility, AMOLED/light/dark behavior, reader scrolling performance.
+   Do not "just add a blur modifier."
+3. **Artwork-reactive reader tray** — subtle top/bottom tray appearance
+   derived from the manga artwork behind it (Tadami-inspired contextual
+   behavior, not its visual identity). Requirements: subtle, content-first,
+   no aura/rim lighting/glass-everywhere, reader performance first,
+   readability preserved.
+4. **Automatic Feed pagination** — near-end automatic loading, ONLY after
+   the explicit Load-more paging (shipped 2026-09-06) is device-tested and
+   stable. No auto infinite scroll in the current phase.
 
 ---
 

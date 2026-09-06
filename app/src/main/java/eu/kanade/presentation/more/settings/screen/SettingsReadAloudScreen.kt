@@ -60,20 +60,30 @@ object SettingsReadAloudScreen : SearchableSettings {
 
         if (state.isLoading) {
             return listOf(
-                Preference.PreferenceItem.CustomPreference(title = stringResource(MR.strings.loading)) {
-                    CircularProgressIndicator()
-                },
+                Preference.PreferenceGroup(
+                    title = "",
+                    preferenceItems = listOf(
+                        Preference.PreferenceItem.CustomPreference(title = stringResource(MR.strings.loading)) {
+                            CircularProgressIndicator()
+                        },
+                    ),
+                ),
             )
         }
 
         if (state.loadFailed) {
             return listOf(
-                Preference.PreferenceItem.InfoPreference(
-                    title = stringResource(MR.strings.tts_voices_unavailable),
-                ),
-                Preference.PreferenceItem.TextPreference(
-                    title = stringResource(MR.strings.action_retry),
-                    onClick = { screenModel.load() },
+                Preference.PreferenceGroup(
+                    title = "",
+                    preferenceItems = listOf(
+                        Preference.PreferenceItem.InfoPreference(
+                            title = stringResource(MR.strings.tts_voices_unavailable),
+                        ),
+                        Preference.PreferenceItem.TextPreference(
+                            title = stringResource(MR.strings.action_retry),
+                            onClick = { screenModel.load() },
+                        ),
+                    ),
                 ),
             )
         }

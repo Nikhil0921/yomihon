@@ -11,11 +11,15 @@
 
 ```text
 Project:        Yomihon fork (v0.5.2, vc28) — Android manga reader + OCR/language tooling
-Repo state:     branch main @ 0286d9081 (v0.5.2 release) + UNCOMMITTED
-                post-release sets: P0 zone-prefill fix + UI modernization
-                set 1 + UI follow-up set 2 + set 3 design-audit
-                implementation (2026-09-03/04, see Completed work +
-                Agent handoff). v0.5.2 RELEASE PUBLISHED 2026-09-03 (tag
+Repo state:     branch main @ 6b0ad4623 (v0.5.2 + set 3
+                design-audit + translucent surface commit) +
+                UNCOMMITTED: UI modernization set 4 "Visual
+                Hierarchy / Frosted Surfaces" (2026-09-06) AND
+                post-modernization feature set (2026-09-06, this
+                session — Recent tab IA + nav reorder + Feed v2 +
+                reader-settings grouping, see 2026-09-06 blocks +
+                Agent handoff).
+                v0.5.2 RELEASE PUBLISHED 2026-09-03 (tag
                 v0.5.2, 5 ABI APKs; includes exclusion rules, speech
                 cleanup, voice profiles, 3x rate, Feed tab).
 Untracked:      .opencode/ + .device-pass/ (gitignored), .codegraph/ (index,
@@ -25,8 +29,12 @@ Primary goal:    Stabilize post-v0.5.2: device verification of uncommitted
 Current phase:  Post-release stabilization — UI sets uncommitted, device
                 pass NOT run.
 Current status: TTS v1 + 10A + 2026-09-01 multi-feature set all shipped in
-                v0.5.2; docs (architecture/prd/design/phase) re-audited and
-                aligned 2026-09-04.
+                v0.5.2; docs re-audited 2026-09-04; visual-hierarchy
+                modernization set 4 implemented 2026-09-06 (gates green,
+                device pass pending user); IA/feature set (Recent tab,
+                nav reorder, Feed v2 controls+paging, reader settings
+                groups) implemented 2026-09-06 (gates green, device
+                pass pending user).
 ```
 
 ## Current objective
@@ -937,6 +945,67 @@ Files changed (4): presentation/track/TrackInfoDialogHome.kt (clip),
 Device verify pending user: TrackInfo dialog visuals (shape unchanged,
 one clip), History row at default + large font scale, Read aloud
 Settings → Advanced → Text Recognition opens queue screen.
+```
+
+```text
+[COMPLETED 2026-09-05 — UI-modernization Phase B-M: MoreScreen grouped
+surfaces, UNCOMMITTED]
+
+One file: presentation/more/MoreScreen.kt. ListGroupHeader sections →
+PreferenceGroupCard sections (widget from Phase A foundation, same Gradle
+module — internal import OK). Report: /tmp/opencode/phaseBM-report.md.
+
+- 3 cards, existing i18n keys reused (zero new strings):
+  pref_category_general (Downloaded only + Incognito switches),
+  pref_category_library (Download queue, OCR queue — both state-subtitle
+  rows, Categories, Stats, Data and storage, Dictionary lookup, Manage
+  dictionaries), label_settings (Settings, Support us, About, Help URI).
+- LogoHeader item 0 untouched, outside cards. One card = ONE lazy item,
+  rows non-lazy Column inside (counts 2/7/4). 12dp spacer items between
+  cards (matches PreferenceScreen rhythm, no trailing spacer).
+- All row widgets/callbacks/state providers verbatim; queue-state
+  providers now compose inside Library card item (slightly coarser
+  recomposition scope — negligible at these row counts).
+- ListGroupHeader import removed (unused). No frost/shadows/row metric
+  changes. No two-pane code in file (nothing to preserve). Only caller
+  MoreTab.kt uses public MoreScreen signature — unchanged.
+
+GATES GREEN 2026-09-05 (docker vsc-yomihon-e24e3bd7e46d…, JDK17, -Xmx4g,
+both volumes): spotlessApply + :app:compileDebugKotlin BUILD SUCCESSFUL
+2m33s; spotlessCheck + :app:compileDebugKotlin BUILD SUCCESSFUL 5m15s.
+No DB/pref/semantic changes; no unit tests touched (presentation-only).
+
+Device verify pending user: More tab = 3 tactile cards under logo, all
+themes, queue subtitles live during downloads.
+```
+
+```text
+[COMPLETED 2026-09-05 — UI-modernization Phase B-R: reader floating-chrome
+unification, UNCOMMITTED]
+
+4 files, all reader floating chrome moved to asFloatingChrome() role
+(Translucent.kt foundation): ReaderAppBars.kt shared backgroundColor =
+surfaceColorAtElevation(3.dp).asFloatingChrome() (dead isSystemInDarkTheme
+branch deleted); ChapterNavigator.kt — computes its OWN color (NOT passed
+from ReaderAppBars) — same swap + comment fixed ReaderActivity→ReaderAppBars;
+TtsPlaybackBar.kt .copy(0.9/0.95).asChromeContainer() → .asFloatingChrome()
+(fixes opaque-when-pref-ON + translucent-when-OFF bugs); OcrLoadingIndicator.kt
+surfaceContainer strip → frosted role. OcrResultPopup deliberately untouched
+(content panel, readability ruling). Spec discrepancy found: forked
+surfaceColorAtElevation is private in presentation-core Surface.kt — kept
+androidx import (identical result at these sites). Read-only audit: reader
+settings slider pills (surfaceContainerHighest) correctly stay opaque-tokened
+inside frosted sheet (no frost-on-frost); ReaderActivity passes NO chrome
+colors (viewer bg only). Report: /tmp/opencode/phaseBR-report.md.
+
+GATES GREEN 2026-09-05 (docker vsc-yomihon-e24e3bd7e46d…, JDK17, -Xmx4g,
+both volumes): spotlessApply + :app:compileDebugKotlin 2m26s; spotlessCheck +
+:app:compileDebugKotlin 2m27s. Side effect: forced spotlessApply also
+reformatted 4 PRE-EXISTING dirty files from earlier sets (ktlint-only).
+Stale Gradle journal-1.lock (rogue parallel container) removed once.
+
+Device verify pending user: reader bars/tray/navigator/TTS pill/OCR strip
+frosted 0.85 with pref ON, opaque OFF, both themes, no frost-on-frost.
 ```
 
 Feature: Phase 10A advanced system TTS voice configuration — COMPLETE
@@ -1919,21 +1988,69 @@ Standing decision unchanged: prd script stays manual/interactive.
 ## Current files being modified
 
 ```text
-Current working files:
-- Phase 10A set UNCOMMITTED (Tasks 1-6): TtsVoicePreferences (+test),
-  TtsEngine, AndroidTtsEngine, DomainModule, PreferenceModule,
-  SettingsReadAloudScreen (+screen model dir), SettingsSearchScreen,
-  SettingsMainScreen, Constants.kt, SettingsScreen.kt, MainActivity.kt,
-  ReaderSettingsDialog.kt, ReadAloudPage.kt, ReaderActivity.kt (both
-  dialog call sites), i18n base strings.xml (18 TTS keys), docs/* (Task 6
-  documentation updates: prd/architecture/design/phase/memory)
-- docs/memory.md (this session record)
+[COMPLETED 2026-09-05 — UI-modernization Phase A (visual hierarchy
+foundation), UNCOMMITTED (4 files)]
 
-All fix sets prior to Phase 10A COMMITTED: fff9583f0/872c55397/8cb320e7c
-  (P0/P1+scroll), 41200022e (z-order), be31edb71 (action logging +
-  reportFailure), 80deac5b8 (prefetch-DNS docs), 5c7d2cc2c (leak fix +
-  LeakCanary core).
-```
+Presentation-only change set (report: /tmp/opencode/phaseA-report.md):
+
+1. Translucent.kt (+2 roles, zero call-site changes): asFloatingChrome() =
+   frosted READER role — copy(alpha=0.85f) REAL translucency when mica on
+   (backdrop = artwork), opaque fallback when off, dark/light identical,
+   FLOATING_CHROME_ALPHA const, kdoc = no frost-on-frost + scrim-adequate
+   container + onSurfaceVariant content colors required. asFrostedModal()
+   = modal role alias → delegates asChromeContainer() (pre-blend 0.82).
+   LocalTranslucentSurfaces/asChromeContainer untouched (backward compat;
+   NavigationBar/AdaptiveSheet/ResizableSheet/TtsPlaybackBar callers NOT
+   migrated — other agents own those files this phase).
+
+2. PreferenceGroupCard.kt (NEW widget): one group = one surface — Column,
+   16dp screen inset, MaterialTheme.shapes.large clip, tonal background,
+   4dp vertical inner padding, header INSIDE surface (typography.header,
+   start 16/top 12), rows keep BasePreferenceWidget metrics, NO shadow
+   (design §17), NO frost. COLOR DECISION: surfaceContainerLowest
+   REJECTED — verified all 15 color schemes: dark modes put it AT/BELOW
+   background (Tachiyomi #1A181D vs bg #1B1B1F = inverted; Monochrome/
+   GreenApple identical = invisible) → used surfaceContainerLow (task's
+   own fallback clause). Monochrome stays flat (Low==bg, shape-only
+   delineation — intentional theme philosophy).
+
+3. PreferenceScreen.kt: PreferenceGroup renders as ONE LazyColumn item
+   (PreferenceGroupCard wrapping non-lazy Column of PreferenceItems +
+   12dp trailing spacer, enabled-skip preserved). findHighlightedIndex
+   REWRITTEN for 1-group-1-item model: top-level index of group containing
+   matching item title / direct item title match; disabled groups excluded
+   (matches render skip — also fixes pre-existing off-by-N scroll bug when
+   disabled group precedes target). Search breadcrumbs/index untouched
+   (SettingsSearchScreen reads data model, not render tree).
+
+4. SettingsTrackingScreen.kt: 2 loose items (auto-update switch, on-mark-
+   read list) wrapped in new PreferenceGroup(pref_category_general —
+   existing key). Data/Anki loose rows NOT wrapped: no existing i18n key
+   fits (candidates duplicate screen/row titles; spec forbids inventing).
+   ReadAloudPage + SettingsReadAloudScreen state placeholders untouched.
+
+GATES GREEN 2026-09-05 (docker vsc-yomihon-e24e3bd7e46d…, JDK17, -Xmx4g,
+both volumes): spotlessApply + :app:compileDebugKotlin +
+:presentation-core:compileDebugKotlin BUILD SUCCESSFUL 3m39s;
+spotlessCheck BUILD SUCCESSFUL 48s. No DB change. No unit tests touched
+(presentation-only; task scope was compile+spotless).
+
+Device verify pending: settings screens grouped-surface look (all
+themes, esp. dark/AMOLED contrast), search "anki" → navigate → pulse row
+(highlight scroll under new 1-item groups), Tracking screen General
+group, very tall groups (Anki field mappings) scroll behavior.
+
+NOTE: other agents concurrently own NavigationBar/AdaptiveSheet/
+ResizableSheet/TtsPlaybackBar/MoreScreen/SettingsMainScreen/AboutScreen/
+SettingsOcrExclusionsScreen — do not rebase this set without checking
+their state.
+
+Current working files:
+- UI-modernization Phase A set UNCOMMITTED (4 files above)
+- Prior uncommitted sets: UI set 2 (Feed mgmt), audit-fix set, prefill
+  fix, docs alignment (see blocks above)
+- docs/memory.md (this record)
+
 
 ## Recently changed files
 
@@ -2108,6 +2225,146 @@ Reason: ordering belongs to the OCR engine (now fixed there via tiling +
 positional merge); segmenter must mirror tap-highlight behavior.
 ```
 
+```text
+[COMPLETED 2026-09-06 — POST-MODERNIZATION FEATURE SET (IA: Recent tab +
+nav reorder + Feed v2 + reader settings groups), UNCOMMITTED]
+
+User-directed information-architecture + functional set (NOT a visual
+redesign; M3 baseline untouched). Audited first (3 parallel read-only
+agents: nav/index, recent candidates, feed+reader settings).
+
+1. BOTTOM NAV REORDER — final order Library → Recent → Feed → Browse →
+   More. HomeScreen TABS list edited; sealed Tab.{Updates,History} →
+   Tab.Recent; openTabEvent when-map updated; updates-count badge moved
+   to RecentTab. Index audit: Voyager addresses tabs by CLASS, not index
+   (TabOptions.index consumed NOWHERE in repo — verified by grep; the
+   historical Feed/More index swap was already fixed). TabOptions.index
+   now 0..4 matching list order (RecentTab 1u, FeedTab 2u, BrowseTab 3u
+   unchanged, MoreTab 5u→4u fixed). MainActivity SHORTCUT_UPDATES/
+   SHORTCUT_HISTORY both map → Tab.Recent (notification taps in
+   LibraryUpdateNotifier still work via SHORTCUT_UPDATES). shortcuts.xml
+   (res/xml + dead duplicate at app/src/main/shortcuts.xml) consolidated:
+   2 recent shortcuts → 1 "Recent" (SHOW_RECENTLY_UPDATED). Feed keeps
+   animated icon + fade-through tab animation (same treatment as others).
+   BackHandler still targets LibraryTab (class-based, safe).
+2. RECENT DESTINATION — new ui/recent package. RecentTab hosts 3 internal
+   tabs via PrimaryTabRow + HorizontalPager (TabbedScreen pattern, but
+   hosting full self-contained screens: UpdateScreen/HistoryScreen keep
+   their own Scaffold+AppBar):
+   - Continue (NEW, ui/recent/continuereading): unfinished/resumable
+     reading — favorites with unreadCount>0 && hasStarted, sorted
+     lastRead desc. ContinueScreenModel reuses GetLibraryManga.subscribe
+     + GetChaptersByMangaId + getNextUnread (same resume logic as
+     Library's per-item continue button — NOT the reverted Library
+     Continue section UI). Row = cover + title + unread plural +
+     PlayArrow resume; row tap resumes too.
+   - History (ui/recent/history): verbatim HistoryTab Content logic —
+     HistoryScreen + all dialogs + events + snackbar, shared
+     SnackbarHostState from RecentTab scaffold. Resume-last-chapter
+     reselect semantics DROPPED (HistoryTab deleted; RecentTab reselect
+     = no-op like Feed).
+   - Updates (ui/recent/updates): verbatim UpdatesTab Content logic —
+     UpdateScreen + filter/delete dialogs + events + selection-mode
+     showBottomNav interplay + resetNewUpdatesCount. DownloadQueue
+     reselect semantics DROPPED (UpdatesTab deleted; queue still
+     reachable via More + notification).
+   KEY VOYAGER LESSON (cost 90min debugging): rememberScreenModel is an
+   EXTENSION on cafe.adriel.voyager.core.screen.Screen, and
+   MigrateMangaDialog is internal fun Screen.MigrateMangaDialog — plain
+   top-level composables have NO implicit Screen receiver → "unresolved
+   reference". Fixed by making tab-builder + content functions
+   Screen extensions (BrowseTab sourcesTab() pattern). Probe-file
+   bisect + javap on voyager-screenmodel jar found it.
+3. FEED V2:
+   - Compact header: source row replaced by dropdown (name ▼ → menu with
+     All + each configured source, checkmark on selection) + listing
+     chips on the same row (All/Popular/Latest). No permanent
+     one-chip-per-source row.
+   - Customization dialog (AppBar List icon): grid columns (Auto/2-5),
+     show source selector toggle, show listing selector toggle, default
+     listing (All/Popular/Latest — drives initial listingOverride until
+     user changes chips). New FeedPreferences keys:
+     pref_feed_show_source_selector (true), pref_feed_show_listing_
+     selector (true), pref_feed_default_listing (""=All), pref_feed_grid_
+     columns (0=Auto). No new DB/schema.
+   - Pagination (explicit Load more, NO auto infinite scroll): per-feed
+     paging state inside FeedSectionResult.Success(mangas, hasMore,
+     isLoadingMore). loadMore computes next page from mangas.size/20+2
+     (PAGE_SIZE const, ponytail: swap for stored counter if a source
+     returns uneven pages), appends + dedups by url; error during append
+     keeps existing list (isLoadingMore=false only); hasNextPage drives
+     hasMore. retry() re-fetches page 1. Independent state per feed —
+     switching source/listing never corrupts another section (map keyed
+     by FeedItem). Recomposition-safe: fetch only from user actions +
+     feed-pref changes (state-controlled, no network per recompose).
+   - FeedSectionResult.Error now has retry button. Section footer:
+     spinner while loading-more / "You're all caught up" at end / Load
+     more button.
+   - Grid: GridCells.Adaptive(96.dp) → Fixed(N) when pref set; gutters
+     unchanged (4dp, CommonMangaItemDefaults — matches Library item
+     spacing; Library-style FastScroll skipped, feed is short).
+4. READER SETTINGS (IA only, no new components):
+   - ReadingModePage: NEW grouped "Reader layout" surface
+     (PreferenceGroupCard wrapping reading-mode + orientation chips —
+     Tadami-inspired grouping in Yomihon's own M3 language); pager/
+     webtoon sub-settings grouped into unnamed card (scale/zoom/crop/
+     pan/panel-nav) + "dual page split" card (split/invert + rotate/
+     invert). All existing prefs/keys untouched.
+   - GeneralSettingsPage: groups = "Toolbar & display" (theme, page
+     number, fullscreen, cutout, transitions) + "Behavior" (keep-screen-
+     on, long-tap, chapter transition) + unnamed vertical-navigator
+     card + "flash" card. TTS/OCR/ColorFilter pages untouched (per
+     spec); toolbar drag-drop NOT implemented (visibility controls only
+     — see backlog).
+5. i18n base additions (strings.xml): label_recent, recent_tab_continue,
+   recent_continue_empty, feed_select_feed (unused-dropped later — kept
+   minimal), feed_show_source_selector, feed_show_listing_selector,
+   feed_default_listing, feed_load_more, feed_end_of_list,
+   feed_grid_columns, pref_group_reader_layout, pref_group_behavior,
+   pref_group_toolbar. Plural continue_reading_unread reused (existed).
+   No locale hand-edits.
+
+GATES GREEN 2026-09-06 (devcontainer JDK17, -Xmx4g, both volumes):
+  spotlessApply; spotlessCheck + testDebugUnitTest +
+  verifySqlDelightMigration + :app:assembleDebug BUILD SUCCESSFUL
+  2m33s. NO DB/schema changes.
+
+Files changed (17 code + 3 xml + docs):
+  NEW: app/.../ui/recent/{RecentTab,RecentTabContent}.kt,
+       app/.../ui/recent/continuereading/{ContinueScreenModel,ContinueTab}.kt,
+       app/.../ui/recent/history/RecentHistoryTab.kt,
+       app/.../ui/recent/updates/RecentUpdatesTab.kt
+  EDIT: HomeScreen.kt (TABS/Tab seal/badge/when), MainActivity.kt
+       (shortcut map), MoreTab.kt (5u→4u), FeedTab.kt (wiring, 2u),
+       FeedScreenModel.kt (paging + prefs + retry), FeedPreferences.kt
+       (+4 keys), FeedScreen.kt (dropdown header, customize dialog,
+       footer, retry), ReadingModePage.kt + GeneralSettingsPage.kt
+       (groups), i18n base strings.xml, shortcuts.xml (res/xml + dup).
+  DELETED: ui/updates/UpdatesTab.kt, ui/history/HistoryTab.kt (logic
+       relocated verbatim into ui/recent/*; ScreenModels untouched).
+
+Device verification PENDING user (matrix): all 5 tabs + active
+indicator; Recent Continue/History/Updates switch + resume + empty
+states; updates badge on Recent; shortcuts (launcher + notification tap
+→ Recent); Feed: dropdown select, chips, customize dialog (toggles +
+grid columns + default listing), Load more page 2 append, per-feed
+state independence, retry on error, end-of-list label; Reader: layout
+group selection works per-series, TTS/OCR pages unchanged, color-filter
+dim behavior unchanged (title-based check, no index hack).
+
+FUTURE BACKLOG RECORDED (docs/phase.md "Deferred features"):
+  1. Reader toolbar reordering (drag/drop + persist + defaults) — this
+     phase only keeps visibility controls.
+  2. True backdrop blur investigation (Compose can't sample sibling
+     artwork View; RenderEffect fullscreen rejected on perf — must
+     first prove feasibility: rendering arch, perf, battery, memory,
+     AMOLED behavior, scroll perf; then implement).
+  3. Artwork-reactive reader tray (subtle, content-first, no aura/rim/
+     glass, reader perf first).
+  4. Feed automatic near-end pagination (only after explicit Load-more
+     is device-tested stable).
+```
+
 ## Known issues
 
 ```text
@@ -2259,44 +2516,43 @@ Device tests:      Phase 8 script COMPLETE (steps 1–15 executed +
                       PENDING: post-device-test audit set device pass
                       (9-item checklist) + regression-fix #2 A–J checklist
                       (memory.md 2026-09-03 block).
-Lint:              spotlessCheck PASS (2026-09-03, regression-fix #2)
-Build:             :app:assembleDebug PASS (2026-09-03, 0.5.1-8255 installed
-                    on SM_M066B 12:54)
+Lint:              spotlessCheck PASS (2026-09-06, UI modernization set 4 —
+                     visual hierarchy / frosted surfaces)
+Build:             :app:assembleDebug PASS (2026-09-06, full gate green incl.
+                     :app:+:presentation-core:compileDebugKotlin)
 Baseline (pre-TTS expectations): CI order = spotlessCheck → testDebugUnitTest →
-                         verifySqlDelightMigration → assembleRelease (see rules.md §11)
+                          verifySqlDelightMigration → assembleRelease (see rules.md §11)
 Environment: devcontainer image vsc-yomihon-e24e3bd7… (JDK 17) via docker on host;
-            ALWAYS pass -Xmx4g; mount BOTH volumes:
-              -v yomihon-gradle-home:/home/vscode/.gradle
-              -v yomihon-android-home:/home/vscode/.android   (stable debug key)
-            CI (JDK 21, more RAM) unaffected.
+             ALWAYS pass -Xmx4g; mount BOTH volumes:
+               -v yomihon-gradle-home:/home/vscode/.gradle
+               -v yomihon-android-home:/home/vscode/.android   (stable debug key)
+             CI (JDK 21, more RAM) unaffected.
 ```
 
 ## Last verified build
 
 ```text
-Date:     2026-09-03 (OCR exclusion regression-fix set #2, run by orchestrator)
+Date:     2026-09-06 (UI modernization set 4 — visual hierarchy / frosted
+          surfaces, run by orchestrator)
 Command:  ./gradlew spotlessCheck testDebugUnitTest verifySqlDelightMigration
+          :app:compileDebugKotlin :presentation-core:compileDebugKotlin
           :app:assembleDebug (docker devcontainer JDK17, -Xmx4g, both volumes)
-Result:   ALL GREEN — spotlessCheck 35s; testDebugUnitTest + verifySqlDelight-
-          Migration BUILD SUCCESSFUL 2m36s; :app:assembleDebug BUILD
-          SUCCESSFUL 2m44s. Change set: recognizeText LEGACY/FAST→Glens
-          redirect, boxMostlyInside selection filter, PHRASE token-concat
-          matching, WebtoonTransitionHolder detach-cancel leak fix,
-          single-flight exclusion detect + min-crop guard. UNCOMMITTED;
-          device verification A–J pending (APK 0.5.1-8255 installed).
+Result:   ALL GREEN — BUILD SUCCESSFUL 3m43s. Change set: PreferenceGroupCard
+          (grouped settings surfaces, all SearchableSettings + Main/More/
+          About/OcrExclusions/Data/Anki/ReadAloud), SettingsMainScreen 6
+          sections (two-pane untouched), reader chrome unified on
+          asFloatingChrome (bars/navigator/TTS pill/OCR strip), TabbedDialog
+          frosted tabs, highlight-scroll index fix. UNCOMMITTED; device pass
+          pending user.
 ```
 
 ## Last verified test
 
 ```text
-Date:     2026-09-03 (OCR exclusion regression-fix set #2)
-Command:  ./gradlew testDebugUnitTest (docker devcontainer, JDK 17, -Xmx4g,
-          both volumes)
-Result:   BUILD SUCCESSFUL — full suite green incl. extended
-          OcrExclusionMatcherTest 27/27 (NEW: phrase space-rule vs punct-OCR,
-          punct-rule vs space-OCR, ・ separator, cross-region phrase pin,
-          punctuation-only rule, Dis\ncord concat-run pin; all prior 20 kept
-          green) + BoxMostlyInsideTest 7/7 (new file).
+Date:     2026-09-06 (UI modernization set 4)
+Command:  ./gradlew testDebugUnitTest (in full gate run above)
+Result:   BUILD SUCCESSFUL — all suites green (193+ domain tests unchanged;
+          set is pure Compose presentation, no new tests required).
 ```
 
 ---
@@ -2304,111 +2560,73 @@ Result:   BUILD SUCCESSFUL — full suite green incl. extended
 ## Agent handoff
 
 ```text
-Last agent:                 opencode (2026-09-04 — UI modernization
-                            implementation, approved plan in
-                            docs/design-audit.md)
-Date:                       2026-09-04
-Task completed:             Full presentation-only implementation of the
-                            approved design-audit plan (user approved all
-                            bug fixes + flat settings + Mica toggle;
-                            MangaScreen screen-model architecture
-                            explicitly excluded by user).
-                            STEP 1 foundation: Typography.itemTitle (12/18sp
-                            token, kills GridItemTitle hack ×2 sites),
-                            Constants PILL_ALPHA + CoverPlaceholderColor,
-                            ListGroupHeader→Typography.header (one header
-                            system: MoreScreen private header deleted,
-                            PreferenceGroupHeader re-pointed, Sources/
-                            Feed/OcrExclusions converge), ResizableSheet→
-                            extraLarge+surfaceContainerHigh (sheet
-                            geometry unified), amber `active` deleted →
-                            tertiary (5 callers), tracking 0xFF4CAF50 →
-                            tertiary, pillAlpha ×3→constant (Tabs/
-                            LibraryToolbar/queue screens ×2), placeholder
-                            gray ×2 → single constant, NavigationBar pill
-                            shape → token.
-                            STEP 2: FeedTab index 5→4, MoreTab 4→5
-                            (Voyager metadata matches TABS order);
-                            anim_feed_enter.xml added (Feed animated icon,
-                            300ms tilt morph).
-                            STEP 3: AppBar search 18sp hack removed.
-                            STEP 4: FeedScreen normalized — presentation
-                            AppBar+enterAlways scrollBehavior, shared
-                            EmptyScreen+Add action, CircularProgressIndicator
-                            section loading, error-tinted error text,
-                            AddFeedDialog "✓" concat → RadioButton+FilterChip,
-                            grid gutters → CommonMangaItemDefaults (4dp+8dp
-                            edges), FeedHeader → Typography.header,
-                            delete icon error-tinted in ManageFeeds too.
-                            STEP 5: Reader/Download/Advanced loose rows
-                            grouped under "General" PreferenceGroup;
-                            SettingsAnkiScreen added to settingScreens
-                            search index (OcrExclusions NOT — plain
-                            Screen, no getPreferences); Destination ids
-                            reordered (Dictionary=3 after Tracking=2).
-                            STEP 6: ReaderSettingsDialog dim-hack → tab
-                            title identity check (not index); OcrExclusions
-                            RuleRow type/scope → Badge chips
-                            (secondaryContainer); 4 TypeLegend strings +
-                            screen rows; reader OcrExclusionZonesSheet →
-                            Badge chips + error-tinted delete IconButton;
-                            SectionHeader → ListGroupHeader.
-                            STEP 7 reader overlays: DEAD outer composition
-                            tree + dead AppBars() fn DELETED (~210 lines);
-                            single live setComposeOverlay with z-order
-                            contract comment (8 layers); ReaderPageIndicator
-                            RESTORED into live tree (pref-gated feature
-                            revived); TTS pill hidden during ocrSelectionMode;
-                            OcrLoadingIndicator given pillClearancePx
-                            offset (never under bars/pill); OcrResultPopup
-                            viewport inset-aware (safeDrawing subtracted);
-                            OcrResultBottomSheet navBarsPadding.
-                            STEP 8: TTS pill container → asChromeContainer.
-                            NEW Mica/Translucent UI: UiPreferences.
-                            translucentTheme pref (pref_theme_translucent_key),
-                            Appearance toggle in theme group (+2 strings),
-                            LocalTranslucentSurfaces CompositionLocal,
-                            Color.asChromeContainer() (0.82 pre-blend over
-                            background — flat color, no per-frame blending,
-                            identical contrast both modes) consumed by
-                            NavigationBar pill, AdaptiveSheet ×2,
-                            ResizableSheet, TTS pill.
-                            NOT done (per user/exclusions): MangaScreen
-                            error state, reselect→scroll-to-top, OcrQueue
-                            relocation, ttsSpeechScript/ocrTextSelection
-                            pref renames, TrackInfoDialogHome double-clip
-                            (audit listed; not in approved scope of this
-                            pass), Dictionary/History token micro-passes
-                            (audit §9 order items 3/4 partially folded
-                            into Feed work).
+Last agent:                 opencode (2026-09-06 — post-modernization
+                            feature set: Recent tab IA, nav reorder,
+                            Feed v2, reader settings groups)
+Date:                       2026-09-06
+Task completed:              Per user spec: (1) bottom nav → Library/
+                            Recent/Feed/Browse/More with full index/
+                            metadata correction (class-based Voyager
+                            addressing verified; TabOptions.index now
+                            0-4; MoreTab 5u→4u fixed; shortcuts
+                            consolidated; SHORTCUT_UPDATES/HISTORY →
+                            Tab.Recent). (2) Recent destination =
+                            PrimaryTabRow+HorizontalPager hosting
+                            Continue (new: favorites unread>0 sorted
+                            lastRead desc, reuses getNextUnread resume)
+                            + History + Updates (verbatim tab logic
+                            relocated; UpdatesTab/HistoryTab deleted).
+                            (3) Feed v2: compact dropdown source
+                            selector + inline listing chips, customize
+                            dialog (grid columns Auto/2-5, selector
+                            toggles, default listing), explicit
+                            per-feed Load-more paging (hasNextPage,
+                            append+dedup, retry, end label; NO auto
+                            infinite scroll), 4 new FeedPreferences
+                            keys. (4) Reader settings IA: Reader-layout
+                            grouped surface + Toolbar&display/Behavior/
+                            dual-page/flash PreferenceGroupCards; TTS/
+                            OCR/ColorFilter pages + all pref keys
+                            untouched; NO toolbar drag-drop (deferred).
+                            KEY LESSON: Voyager rememberScreenModel +
+                            MigrateMangaDialog are Screen extensions —
+                            content fns must be Screen extensions
+                            (BrowseTab pattern).
 GATES:                      spotlessCheck + testDebugUnitTest +
-                            :app:compileDebugKotlin + :presentation-core:
-                            compileDebugKotlin ALL GREEN in devcontainer
-                            (vsc-yomihon-e24e3bd…, -Xmx4g) 2026-09-04.
-                            No DB changes → verifySqlDelightMigration N/A.
-Current task:               DONE — awaiting user device verification.
-Next recommended task:      1) User device-pass: theme sweep (light/dark/
-                            AMOLED/Monet/Monochrome × Mica on/off), reader
-                            page indicator + TTS pill + OCR bar z-order,
-                            Feed screen, settings search "anki", search
-                            dim behavior on color-filter tab. 2) Device-
-                            verify UI set 2 + Zone-repeat matrix (still
-                            pending from before). 3) Commit as UI
-                            modernization set 3.
+                            verifySqlDelightMigration + :app:
+                            assembleDebug ALL GREEN 2026-09-06 (docker,
+                            -Xmx4g, both volumes) 2m33s. No DB change.
+Current task:               DONE — awaiting user device verification +
+                            commit (stacked on uncommitted set 4).
+Next recommended task:      Device pass matrix: nav order + active
+                            indicator + badge on Recent; Recent 3 sub-
+                            tabs (Continue resume/empty, History,
+                            Updates incl. selection-mode bottom-nav
+                            hide); launcher + notification shortcuts →
+                            Recent; Feed dropdown/chips/customize/
+                            Load-more/retry/end-of-list/per-feed state;
+                            reader layout group + existing TTS/OCR/
+                            color-filter behavior unchanged. Then
+                            commit (nav+Recent+Feed+reader-settings as
+                            one feature set or split as user prefers).
 Files safe to modify:       app presentation/ui screens + settings + reader
                             presentation; presentation-core components/
                             theme; i18n base strings.xml. docs/* always.
-Known risks:                Mica = pre-blended flat color (no window blur
-                            — API<31 devices get same look, no real blur;
-                            documented in Translucent.kt); Feed animated
-                            icon is hand-authored vector (visual check on
-                            device recommended); ReaderActivity surgery
-                            large (~210 lines dead code removed) — reader
-                            smoke test essential (menus, TTS, OCR select,
-                            dialogs, page indicator). PHRASE spanning two
-                            OCR regions stays un-excluded (v1 semantics);
-                            Known issue #13 LeakCanary Toast/Popup noise
-                            unchanged.
+Known risks:                Recent sub-screens keep own Scaffolds (nested
+                            scaffold insets inside pager — verify no
+                            double bottom inset on device); Continue N+1
+                            getNextUnread over resumable list is lazy-
+                            per-collect (bounded by library size; fine
+                            ≤ few hundred); feed Load-more page math
+                            assumes ~20/page (ponytail-marked);
+                            HistoryTab snackbar was tab-singleton before,
+                            now shared per Recent scaffold (equivalent
+                            lifecycle); dropped reselect semantics
+                            (Updates→DownloadQueue, History→resume-
+                            last) — intentional, queue reachable via
+                            More; default listing pref applies until
+                            user first changes listing chips (session
+                            semantics, not persisted override).
 ```
 
 ---

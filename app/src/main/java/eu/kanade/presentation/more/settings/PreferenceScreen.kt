@@ -1,18 +1,18 @@
 package eu.kanade.presentation.more.settings
 
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEachIndexed
 import eu.kanade.presentation.more.settings.screen.SearchableSettings
-import eu.kanade.presentation.more.settings.widget.PreferenceGroupHeader
+import eu.kanade.presentation.more.settings.widget.PreferenceGroupCard
 import kotlinx.coroutines.delay
 import tachiyomi.presentation.core.components.ScrollbarLazyColumn
 import kotlin.time.Duration.Companion.seconds
@@ -30,12 +30,14 @@ fun PreferenceScreen(
 ) {
     val state = rememberLazyListState()
     val highlightKey = SearchableSettings.highlightKey
+    val rowPx = with(LocalDensity.current) { LocalPreferenceMinHeight.current.toPx() }
     if (highlightKey != null) {
         LaunchedEffect(Unit) {
-            val i = items.findHighlightedIndex(highlightKey)
-            if (i >= 0) {
+            val target = items.findHighlightedItem(highlightKey)
+            if (target != null) {
                 delay(0.5.seconds)
-                state.animateScrollToItem(i)
+                state.animateScrollToItem(target.first)
+                if (target.second > 0) state.animateScrollBy(target.second * rowPx)
             }
             SearchableSettings.highlightKey = null
         }
@@ -48,22 +50,21 @@ fun PreferenceScreen(
     ) {
         items.fastForEachIndexed { i, preference ->
             when (preference) {
-                // Create Preference Group
+                // One group = one lazily-composed grouped surface; blank title = unheaded card
                 is Preference.PreferenceGroup -> {
                     if (!preference.enabled) return@fastForEachIndexed
 
-                    item {
-                        Column {
-                            PreferenceGroupHeader(title = preference.title)
+                    item(key = "group-$i-${preference.title}") {
+                        PreferenceGroupCard(title = preference.title.takeIf { it.isNotBlank() }) {
+                            preference.preferenceItems.forEach { groupItem ->
+                                PreferenceItem(
+                                    item = groupItem,
+                                    highlightKey = highlightKey,
+                                )
+                            }
                         }
                     }
-                    items(preference.preferenceItems) { item ->
-                        PreferenceItem(
-                            item = item,
-                            highlightKey = highlightKey,
-                        )
-                    }
-                    item {
+                    item(key = "spacer-$i") {
                         if (i < items.lastIndex) {
                             Spacer(modifier = Modifier.height(12.dp))
                         }
@@ -82,16 +83,29 @@ fun PreferenceScreen(
     }
 }
 
-private fun List<Preference>.findHighlightedIndex(highlightKey: String): Int {
-    return flatMap {
-        if (it is Preference.PreferenceGroup) {
-            buildList<String?> {
-                add(null) // Header
-                addAll(it.preferenceItems.map { groupItem -> groupItem.title })
-                add(null) // Spacer
+/**
+ * Locates the highlighted preference by lazy-column coordinates: the index of the
+ * group's card item (or of the bare item) plus the row index within the group.
+ * Must mirror the item emission above: enabled groups emit card + spacer (2 lazy
+ * items), disabled groups emit none, bare items emit 1.
+ */
+private fun List<Preference>.findHighlightedItem(highlightKey: String): Pair<Int, Int>? {
+    var lazyIndex = 0
+    forEach { preference ->
+        when (preference) {
+            is Preference.PreferenceGroup -> {
+                if (preference.enabled) {
+                    preference.preferenceItems.forEachIndexed { rowIndex, groupItem ->
+                        if (groupItem.title == highlightKey) return lazyIndex to rowIndex
+                    }
+                    lazyIndex += 2
+                }
             }
-        } else {
-            listOf(it.title)
+            is Preference.PreferenceItem<*, *> -> {
+                if (preference.title == highlightKey) return lazyIndex to 0
+                lazyIndex++
+            }
         }
-    }.indexOfFirst { it == highlightKey }
+    }
+    return null
 }
