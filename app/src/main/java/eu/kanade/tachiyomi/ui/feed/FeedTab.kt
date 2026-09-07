@@ -7,9 +7,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
@@ -23,17 +20,10 @@ import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
-import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.receiveAsFlow
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 
 data object FeedTab : Tab {
-
-    // Reselect opens the source selector directly.
-    private val openSourceSelectorEvent = Channel<Unit>(1, BufferOverflow.DROP_OLDEST)
 
     override val options: TabOptions
         @Composable
@@ -47,8 +37,9 @@ data object FeedTab : Tab {
             )
         }
 
+    // Reselecting the already-active Feed tab is a deliberate manage action.
     override suspend fun onReselect(navigator: Navigator) {
-        openSourceSelectorEvent.trySend(Unit)
+        navigator.push(ManageFeedsScreen())
     }
 
     @Composable
@@ -59,13 +50,6 @@ data object FeedTab : Tab {
         val compactGrid by screenModel.compactGrid
         val navigator = LocalNavigator.currentOrThrow
         val context = LocalContext.current
-        var sourceSelectorExpanded by remember { mutableStateOf(false) }
-
-        LaunchedEffect(Unit) {
-            openSourceSelectorEvent.receiveAsFlow().collectLatest {
-                sourceSelectorExpanded = true
-            }
-        }
 
         FeedScreen(
             state = state,
@@ -85,8 +69,6 @@ data object FeedTab : Tab {
             onToggleSourceSelector = { screenModel.toggleSourceSelector(it) },
             onToggleListingSelector = { screenModel.toggleListingSelector(it) },
             onSelectDefaultListing = { screenModel.setDefaultListing(it) },
-            sourceSelectorExpanded = sourceSelectorExpanded,
-            onSourceSelectorExpandedChange = { sourceSelectorExpanded = it },
         )
 
         LaunchedEffect(Unit) {

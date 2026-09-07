@@ -85,10 +85,6 @@ fun FeedScreen(
     onToggleSourceSelector: (Boolean) -> Unit,
     onToggleListingSelector: (Boolean) -> Unit,
     onSelectDefaultListing: (FeedListing?) -> Unit,
-    // Source-selector dropdown visibility, hoisted so the bottom-nav
-    // reselect can open it.
-    sourceSelectorExpanded: Boolean,
-    onSourceSelectorExpandedChange: (Boolean) -> Unit,
 ) {
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
     var showCustomizeDialog by remember { mutableStateOf(false) }
@@ -145,8 +141,6 @@ fun FeedScreen(
         Column(modifier = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding())) {
             FeedFilterBar(
                 state = state,
-                sourceSelectorExpanded = sourceSelectorExpanded,
-                onSourceSelectorExpandedChange = onSourceSelectorExpandedChange,
                 onSelectSource = onSelectSource,
                 onSelectListing = onSelectListing,
             )
@@ -366,8 +360,6 @@ private fun FeedSectionFooter(
 @Composable
 private fun FeedFilterBar(
     state: FeedScreenModel.State,
-    sourceSelectorExpanded: Boolean,
-    onSourceSelectorExpandedChange: (Boolean) -> Unit,
     onSelectSource: (Long?) -> Unit,
     onSelectListing: (FeedListing?) -> Unit,
 ) {
@@ -389,8 +381,6 @@ private fun FeedFilterBar(
         if (state.showSourceSelector && feedSources.size >= 2) {
             SourceSelectorDropdown(
                 state = state,
-                expanded = sourceSelectorExpanded,
-                onExpandedChange = onSourceSelectorExpandedChange,
                 onSelectSource = onSelectSource,
             )
         }
@@ -424,17 +414,16 @@ private fun FeedFilterBar(
 @Composable
 private fun SourceSelectorDropdown(
     state: FeedScreenModel.State,
-    expanded: Boolean,
-    onExpandedChange: (Boolean) -> Unit,
     onSelectSource: (Long?) -> Unit,
 ) {
     val enabledFeeds = state.feeds.filter { it.enabled }
     val feedSources = enabledFeeds.map { it.sourceId }.distinct()
         .mapNotNull { id -> state.sources.firstOrNull { it.id == id } }
     val selected = feedSources.firstOrNull { it.id == state.selectedSourceId }
+    var expanded by remember { mutableStateOf(false) }
 
     Row(
-        modifier = Modifier.clickable { onExpandedChange(true) },
+        modifier = Modifier.clickable { expanded = true },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -443,12 +432,12 @@ private fun SourceSelectorDropdown(
         )
         Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
     }
-    DropdownMenu(expanded = expanded, onDismissRequest = { onExpandedChange(false) }) {
+    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
         DropdownMenuItem(
             text = { Text(stringResource(MR.strings.feed_all_sources)) },
             onClick = {
                 onSelectSource(null)
-                onExpandedChange(false)
+                expanded = false
             },
             trailingIcon = {
                 if (selected == null) Icon(Icons.Outlined.Check, contentDescription = null)
@@ -459,7 +448,7 @@ private fun SourceSelectorDropdown(
                 text = { Text(source.visualName) },
                 onClick = {
                     onSelectSource(source.id)
-                    onExpandedChange(false)
+                    expanded = false
                 },
                 trailingIcon = {
                     if (selected?.id == source.id) Icon(Icons.Outlined.Check, contentDescription = null)

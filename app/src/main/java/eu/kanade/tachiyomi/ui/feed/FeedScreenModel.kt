@@ -34,6 +34,13 @@ sealed interface FeedSectionResult {
     data class Error(val message: String?) : FeedSectionResult
 }
 
+private data class DisplayPrefs(
+    val showSource: Boolean,
+    val showListing: Boolean,
+    val defaultListing: FeedListing?,
+    val selectedSource: Long?,
+)
+
 class FeedScreenModel(
     private val sourceManager: SourceManager = Injekt.get(),
     private val getEnabledSources: GetEnabledSources = Injekt.get(),
@@ -55,9 +62,12 @@ class FeedScreenModel(
         val defaultListing: FeedListing? = null,
     ) {
         val visibleFeeds: List<FeedItem>
-            get() = feeds.filter { feed ->
-                (selectedSourceId == null || feed.sourceId == selectedSourceId) &&
-                    (listingOverride == null || feed.listing == listingOverride)
+            get() {
+                val enabled = feeds.filter { it.enabled }
+                val sourceMatched = enabled.filter { selectedSourceId == null || it.sourceId == selectedSourceId }
+                // A saved source with no enabled feeds left (removed/disabled)
+                // falls back to showing everything instead of an empty screen.
+                return if (sourceMatched.isEmpty() && enabled.isNotEmpty()) enabled else sourceMatched
             }
     }
 
@@ -80,15 +90,16 @@ class FeedScreenModel(
                     feedPreferences.showSourceSelector().changes(),
                     feedPreferences.showListingSelector().changes(),
                     feedPreferences.defaultListing().changes(),
-                ) { showSource, showListing, defaultListing ->
-                    Triple(showSource, showListing, defaultListing)
-                }.collect { (showSource, showListing, defaultListing) ->
+                    feedPreferences.selectedSource().changes(),
+                    ::DisplayPrefs,
+                ).collect { prefs ->
                     mutableState.update {
                         it.copy(
-                            showSourceSelector = showSource,
-                            showListingSelector = showListing,
-                            defaultListing = defaultListing,
-                            listingOverride = it.listingOverride ?: defaultListing,
+                            showSourceSelector = prefs.showSource,
+                            showListingSelector = prefs.showListing,
+                            defaultListing = prefs.defaultListing,
+                            selectedSourceId = it.selectedSourceId ?: prefs.selectedSource,
+                            listingOverride = it.listingOverride ?: prefs.defaultListing,
                         )
                     }
                 }
@@ -184,6 +195,7 @@ class FeedScreenModel(
     }
 
     fun selectSource(sourceId: Long?) {
+        feedPreferences.selectedSource().set(sourceId)
         mutableState.update { it.copy(selectedSourceId = sourceId) }
     }
 

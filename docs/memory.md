@@ -2660,70 +2660,215 @@ Result:   BUILD SUCCESSFUL — all suites green (193+ domain tests unchanged;
 
 ---
 
+[COMPLETED 2026-09-06 — UI governance skill creation, UNCOMMITTED (docs-adjacent, zero app source)]
+
+Created project-local OpenCode skill .opencode/skills/yomihon-ui/SKILL.md
+(per user spec: permanent UI/design guardrail for future agents). Grounded
+in docs/design.md §1–§14 + rules.md §4 + source verification (codegraph:
+PreferenceGroupCard, Translucent.kt roles, NavigationBar pill,
+ListGroupHeader, TachiyomiTheme/MaterialExpressiveTheme, ReaderBottomBar).
+Encodes: consistency-above-novelty ladder (Yomihon→Mihon→M3→new),
+do-not-invent-components search protocol, colorScheme-only tokens,
+black≠hierarchy rule, frost surface model (floating chrome / frosted modal
+/ solid; no frost-on-frost, no frost on readable content), grouped
+settings (one group = one PreferenceGroupCard surface), spacing/typography
+baselines (16dp screen, 24/12 pills, SettingsItems metrics, Material
+roles), reader hero/overlay rules, floating-pill bottom nav, Feed/Recent
+behavioral-vs-visual separation, a11y/motion/responsive, MANDATORY visual
+verification + screenshot checklist, anti-pattern list, Yomitsu
+future-brand note (no rebranding in non-rebranding tasks). Validated:
+YAML frontmatter parses, name matches dir, `opencode run` recognizes the
+skill; scenario pressure-tests GREEN (black-card rejected, component
+search-first enforced). No application source files modified.
+
+[COMPLETED 2026-09-06 — visual/UX correction pass (2nd) over Feed
+reselect + source persistence, UNCOMMITTED (4 files)]
+
+Spec source: user "VISUAL DESIGN + UX CORRECTION PASS" prompt (this
+session) — overrides two behaviors of the previous correction pass:
+
+1. FEED RESELECT (spec: "Reselecting the already-active Feed bottom-nav
+   item opens Manage Sources. Do NOT substitute the source-selector
+   dropdown"). FeedTab.onReselect now navigator.push(ManageFeedsScreen())
+   (same screen the Tune AppBar action opens). openSourceSelectorEvent
+   channel + hoisted sourceSelectorExpanded state DELETED from FeedTab;
+   dropdown visibility is now local remember state inside
+   SourceSelectorDropdown (FeedScreen.kt). First navigation opens Feed
+   normally (onReselect only fires on already-active tab — Voyager
+   semantics, unchanged).
+2. FEED SOURCE SELECTION PERSISTENCE (spec: persist across process
+   death, restore on reopen, never always-default-to-All). New pref
+   FeedPreferences.selectedSource() ("pref_feed_selected_source",
+   Long? via getObjectFromString, "" = All sources). FeedScreenModel:
+   - 4-flow combine (showSourceSelector/showListingSelector/
+     defaultListing/selectedSource changes) via private DisplayPrefs
+     data class (first attempt using listOf() erased types to
+     Comparable<*> — compile error, fixed).
+     - selectedSourceId seeded from pref on collect; in-session
+       selection wins (?: guard, same pattern as listingOverride).
+   - selectSource() now WRITES the pref + updates state.
+   - visibleFeeds: saved source whose feeds no longer exist/disabled
+     falls back to ALL enabled feeds (no empty screen on stale pref).
+     Source filter + listing filter logic unchanged otherwise.
+   VERIFIED BEHAVIOR PATH: select → pref written → process death →
+   FeedScreenModel re-created → combine emits pref value → state
+   restored → dropdown shows saved source + grid filtered. Pref store
+   is SharedPreferences-backed (Injekt) → survives process death.
+   (Device confirmation pending, see below.)
+3. Recent: VERIFIED already-correct (no changes needed) — one screen
+   AppBar "Recent" (RecentTab.kt:82), persistent PrimaryTabRow
+   Continue|History|Updates with badge, HorizontalPager swipe between
+   all 3, no duplicate content headings (Continue controls = FilterChips,
+   not headers).
+4. Reader settings: VERIFIED already-correct (no changes needed) — all
+   4 pages (ReadingMode/General/ReadAloud/ColorFilter) grouped via
+   PreferenceGroupCard solid surfaces, no frost, no black containers
+   (grep: zero arbitrary Color(0x/Black/fontSize in these files; hits
+   elsewhere = theme token definitions + documented exceptions).
+5. Full-repo arbitrary-token sweep: only legitimate hits (Nord/Tako/
+   colorscheme token sources, documented WordSelector 20sp, pill
+   shapes 28dp precedent). No new violations introduced.
+
+GATES GREEN 2026-09-06 (docker vsc-yomihon-e24e3bd7e46d…, JDK17, -Xmx4g,
+both volumes): spotlessApply + :app:compileDebugKotlin BUILD SUCCESSFUL
+3m25s; spotlessCheck + testDebugUnitTest + :app:assembleDebug BUILD
+SUCCESSFUL 2m38s. No DB/schema change (pref-only). APKs built.
+
+Device visual pass NOT RUN — wireless adb unreachable from host this
+session (192.168.29.x subnet no route: host on 172.26.16.0/20, device
+subnet unreachable, last known device IP 192.168.29.98 refused). No
+emulator (no Android SDK on host). Visual verification performed
+STATICALLY per yomihon-ui checklist (structure/components/tokens/
+spacing verified in source); rendered-screenshot review PENDING user
+device pass.
+
+Files changed (4): FeedPreferences.kt (+selectedSource pref),
+FeedTab.kt (reselect → ManageFeedsScreen, dropdown state un-hoisted),
+FeedScreen.kt (SourceSelectorDropdown local expanded state,
+FeedFilterBar signature cleanup), FeedScreenModel.kt (DisplayPrefs
+combine, selectSource persists, visibleFeeds stale-source fallback).
+
+Device verification PENDING user: (1) Feed reselect opens Manage
+Sources; (2) select source → leave Feed → kill app → reopen → Feed
+shows saved source; (3) source selector toggle respected; (4) All
+Sources selection persists too; (5) delete feed of saved source →
+Feed falls back to all feeds.
+
+[COMPLETED 2026-09-07 — DEVICE VISUAL PASS over the correction set,
+UNCOMMITTED (verification only, no code changes)]
+
+Build 0.5.2-8260 (arm64 debug) installed on SM_M066B via wireless
+adb (port had rotated to :35577; reachable this session). Method:
+uiautomator dumps (view hierarchy/text/bounds) + screencap PNGs +
+pure-stdlib pixel-band analyzer (/tmp/opencode/png_scan.py — no PIL
+on host) + dumpsys activity states. Screenshots archived:
+.device-pass/screenshots/01..18*.png. Host-side image reading
+unsupported by the model — verification done via hierarchy dumps +
+pixel-band analysis, screenshot files preserved for human review.
+
+ALL TESTS PASS:
+1. Feed reselect → Manage Sources screen (feed rows: Asura/Atsumaru/
+   Mangakakalot/Comix + listing labels, no manga grid). CONFIRMED
+   with clean sequence from Library → Feed → reselect. (Earlier
+   ambiguous runs were test-harness chaos, not app behavior.)
+2. Source selection persistence: Asura Scans selected via dropdown
+   → force-stop → cold relaunch → Feed shows "Asura Scans (EN)"
+   restored in dropdown + grid filtered. PREF SURVIVES PROCESS
+   DEATH. (stray tap had also exercised Mangakakalot persisting
+   across nav + relaunch — same result.)
+3. All Sources selection persists across process death too.
+4. Customize dialog "Show source selector" OFF → dropdown row
+   disappears, All/Popular/Latest listing chips remain, feed
+   sections render. Toggle respected. Restored ON afterward.
+5. Normal/Compact grid toggle: both switchable via customize
+   dialog chips; compact grid title-inside-cover rendering
+   (pixel bands differ vs normal; Library component semantics).
+6. Recent: one "Recent" AppBar title only; Continue|History|
+   Updates PrimaryTabRow persistent at top (y26-58, below status
+   inset, no overlap); tab taps switch immediately; HORIZONTAL
+   SWIPE verified Continue→History→Updates and back (History shows
+   Today/Yesterday + Ch. timestamps; Updates shows "No recent
+   updates" empty state); no duplicate section headings under the
+   tab row (Continue shows chip controls, not a heading).
+7. Reader settings: all 4 tabs device-verified on-screen — Reading
+   mode (Reader layout group: mode chips + Rotation group + Long
+   strip card with Tap zones/Invert), General (Toolbar & display +
+   Behavior + vertical-navigator + flash cards), Custom filter
+   (Custom brightness / Custom color filter / Effects), Read aloud
+   (Speech / Speech cleanup / Spoken content). Grouped tonal
+   surfaces render as bands over the frosted sheet — no black
+   rectangles.
+8. Zero app crashes in full-session logcat (grep FATAL/
+   AndroidRuntime = 0 app hits; the one "FATAL EXCEPTION" grep hit
+   was the adb echo of the search string itself). LeakCanary
+   "1 Distinct Leak / Last leaked 7 hours ago" banner = stale
+   pre-build event, no leak events during this pass.
+
+DEVICE PASS NOTES: device had auto-rotate ON and was physically
+landscape during part of the pass (caused earlier phantom-tap
+chaos + 1600x720 screenshots); temporarily locked portrait via
+settings for determinism, restored accelerometer_rotation=1 after.
+Logcat capture at /sdcard/visual-pass.log (device-side).
+
+VERDICT: The 2026-09-06 correction set is DEVICE-VERIFIED.
+Remaining known-limitations: (a) pixel screenshots not human-
+reviewed for aesthetic nuance (files preserved for user); (b)
+stale-source fallback (delete saved source's feeds → all feeds)
+verified in code only, not exercised on device (would require
+removing a feed).
+
 ## Agent handoff
 
 ```text
-Last agent:                 opencode (2026-09-06 — user-directed
-                            correction pass over the post-modernization
-                            feature set)
+Last agent:                 opencode (2026-09-06 — visual/UX correction
+                            pass 2nd: Feed reselect → Manage Sources
+                            (was dropdown), Feed source selection now
+                            persisted pref surviving process death;
+                            Recent + reader settings verified correct
+                            unchanged; arbitrary-token sweep clean;
+                            gates green; device pass pending user)
 Date:                       2026-09-06
-Task completed:              Per user "POST-IMPLEMENTATION CORRECTION"
-                            spec: (1) Recent screen structure: screen-level
-                            AppBar "Recent" (inset-safe, status bar/
-                            cutout respected via Scaffold), HistoryScreen +
-                            UpdateScreen titles REMOVED (no duplicate
-                            titles; actions/action-modes kept). (2)
-                            Reselect semantics: Recent → resume last-read
-                            manga (old HistoryTab mechanism reused verbatim:
-                            GetNextChapters.await(onlyUnread=false) +
-                            ReaderActivity.newIntent + no_next_chapter
-                            snackbar; RecentReselect.kt); Feed → source
-                            selector dropdown opens (state hoisted in
-                            FeedTab); Library/Browse/More verified
-                            unchanged. (3) Continue: semantics confirmed
-                            history-derived (unread>0 ∩ hasStarted);
-                            compact control row added (sort Last-read/
-                            Alphabetical + Downloaded-only filter). (4)
-                            Feed: grid style pref Normal/Compact
-                            (MangaCompactGridItem = title inside cover
-                            bottom, reused Library component); customize
-                            dialog restructured Display/Sources/Listing;
-                            ListGroupHeader for feed sections; All-sources
-                            configurable + deselectable. (5) Global search
-                            defaults: All + Has-results (persisted choice
-                            wins), Pinned NOT default. (6) Reader settings:
-                            all 4 pages grouped into PreferenceGroupCards
-                            (ReadingMode/General/ReadAloud/ColorFilter),
-                            solid surfaces, no frost, existing pref keys
-                            untouched. No sub-agent failures (no sub-agents
-                            used; single orchestrator).
-GATES:                      spotlessCheck + testDebugUnitTest +
-                            verifySqlDelightMigration + :app:
-                            assembleDebug ALL GREEN 2026-09-06 (docker,
-                            -Xmx4g, both volumes) 2m53s. No DB change.
-                            APK 0.5.2-8259 installed, clean boot, 0 FATAL.
-Current task:               DONE — awaiting user device verification
-                            (spec §31 matrix) + commit.
-Next recommended task:      User runs spec §31 device pass: reselects ×5,
-                            Recent cutout/inset, Continue chips, Feed
-                            compact grid + customize groups, Global Search
-                            defaults, Reader settings 4-tab grouping
-                            inspection (§32 quality gate). Then commit.
+Task completed:             Per user "VISUAL DESIGN + UX CORRECTION PASS"
+                            spec (session prompt; supersedes prior pass's
+                            Feed reselect/dropdown + in-memory selection):
+                            (1) Feed reselect now opens Manage Sources
+                            (navigator.push(ManageFeedsScreen) in
+                            FeedTab.onReselect; dropdown state un-hoisted
+                            to local). (2) Feed source selection persisted
+                            (new pref pref_feed_selected_source; SM
+                            combines 4 pref flows via DisplayPrefs;
+                            selectSource writes pref; stale saved source
+                            falls back to all feeds). (3) Recent verified:
+                            one "Recent" AppBar + persistent
+                            Continue|History|Updates PrimaryTabRow +
+                            HorizontalPager swipe, no duplicate headings.
+                            (4) Reader settings verified: 4 pages on
+                            PreferenceGroupCard, solid, no black blocks.
+                            (5) No arbitrary colors/radii/fonts added
+                            (repo sweep clean).
+GATES:                      spotlessApply + :app:compileDebugKotlin
+                            BUILD SUCCESSFUL 3m25s; spotlessCheck +
+                            testDebugUnitTest + :app:assembleDebug BUILD
+                            SUCCESSFUL 2m38s (docker, JDK17, -Xmx4g,
+                            both volumes) 2026-09-06. No DB change.
+Current task:               DONE — DEVICE-VERIFIED 2026-09-07 (all
+                            8 visual/behavioral tests pass, zero
+                            crashes; see device-pass block). Awaiting
+                            user commit.
+Next recommended task:      User device pass on new APK: Feed reselect →
+                            Manage Sources; source select → kill app →
+                            reopen → restored; selector toggle; Recent
+                            swipe + tabs; reader settings 4-page
+                            grouping screenshots. Then commit.
 Files safe to modify:       app presentation/ui screens + settings + reader
                             presentation; presentation-core components/
                             theme; i18n base strings.xml. docs/* always.
-Known risks:                Recent reselect + RecentTab shared snackbar:
-                            reselect snackbar uses its own host state while
-                            tab pages share the scaffold host — both render
-                            (no conflict) but reselect feedback while on
-                            a page with its own snackbar shows in-page;
-                            verify visually. Global-search has-results
-                            default flip: users who NEVER toggled it now
-                            start with Has-results ON (spec-mandated).
-                            Feed compact grid: MangaCompactGridItem has
-                            no onClickContinueReading slot wired (unused).
-                            UpdateScreen title=null: empty AppBar space —
-                            acceptable (actions right-aligned).
+Known risks:                Stale saved source after all its feeds removed
+                            → falls back to all feeds by design (not a
+                            dead end); pref remains stale-but-harmless
+                            until user changes selection. Device subnet
+                            unreachable from host this session — wireless
+                            adb may need re-pairing.
 ```
 
 ---

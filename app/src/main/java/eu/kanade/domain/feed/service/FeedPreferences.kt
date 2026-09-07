@@ -18,6 +18,17 @@ class FeedPreferences(
 
     fun showSourceSelector(): Preference<Boolean> = preferenceStore.getBoolean("pref_feed_show_source_selector", true)
 
+    /**
+     * Last selected source in the Feed source selector (null = All sources).
+     * Persisted so the selection survives process death.
+     */
+    fun selectedSource(): Preference<Long?> = preferenceStore.getObjectFromString(
+        "pref_feed_selected_source",
+        defaultValue = null,
+        serializer = { it?.toString() ?: "" },
+        deserializer = { raw -> raw.toLongOrNull() },
+    )
+
     fun showListingSelector(): Preference<Boolean> = preferenceStore.getBoolean("pref_feed_show_listing_selector", true)
 
     fun defaultListing(): Preference<FeedListing?> = preferenceStore.getObjectFromString(
