@@ -1,4 +1,4 @@
-# Yomihon — Project Memory (AI State File)
+# Yomitsu — Project Memory (AI State File)
 
 > LIVING DOCUMENT. Every coding agent MUST read this file before substantial work
 > and MUST update it after meaningful implementation work (protocol at bottom).
@@ -2888,54 +2888,118 @@ rows), i18n base strings.xml (+1 key).
 ## Agent handoff
 
 ```text
-Last agent:                 opencode (2026-09-07 — visual hierarchy
-                            correction pass 3: Recent tab-row
-                            visibility root-fix, reader-settings
-                            12dp group rhythm, Feed chip selector,
-                            Manage Sources grouped surface, customize
-                            sheet; ListItem-transparent-on-tonal-card
-                            AMOLED clash fixed; device visual pass
-                            done)
+[YOMITSU REBRAND — COMPLETED 2026-09-07, UNCOMMITTED]
+Audit-first controlled rebrand (user spec, 12 phases). Audit totals:
+  yomihon 176 refs / mihon 1784 / tachiyomi 12327 / yomitsu 5 (pre-change).
+Every match classified A–H. Full classification + rationale:
+  docs/branding.md (NEW — single source of truth).
+Changed (Category A): app_name → Yomitsu; launcher icons (legacy
+  mipmap webps + adaptive foreground rasters + monochrome, all
+  regenerated from docs/Logo/Yomitsu-logo via PIL/uv, mark inside
+  66dp safe zone); drawable/ic_mihon.xml → bitmap wrapper around
+  drawable-nodpi/ic_yomitsu_mark.png (About LogoHeader + notification
+  small icons + splash — resource name kept so zero code refs changed);
+  splash color → #000000 (logo bg); README rewritten; .github/assets/
+  logo.png replaced + cover.png added; CONTRIBUTING + issue templates;
+  release.yml artifact names yomitsu-* (upstream if-gates kept =
+  skip-on-fork by design); AppUpdateChecker.GITHUB_REPO + AboutScreen
+  GitHub link → Nikhil0921/yomitsu; settings.gradle.kts rootProject.name
+  → Yomitsu; docs titles + prd §1.1 + architecture §1/§6 wording;
+  GitHub repo renamed via API (yomitsu) + description; origin remote
+  updated; docs/branding.md created.
+Preserved (B/C/D/E): applicationId app.yomihon; all code namespaces;
+  tachiyomi:// + mihon:// schemes (extension-store + tracker OAuth);
+  .tachibk + APPLICATION_ID backup filename; provider authorities;
+  TelemetryConfig gate (app.yomihon pkgs + cert fingerprint);
+  google-services.json; com.github.yomihon:{Furiganable,hoshidicts,
+  image-decoder} Maven coords (upstream org); AnkiDroid persisted names
+  (deck "Yomihon", model "Yomihon Card", YOMIHON_* constants, yomihon-*
+  media prefixes — user AnkiDroid data looks models up BY NAME);
+  DictionaryTermCard "yomihon" Anki tag (existing cards); upstream
+  yomihon.github.io doc URLs (live docs); upstream Discord + FUNDING;
+  LICENSE text + upstream copyright lines (added © 2026 Yomitsu
+  contributors line only); CHANGELOG history; release.yml upstream
+  if-gates; AGENTS.md / architect.md / architect-2.md (user-owned);
+  memory.md historical blocks.
+Validation: repo-wide re-search — every remaining "yomihon" ref maps to
+  a preserved category (list above); no unexplained user-visible
+  Yomihon branding remains (aapt2 application-label:'Yomitsu').
+GATES GREEN 2026-09-07 (docker, JDK17, -Xmx4g, both volumes):
+  spotlessCheck + :app:compileDebugKotlin 2m49s; testDebugUnitTest +
+  :app:assembleDebug 2m40s (after :source-local:clean :source-api:clean
+  for stale intermediates). aapt2 dump badging verified label + assets.
+Files changed (28 tracked-modified + 4 new): see git status.
+Device pass PENDING user: launcher name/icon, splash, About mark,
+  notifications.
+```
+
+```text
+Last agent:                 opencode (2026-09-07 — YOMITSU REBRAND: audit →
+                            controlled product rebrand Yomihon→Yomitsu per
+                            user spec. Full audit first (phases 0–8), then
+                            implementation. See "YOMITSU REBRAND" block in
+                            Completed work for the complete record.)
 Date:                       2026-09-07
-Task completed:             Per user "VISUAL UX CORRECTION PASS" spec:
-                            (1) Recent: fixed tab row rendering under
-                            AppBar (top padding applied — root cause,
-                            not cosmetic). (2) Reader settings: 12dp
-                            spacing between PreferenceGroupCards
-                            (dialog Column spacedBy, app-settings
-                            rhythm). (3) Feed source selector now an
-                            M3 FilterChip + dropdown. (4) Manage
-                            Sources rows flat in one PreferenceGroupCard,
-                            ListItems transparent so tonal card reads.
-                            (5) Customize dialog → AdaptiveSheet with
-                            Display/Sources/Listing group cards.
-                            (6) No new components invented (all
-                            existing: PreferenceGroupCard, SettingsChip-
-                            Row, SwitchPreferenceWidget, AdaptiveSheet,
-                            FilterChip); no hard-coded colors; no
-                            black-manufactured hierarchy.
-GATES:                      spotlessCheck + testDebugUnitTest +
-                            verifySqlDelightMigration BUILD SUCCESSFUL
-                            2m17s; assembleDebug 3m29s (docker, JDK17,
-                            -Xmx4g) 2026-09-07. No DB change.
-Current task:               DONE — device visual pass complete
-                            (r1..r12 screenshots). Awaiting user
-                            visual review + commit.
-Next recommended task:      User eyeballs .device-pass/screenshots/
-                            r1..r12 (aesthetic nuance only model can't
-                            judge), then commit. Optional: exercise
-                            stale-source fallback on device.
+Task completed:             Product rebrand: app_name → "Yomitsu" (single
+                            i18n source; launcher/notifications/onboarding
+                            all read MR.strings.app_name); launcher icons +
+                            adaptive foreground/monochrome regenerated from
+                            approved docs/Logo/Yomitsu-logo (enso ring +
+                            glyph, black bg, lavender accent); About/splash
+                            mark via drawable/ic_mihon.xml → bitmap wrapper
+                            (resource name kept, zero code churn); splash
+                            bg → #000000; README rewritten (Yomitsu primary,
+                            lineage + credits preserved, +2026 Yomitsu
+                            copyright line); CONTRIBUTING + issue templates;
+                            release.yml artifacts → yomitsu-*; updater +
+                            About GitHub links → Nikhil0921/yomitsu;
+                            rootProject.name = "Yomitsu"; GitHub repo
+                            RENAMED yomitsu + new description (gh api PATCH);
+                            local origin remote updated. PRESERVED
+                            (intentionally): applicationId app.yomihon,
+                            eu.kanade.tachiyomi.*/mihon.*/tachiyomi.*
+                            namespaces, tachiyomi:// + mihon:// schemes,
+                            .tachibk backup format, AnkiDroid "Yomihon
+                            Card"/deck defaults + yomihon-* media names
+                            (persisted user data), DictionaryTermCard "yomihon"
+                            tag, com.github.yomihon Maven coords, TelemetryConfig
+                            package/fingerprint gate, google-services.json,
+                            upstream yomihon.github.io doc links, upstream
+                            Discord, FUNDING, LICENSE text + copyright lines,
+                            CHANGELOG history, AGENTS.md/architect*.md
+                            (user-owned). Full decision record:
+                            docs/branding.md (NEW).
+GATES:                      spotlessCheck + :app:compileDebugKotlin BUILD
+                            SUCCESSFUL 2m49s; testDebugUnitTest +
+                            :app:assembleDebug BUILD SUCCESSFUL 2m40s
+                            (docker, JDK17, -Xmx4g, both volumes, 2026-09-07;
+                            one DexingNoClasspathTransform failure first =
+                            stale source-local/source-api intermediates, fixed
+                            via :source-local:clean :source-api:clean —
+                            same class as Known issue #7, NOT the gradle
+                            volume). aapt2 verified: application-label
+                            'Yomitsu', Yomitsu icons + mark packaged in
+                            APK.
+Current task:               DONE — rebrand implemented + gates green.
+                            NOT committed (awaiting user). NOT device-
+                            verified (launcher/splash/About visuals pending
+                            device pass).
+Next recommended task:      User reviews diff, commits, runs device visual
+                            pass (launcher name+icon, splash, About mark,
+                            notifications). Optional follow-up: local
+                            directory still named yomihon/ (cosmetic —
+                            rename locally if desired); AGENTS.md branding
+                            line still says "Yomihon" (user-owned file —
+                            left untouched per rules).
 Files safe to modify:       app presentation/ui screens + settings + reader
                             presentation; presentation-core components/
                             theme; i18n base strings.xml. docs/* always.
-Known risks:                Wireless adb port rotates (36137 now);
-                            reconnect by scanning 30000-40000 if
-                            refused. AMOLED theme makes unselected
-                            chip outlines subtle (theme, not bug —
-                            tokens only). Manage Sources edit/add of
-                            management actions beyond feeds was
-                            intentionally NOT added (spec §9 said
-                            keep existing content).
+Known risks:                Repo rename: GitHub redirects old URL, but any
+                            external clones/forks of Nikhil0921/yomihon
+                            need remote update. Updater on OLD installed
+                            releases (v0.5.2-) still points at yomihon
+                            repo — redirect covers it. vsc-yomihon docker
+                            image name unchanged (local build artifact).
 ```
 
 ---

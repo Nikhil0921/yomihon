@@ -1,4 +1,4 @@
-# Yomihon — Design & UX Specification
+# Yomitsu — Design & UX Specification
 
 > Describes HOW the product should look/feel. Grounded in the existing design
 > language; TTS-specific specs extend it and never override it.
@@ -8,7 +8,7 @@
 
 ## 1. Design philosophy
 
-Yomihon inherits Mihon's **Material 3** design language, rendered through
+Yomitsu inherits Mihon's **Material 3** design language, rendered through
 `MaterialExpressiveTheme` (Compose BOM 2026.06.01):
 
 - Content-first: chrome recedes; the manga page is the hero.

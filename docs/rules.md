@@ -1,4 +1,4 @@
-# Yomihon — Engineering Rules (AI Rulebook)
+# Yomitsu — Engineering Rules (AI Rulebook)
 
 > AI agents MUST read this file (and `docs/memory.md`) before modifying code.
 > These rules are derived from the actual repository conventions, not generic style.

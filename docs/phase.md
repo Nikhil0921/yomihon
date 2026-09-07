@@ -1,4 +1,4 @@
-# Yomihon — Implementation Phases
+# Yomitsu — Implementation Phases
 
 > Roadmap for the Read-Aloud TTS feature and the documentation system that
 > governs it. Statuses use: `NOT_STARTED | IN_PROGRESS | BLOCKED | COMPLETED | NEEDS_REVIEW`.

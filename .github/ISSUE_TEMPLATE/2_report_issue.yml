@@ -1,5 +1,5 @@
 name: 🐞 Issue report
-description: Report an issue in Yomihon
+description: Report an issue in Yomitsu
 labels: [bug]
 body:
   - type: textarea
@@ -47,10 +47,10 @@ body:
         You can upload the crash log file as an attachment, or paste the crash logs in plain text if needed.
 
   - type: input
-    id: yomihon-version
+    id: app-version
     attributes:
-      label: Yomihon version
-      description: You can find your Yomihon version in **More → About**.
+      label: Yomitsu version
+      description: You can find your Yomitsu version in **More → About**.
       placeholder: |
         Example: "0.4.0"
     validations:
@@ -95,9 +95,9 @@ body:
           required: true
         - label: I have gone through the [FAQ](https://yomihon.github.io/docs/faq/general) and [troubleshooting guide](https://yomihon.github.io/docs/guides/troubleshooting/).
           required: true
-        - label: I have updated the app to version **[0.4.0](https://github.com/yomihon/yomihon/releases/latest)**.
+        - label: I have updated the app to version **[latest](https://github.com/Nikhil0921/yomitsu/releases/latest)**.
           required: true
         - label: I have filled out all of the requested information in this form, including specific version numbers.
           required: true
-        - label: I understand that **Yomihon does not have or fix any extensions**, and I **will not receive help** for any issues related to sources or extensions.
+        - label: I understand that **Yomitsu does not have or fix any extensions**, and I **will not receive help** for any issues related to sources or extensions.
           required: true

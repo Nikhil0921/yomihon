@@ -38,9 +38,9 @@ class AppUpdateChecker {
 // This fork's repository — update checks must not point users at upstream releases.
 val GITHUB_REPO: String by lazy {
     if (isPreviewBuildType) {
-        "Nikhil0921/yomihon"
+        "Nikhil0921/yomitsu"
     } else {
-        "Nikhil0921/yomihon"
+        "Nikhil0921/yomitsu"
     }
 }
 

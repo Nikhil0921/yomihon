@@ -1,4 +1,4 @@
-# Yomihon — Product Requirements Document
+# Yomitsu — Product Requirements Document
 
 > Status: living document. Describes WHAT the product must provide.
 > Technical HOW lives in `docs/architecture.md`; engineering rules in `docs/rules.md`;
@@ -9,13 +9,13 @@
 
 ## 1. Product overview
 
-### 1.1 What Yomihon is
+### 1.1 What Yomitsu is
 
-Yomihon is a free, open-source (Apache-2.0) **Android manga / manhwa / manhua reader**
-("Full-Featured Reader for Android"). It is a community fork of
-[Mihon](https://github.com/mihonapp/mihon) (Tachiyomi lineage), enhanced with
-**on-device OCR and language-learning tooling**: text recognition on manga pages,
-Yomitan-style dictionary lookups, and one-click Anki card creation.
+Yomitsu is a free, open-source (Apache-2.0) **Android manga / manhwa / manhua reader**
+— an independent project built on the Yomihon/Mihon ecosystem (Tachiyomi lineage),
+enhanced with **on-device OCR and language-learning tooling**: text recognition on
+manga pages, Yomitan-style dictionary lookups, one-click Anki card creation, and
+Read-Aloud TTS.
 
 - Application ID: `app.yomihon` (code namespaces remain `eu.kanade.tachiyomi.*`,
   `mihon.*`, `tachiyomi.*` — see `docs/rules.md`).

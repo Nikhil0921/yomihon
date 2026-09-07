@@ -1,4 +1,4 @@
-# Yomihon UI Modernization — Design Audit Report (Phase 1)
+# Yomitsu UI Modernization — Design Audit Report (Phase 1)
 
 > Read-only audit per docs/Prompt.md. NO code modified. Produced 2026-09-04
 > from 4 parallel audits (theme/components, navigation/screens, overlays/

@@ -3,6 +3,6 @@ contact_links:
   - name: ❌ Help with Extensions
     url: https://yomihon.github.io/docs/faq/browse/extensions
     about: For extension-related questions/issues
-  - name: 🖥️ Yomihon website
+  - name: 🖥️ Upstream Yomihon website
     url: https://yomihon.github.io/
-    about: Guides, troubleshooting, and answers to common questions
+    about: Guides, troubleshooting, and answers to common questions (upstream docs; applies to Yomitsu's inherited base)

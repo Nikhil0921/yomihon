@@ -1,15 +1,15 @@
-Looking to report an issue/bug or make a feature request? Please refer to the [README file](https://github.com/yomihon/yomihon#issues-feature-requests-and-contributing).
+Looking to report an issue/bug or make a feature request? Please refer to the [README file](https://github.com/Nikhil0921/yomitsu#contributing).
 
 ---
 
-Thanks for your interest in contributing to Yomihon!
+Thanks for your interest in contributing to Yomitsu!
 
 
 # Code contributions
 
 Pull requests are welcome!
 
-If you're interested in taking on [an open issue](https://github.com/yomihon/yomihon/issues), please comment on it so others are aware.
+If you're interested in taking on [an open issue](https://github.com/Nikhil0921/yomitsu/issues), please comment on it so others are aware.
 You do not need to ask for permission nor an assignment.
 
 ## Prerequisites

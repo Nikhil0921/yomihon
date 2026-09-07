@@ -101,22 +101,22 @@ jobs:
         run: |
           set -e
 
-          mv app/build/outputs/apk/release/app-armeabi-v7a-release.apk yomihon-armeabi-v7a-${{ needs.get_tag.outputs.tag }}.apk
-          mv app/build/outputs/apk/release/app-arm64-v8a-release.apk yomihon-arm64-v8a-${{ needs.get_tag.outputs.tag }}.apk
-          mv app/build/outputs/apk/release/app-x86-release.apk yomihon-x86-${{ needs.get_tag.outputs.tag }}.apk
-          mv app/build/outputs/apk/release/app-x86_64-release.apk yomihon-x86_64-${{ needs.get_tag.outputs.tag }}.apk
-          mv app/build/outputs/apk/release/app-universal-release.apk yomihon-universal-${{ needs.get_tag.outputs.tag }}.apk
+          mv app/build/outputs/apk/release/app-armeabi-v7a-release.apk yomitsu-armeabi-v7a-${{ needs.get_tag.outputs.tag }}.apk
+          mv app/build/outputs/apk/release/app-arm64-v8a-release.apk yomitsu-arm64-v8a-${{ needs.get_tag.outputs.tag }}.apk
+          mv app/build/outputs/apk/release/app-x86-release.apk yomitsu-x86-${{ needs.get_tag.outputs.tag }}.apk
+          mv app/build/outputs/apk/release/app-x86_64-release.apk yomitsu-x86_64-${{ needs.get_tag.outputs.tag }}.apk
+          mv app/build/outputs/apk/release/app-universal-release.apk yomitsu-universal-${{ needs.get_tag.outputs.tag }}.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: yomihon
+          name: yomitsu
           path: |
-            yomihon-armeabi-v7a-${{ needs.get_tag.outputs.tag }}.apk
-            yomihon-arm64-v8a-${{ needs.get_tag.outputs.tag }}.apk
-            yomihon-x86-${{ needs.get_tag.outputs.tag }}.apk
-            yomihon-x86_64-${{ needs.get_tag.outputs.tag }}.apk
-            yomihon-universal-${{ needs.get_tag.outputs.tag }}.apk
+            yomitsu-armeabi-v7a-${{ needs.get_tag.outputs.tag }}.apk
+            yomitsu-arm64-v8a-${{ needs.get_tag.outputs.tag }}.apk
+            yomitsu-x86-${{ needs.get_tag.outputs.tag }}.apk
+            yomitsu-x86_64-${{ needs.get_tag.outputs.tag }}.apk
+            yomitsu-universal-${{ needs.get_tag.outputs.tag }}.apk
 
   build_foss:
     if: github.repository == 'yomihon/yomihon'
@@ -157,13 +157,13 @@ jobs:
         run: |
           set -e
 
-          mv app/build/outputs/apk/foss/app-universal-foss.apk yomihon-${{ needs.get_tag.outputs.tag }}-foss.apk
+          mv app/build/outputs/apk/foss/app-universal-foss.apk yomitsu-${{ needs.get_tag.outputs.tag }}-foss.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: yomihon-foss
-          path: yomihon-${{ needs.get_tag.outputs.tag }}-foss.apk
+          name: yomitsu-foss
+          path: yomitsu-${{ needs.get_tag.outputs.tag }}-foss.apk
 
   release:
     if: github.repository == 'yomihon/yomihon'
@@ -184,15 +184,15 @@ jobs:
         with:
           failOnError: false
           name: |
-            yomihon
-            yomihon-foss
+            yomitsu
+            yomitsu-foss
             ocr-models
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         with:
           tag_name: ${{ needs.get_tag.outputs.tag }}
-          name: Yomihon ${{ needs.get_tag.outputs.tag }}
+          name: Yomitsu ${{ needs.get_tag.outputs.tag }}
           body: |
             Check out the [past release notes](https://github.com/yomihon/yomihon/releases) if you’re upgrading from an earlier version.
 
@@ -204,14 +204,14 @@ jobs:
 
             > [!TIP]
             >
-            > ### If you are unsure which version to download then go with `yomihon-universal-${{ needs.get_tag.outputs.tag }}.apk`
+            > ### If you are unsure which version to download then go with `yomitsu-universal-${{ needs.get_tag.outputs.tag }}.apk`
           files: |
-            yomihon-armeabi-v7a-${{ needs.get_tag.outputs.tag }}.apk
-            yomihon-arm64-v8a-${{ needs.get_tag.outputs.tag }}.apk
-            yomihon-x86-${{ needs.get_tag.outputs.tag }}.apk
-            yomihon-x86_64-${{ needs.get_tag.outputs.tag }}.apk
-            yomihon-universal-${{ needs.get_tag.outputs.tag }}.apk
-            yomihon-${{ needs.get_tag.outputs.tag }}-foss.apk
+            yomitsu-armeabi-v7a-${{ needs.get_tag.outputs.tag }}.apk
+            yomitsu-arm64-v8a-${{ needs.get_tag.outputs.tag }}.apk
+            yomitsu-x86-${{ needs.get_tag.outputs.tag }}.apk
+            yomitsu-x86_64-${{ needs.get_tag.outputs.tag }}.apk
+            yomitsu-universal-${{ needs.get_tag.outputs.tag }}.apk
+            yomitsu-${{ needs.get_tag.outputs.tag }}-foss.apk
           draft: true
           prerelease: false
           token: ${{ secrets.GITHUB_TOKEN }}

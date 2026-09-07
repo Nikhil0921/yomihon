@@ -28,7 +28,7 @@ dependencyResolutionManagement {
 
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
-rootProject.name = "Yomihon"
+rootProject.name = "Yomitsu"
 include(":app")
 include(":baseline-profile")
 include(":core-metadata")

@@ -1,4 +1,4 @@
-# Yomihon — Architecture
+# Yomitsu — Architecture
 
 > Status: living document. Describes HOW the system is built.
 > Documents the ACTUAL architecture (Read-Aloud TTS v1 + Phase 10A voice
@@ -10,7 +10,7 @@
 
 ## 1. System overview
 
-Yomihon is a Gradle multi-module Android app (Kotlin 2.4, Jetpack Compose,
+Yomitsu is a Gradle multi-module Android app (Kotlin 2.4, Jetpack Compose,
 minSdk 26 / targetSdk 36 / compileSdk 37). Layering follows a clean-ish
 architecture: **UI (:app presentation) → interactors (:domain) → repositories
 (interfaces :domain, impls :data/:app) → sources/network**. DI is **Injekt**
@@ -421,7 +421,7 @@ Design rules (binding):
 ## 6. Folder structure (actual)
 
 ```text
-yomihon/
+yomitsu/
 ├── app/                                # :app — application module
 │   └── src/main/java/
 │       ├── eu/kanade/tachiyomi/
