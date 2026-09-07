@@ -2817,58 +2817,125 @@ stale-source fallback (delete saved source's feeds → all feeds)
 verified in code only, not exercised on device (would require
 removing a feed).
 
+```text
+[COMPLETED 2026-09-07 — visual hierarchy correction pass 3 (user
+spec "VISUAL UX CORRECTION PASS"), UNCOMMITTED]
+
+User verdict on 09-06 set: functionally correct, visually NOT —
+Recent tab row invisible, reader settings weak grouping, Feed
+selector/control incoherence, Manage Sources plain, customize
+dialog plain. Root causes found (code + pixel-band evidence):
+
+1. RecentTab.kt: content Column applied ONLY bottom padding —
+   Scaffold places body at y=0 with PaddingValues(top=topBarHeight),
+   so PrimaryTabRow rendered UNDER the AppBar (invisible). FIX: +
+   padding(top = padding.calculateTopPadding()). Device: tabs at
+   y202-234, lavender selected indicator verified, tap + swipe
+   both switch + stay synced.
+2. ReaderSettingsDialog.kt: adjacent PreferenceGroupCards touched
+   (no inter-card gap) → one dark slab, groups indistinguishable
+   (pixel: single (31,26,31) band). FIX: Column
+   verticalArrangement = Arrangement.spacedBy(12.dp) — same rhythm
+   as PreferenceScreen Spacer(12.dp). Device: 12dp gap bands
+   verified on Reading mode/General/Read aloud tabs.
+3. FeedScreen.kt SourceSelectorDropdown: bare Text+arrow row read
+   as stray text, not a control. FIX: FilterChip (label = selected
+   source, trailing ArrowDropDown, selected = source!=null) +
+   unchanged DropdownMenu. Same chip language as listing chips.
+   Device: chip renders, dropdown opens w/ all sources, selection
+   filters grid, persists process death.
+4. ManageFeedsScreen.kt: flat ListItem soup + dividers. FIX: rows
+   flat inside one PreferenceGroupCard (header "Reorder feeds"),
+   dividers deleted. CRITICAL FIX FOUND ON DEVICE: M3 ListItem
+   default containerColor = surface → pure black rows painted OVER
+   the tonal card in AMOLED (card only peeked at rims). FIX:
+   ListItemDefaults.colors(containerColor = Color.Transparent) —
+   same applied to AddFeedDialog rows (dialog surface vs row
+   surface same class of clash). Device: single continuous
+   (31,26,31) surface y176→1251, controls aligned.
+5. FeedCustomizeDialog: AlertDialog + divider-separated chip/switch
+   stack. FIX: AdaptiveSheet + PreferenceGroupCard groups — Display
+   (Grid columns + Grid style SettingsChipRows), Sources (SwitchPre-
+   ferenceWidget), Default listing (chips + switch). Device: three
+   grouped cards w/ 12dp gaps, selected chips lavender tonal.
+6. i18n base: +feed_grid_style ("Grid style") key.
+
+NO black manufactured anywhere: all surfaces via existing tokens
+(surfaceContainerLow cards, Transparent rows); device runs AMOLED
+theme (bg pure black by design) — grouping reads via tonal card +
+gaps, exactly per design.md.
+
+GATES GREEN 2026-09-07 (docker, JDK17, -Xmx4g, both volumes):
+  spotlessApply + :app:assembleDebug BUILD SUCCESSFUL 3m29s;
+  spotlessCheck + testDebugUnitTest + verifySqlDelightMigration
+  BUILD SUCCESSFUL 2m17s. No DB change.
+
+DEVICE VISUAL PASS 2026-09-07 (wireless adb port rotated to
+36137; screenshots r1..r12 in .device-pass/screenshots/): Recent
+tabs visible+selected indicator+swipe sync ✓; Feed chip selector +
+dropdown + persistence ✓; Manage Sources single tonal surface ✓
+(after transparent-row fix + rebuild + reinstall); reader settings
+3 tabs gap bands ✓; customize sheet 3 groups ✓; Add feed dialog ✓;
+zero crashes. Full-session functional regression preserved (reselect
+→ Manage Sources still works, listing chips still filter).
+
+Files changed (5): RecentTab.kt (+1), ReaderSettingsDialog.kt (+5),
+FeedScreen.kt (selector chip + transparent ListItems + customize
+sheet rewrite), ManageFeedsScreen.kt (group card + transparent
+rows), i18n base strings.xml (+1 key).
+```
+
 ## Agent handoff
 
 ```text
-Last agent:                 opencode (2026-09-06 — visual/UX correction
-                            pass 2nd: Feed reselect → Manage Sources
-                            (was dropdown), Feed source selection now
-                            persisted pref surviving process death;
-                            Recent + reader settings verified correct
-                            unchanged; arbitrary-token sweep clean;
-                            gates green; device pass pending user)
-Date:                       2026-09-06
-Task completed:             Per user "VISUAL DESIGN + UX CORRECTION PASS"
-                            spec (session prompt; supersedes prior pass's
-                            Feed reselect/dropdown + in-memory selection):
-                            (1) Feed reselect now opens Manage Sources
-                            (navigator.push(ManageFeedsScreen) in
-                            FeedTab.onReselect; dropdown state un-hoisted
-                            to local). (2) Feed source selection persisted
-                            (new pref pref_feed_selected_source; SM
-                            combines 4 pref flows via DisplayPrefs;
-                            selectSource writes pref; stale saved source
-                            falls back to all feeds). (3) Recent verified:
-                            one "Recent" AppBar + persistent
-                            Continue|History|Updates PrimaryTabRow +
-                            HorizontalPager swipe, no duplicate headings.
-                            (4) Reader settings verified: 4 pages on
-                            PreferenceGroupCard, solid, no black blocks.
-                            (5) No arbitrary colors/radii/fonts added
-                            (repo sweep clean).
-GATES:                      spotlessApply + :app:compileDebugKotlin
-                            BUILD SUCCESSFUL 3m25s; spotlessCheck +
-                            testDebugUnitTest + :app:assembleDebug BUILD
-                            SUCCESSFUL 2m38s (docker, JDK17, -Xmx4g,
-                            both volumes) 2026-09-06. No DB change.
-Current task:               DONE — DEVICE-VERIFIED 2026-09-07 (all
-                            8 visual/behavioral tests pass, zero
-                            crashes; see device-pass block). Awaiting
-                            user commit.
-Next recommended task:      User device pass on new APK: Feed reselect →
-                            Manage Sources; source select → kill app →
-                            reopen → restored; selector toggle; Recent
-                            swipe + tabs; reader settings 4-page
-                            grouping screenshots. Then commit.
+Last agent:                 opencode (2026-09-07 — visual hierarchy
+                            correction pass 3: Recent tab-row
+                            visibility root-fix, reader-settings
+                            12dp group rhythm, Feed chip selector,
+                            Manage Sources grouped surface, customize
+                            sheet; ListItem-transparent-on-tonal-card
+                            AMOLED clash fixed; device visual pass
+                            done)
+Date:                       2026-09-07
+Task completed:             Per user "VISUAL UX CORRECTION PASS" spec:
+                            (1) Recent: fixed tab row rendering under
+                            AppBar (top padding applied — root cause,
+                            not cosmetic). (2) Reader settings: 12dp
+                            spacing between PreferenceGroupCards
+                            (dialog Column spacedBy, app-settings
+                            rhythm). (3) Feed source selector now an
+                            M3 FilterChip + dropdown. (4) Manage
+                            Sources rows flat in one PreferenceGroupCard,
+                            ListItems transparent so tonal card reads.
+                            (5) Customize dialog → AdaptiveSheet with
+                            Display/Sources/Listing group cards.
+                            (6) No new components invented (all
+                            existing: PreferenceGroupCard, SettingsChip-
+                            Row, SwitchPreferenceWidget, AdaptiveSheet,
+                            FilterChip); no hard-coded colors; no
+                            black-manufactured hierarchy.
+GATES:                      spotlessCheck + testDebugUnitTest +
+                            verifySqlDelightMigration BUILD SUCCESSFUL
+                            2m17s; assembleDebug 3m29s (docker, JDK17,
+                            -Xmx4g) 2026-09-07. No DB change.
+Current task:               DONE — device visual pass complete
+                            (r1..r12 screenshots). Awaiting user
+                            visual review + commit.
+Next recommended task:      User eyeballs .device-pass/screenshots/
+                            r1..r12 (aesthetic nuance only model can't
+                            judge), then commit. Optional: exercise
+                            stale-source fallback on device.
 Files safe to modify:       app presentation/ui screens + settings + reader
                             presentation; presentation-core components/
                             theme; i18n base strings.xml. docs/* always.
-Known risks:                Stale saved source after all its feeds removed
-                            → falls back to all feeds by design (not a
-                            dead end); pref remains stale-but-harmless
-                            until user changes selection. Device subnet
-                            unreachable from host this session — wireless
-                            adb may need re-pairing.
+Known risks:                Wireless adb port rotates (36137 now);
+                            reconnect by scanning 30000-40000 if
+                            refused. AMOLED theme makes unselected
+                            chip outlines subtle (theme, not bug —
+                            tokens only). Manage Sources edit/add of
+                            management actions beyond feeds was
+                            intentionally NOT added (spec §9 said
+                            keep existing content).
 ```
 
 ---

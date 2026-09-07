@@ -1,5 +1,6 @@
 package eu.kanade.presentation.reader.settings
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.heightIn
@@ -11,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindowProvider
 import eu.kanade.presentation.components.TabbedDialog
 import eu.kanade.presentation.components.TabbedDialogPaddings
@@ -66,6 +68,9 @@ fun ReaderSettingsDialog(
                 modifier = Modifier
                     .padding(vertical = TabbedDialogPaddings.Vertical)
                     .verticalScroll(rememberScrollState()),
+                // Same inter-group rhythm as the app settings screens
+                // (Spacer(12.dp) in PreferenceScreen).
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 when (page) {
                     0 -> ReadingModePage(screenModel)

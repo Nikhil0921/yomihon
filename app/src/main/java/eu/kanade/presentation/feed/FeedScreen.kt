@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ArrowDropDown
@@ -29,9 +30,9 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
@@ -43,21 +44,26 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import eu.kanade.domain.feed.model.FeedItem
 import eu.kanade.domain.feed.model.FeedListing
+import eu.kanade.presentation.components.AdaptiveSheet
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.presentation.library.components.CommonMangaItemDefaults
 import eu.kanade.presentation.library.components.MangaComfortableGridItem
 import eu.kanade.presentation.library.components.MangaCompactGridItem
+import eu.kanade.presentation.more.settings.widget.PreferenceGroupCard
+import eu.kanade.presentation.more.settings.widget.SwitchPreferenceWidget
 import eu.kanade.tachiyomi.ui.feed.FeedScreenModel
 import eu.kanade.tachiyomi.ui.feed.FeedSectionResult
 import tachiyomi.domain.manga.model.asMangaCover
 import tachiyomi.domain.source.model.Source
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.ListGroupHeader
+import tachiyomi.presentation.core.components.SettingsChipRow
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
@@ -280,6 +286,7 @@ private fun AddFeedDialog(
                 sources.forEach { source ->
                     val selected = selectedSource?.id == source.id
                     ListItem(
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                         headlineContent = { Text(source.visualName) },
                         supportingContent = { Text(source.lang) },
                         trailingContent = {
@@ -422,38 +429,40 @@ private fun SourceSelectorDropdown(
     val selected = feedSources.firstOrNull { it.id == state.selectedSourceId }
     var expanded by remember { mutableStateOf(false) }
 
-    Row(
-        modifier = Modifier.clickable { expanded = true },
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = selected?.visualName ?: stringResource(MR.strings.feed_all_sources),
-            style = MaterialTheme.typography.header,
-        )
-        Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
-    }
-    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-        DropdownMenuItem(
-            text = { Text(stringResource(MR.strings.feed_all_sources)) },
-            onClick = {
-                onSelectSource(null)
-                expanded = false
+    Box {
+        FilterChip(
+            selected = selected != null,
+            onClick = { expanded = true },
+            label = {
+                Text(selected?.visualName ?: stringResource(MR.strings.feed_all_sources))
             },
             trailingIcon = {
-                if (selected == null) Icon(Icons.Outlined.Check, contentDescription = null)
+                Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
             },
         )
-        feedSources.forEach { source ->
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
-                text = { Text(source.visualName) },
+                text = { Text(stringResource(MR.strings.feed_all_sources)) },
                 onClick = {
-                    onSelectSource(source.id)
+                    onSelectSource(null)
                     expanded = false
                 },
                 trailingIcon = {
-                    if (selected?.id == source.id) Icon(Icons.Outlined.Check, contentDescription = null)
+                    if (selected == null) Icon(Icons.Outlined.Check, contentDescription = null)
                 },
             )
+            feedSources.forEach { source ->
+                DropdownMenuItem(
+                    text = { Text(source.visualName) },
+                    onClick = {
+                        onSelectSource(source.id)
+                        expanded = false
+                    },
+                    trailingIcon = {
+                        if (selected?.id == source.id) Icon(Icons.Outlined.Check, contentDescription = null)
+                    },
+                )
+            }
         }
     }
 }
@@ -472,14 +481,17 @@ private fun FeedCustomizeDialog(
     defaultListing: FeedListing?,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(MR.strings.action_settings)) },
-        text = {
-            Column {
-                // Display: grid columns + grid style
-                Text(stringResource(MR.strings.feed_grid_columns), style = MaterialTheme.typography.header)
-                Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small)) {
+    AdaptiveSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(vertical = MaterialTheme.padding.medium),
+            verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+        ) {
+            // Display: grid columns + grid style
+            PreferenceGroupCard(title = stringResource(MR.strings.action_display)) {
+                SettingsChipRow(MR.strings.feed_grid_columns) {
                     FilterChip(
                         selected = gridColumns == 0,
                         onClick = { onChangeGridColumns(0) },
@@ -493,10 +505,7 @@ private fun FeedCustomizeDialog(
                         )
                     }
                 }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
-                    modifier = Modifier.padding(top = MaterialTheme.padding.small),
-                ) {
+                SettingsChipRow(MR.strings.feed_grid_style) {
                     FilterChip(
                         selected = !compactGrid,
                         onClick = { onToggleCompactGrid(false) },
@@ -508,23 +517,20 @@ private fun FeedCustomizeDialog(
                         label = { Text(stringResource(MR.strings.feed_grid_style_compact)) },
                     )
                 }
+            }
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = MaterialTheme.padding.small))
-
-                // Sources
-                Text(stringResource(MR.strings.feed_sources_section), style = MaterialTheme.typography.header)
-                ListItem(
-                    headlineContent = { Text(stringResource(MR.strings.feed_show_source_selector)) },
-                    trailingContent = {
-                        Switch(checked = showSourceSelector, onCheckedChange = onToggleSourceSelector)
-                    },
+            // Sources
+            PreferenceGroupCard(title = stringResource(MR.strings.feed_sources_section)) {
+                SwitchPreferenceWidget(
+                    title = stringResource(MR.strings.feed_show_source_selector),
+                    checked = showSourceSelector,
+                    onCheckedChanged = onToggleSourceSelector,
                 )
+            }
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = MaterialTheme.padding.small))
-
-                // Listing
-                Text(stringResource(MR.strings.feed_default_listing), style = MaterialTheme.typography.header)
-                Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small)) {
+            // Listing
+            PreferenceGroupCard(title = stringResource(MR.strings.feed_default_listing)) {
+                SettingsChipRow(MR.strings.feed_default_listing) {
                     FilterChip(
                         selected = defaultListing == null,
                         onClick = { onSelectDefaultListing(null) },
@@ -541,18 +547,12 @@ private fun FeedCustomizeDialog(
                         label = { Text(stringResource(MR.strings.latest)) },
                     )
                 }
-                ListItem(
-                    headlineContent = { Text(stringResource(MR.strings.feed_show_listing_selector)) },
-                    trailingContent = {
-                        Switch(checked = showListingSelector, onCheckedChange = onToggleListingSelector)
-                    },
+                SwitchPreferenceWidget(
+                    title = stringResource(MR.strings.feed_show_listing_selector),
+                    checked = showListingSelector,
+                    onCheckedChanged = onToggleListingSelector,
                 )
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(MR.strings.action_close))
-            }
-        },
-    )
+        }
+    }
 }

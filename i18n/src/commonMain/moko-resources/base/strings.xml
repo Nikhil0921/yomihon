@@ -1386,6 +1386,7 @@
     <string name="feed_end_of_list">You\'re all caught up</string>
     <string name="feed_grid_columns">Grid columns</string>
     <string name="feed_grid_style_normal">Normal grid</string>
+    <string name="feed_grid_style">Grid style</string>
     <string name="feed_grid_style_compact">Compact grid</string>
     <string name="feed_sources_section">Sources</string>
     <string name="pref_group_speech">Speech</string>

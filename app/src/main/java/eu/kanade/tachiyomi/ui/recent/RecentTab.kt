@@ -88,6 +88,7 @@ data object RecentTab : Tab {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .padding(top = padding.calculateTopPadding())
                     .padding(bottom = padding.calculateBottomPadding()),
             ) {
                 PrimaryTabRow(selectedTabIndex = state.currentPage, modifier = Modifier.zIndex(1f)) {
