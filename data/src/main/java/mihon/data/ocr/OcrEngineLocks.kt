@@ -4,7 +4,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 internal class OcrEngineLocks {
-    private val legacyMutex = Mutex()
     private val fastMutex = Mutex()
     private val glensMutex = Mutex()
     private val owOcrMutex = Mutex()
@@ -26,13 +25,11 @@ internal class OcrEngineLocks {
     }
 
     suspend fun <T> withAllLocks(block: suspend () -> T): T {
-        return legacyMutex.withLock {
-            fastMutex.withLock {
-                glensMutex.withLock {
-                    owOcrMutex.withLock {
-                        detectionMutex.withLock {
-                            block()
-                        }
+        return fastMutex.withLock {
+            glensMutex.withLock {
+                owOcrMutex.withLock {
+                    detectionMutex.withLock {
+                        block()
                     }
                 }
             }
@@ -41,7 +38,8 @@ internal class OcrEngineLocks {
 
     private fun mutexFor(type: OcrRepositoryImpl.EngineType): Mutex {
         return when (type) {
-            OcrRepositoryImpl.EngineType.LEGACY -> legacyMutex
+            // LEGACY engine removed; persisted LEGACY selection redirects to GLENS.
+            OcrRepositoryImpl.EngineType.LEGACY -> glensMutex
             OcrRepositoryImpl.EngineType.FAST -> fastMutex
             OcrRepositoryImpl.EngineType.GLENS -> glensMutex
             OcrRepositoryImpl.EngineType.OWOCR -> owOcrMutex

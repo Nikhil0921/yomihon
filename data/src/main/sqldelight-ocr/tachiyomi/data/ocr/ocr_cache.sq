@@ -60,6 +60,19 @@ deleteChapterPages:
 DELETE FROM ocr_pages
 WHERE chapter_id = :chapterId;
 
+countPages:
+SELECT COUNT(*)
+FROM ocr_pages;
+
+deleteOldestPages:
+DELETE FROM ocr_pages
+WHERE _id IN (
+    SELECT _id
+    FROM ocr_pages
+    ORDER BY created_at DESC, _id DESC
+    LIMIT -1 OFFSET :keepCount
+);
+
 deleteAllRegions:
 DELETE FROM ocr_regions;
 

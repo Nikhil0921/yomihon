@@ -35,12 +35,14 @@ import androidx.core.net.toUri
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.lifecycleScope
 import eu.kanade.presentation.util.rememberRequestPackageInstallsPermissionState
 import eu.kanade.tachiyomi.core.security.PrivacyPreferences
 import eu.kanade.tachiyomi.util.system.launchRequestPackageInstallsPermission
 import eu.kanade.tachiyomi.util.system.telemetryIncluded
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import mihon.domain.ankidroid.repository.AnkiDroidRepository
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -79,7 +81,7 @@ internal class PermissionStep : OnboardingStep {
                     batteryGranted = context.getSystemService<PowerManager>()!!
                         .isIgnoringBatteryOptimizations(context.packageName)
 
-                    kotlinx.coroutines.runBlocking {
+                    lifecycleOwner.lifecycleScope.launch {
                         isAnkiAvailable = ankiDroidRepository.isApiAvailable()
                         ankiPermissionGranted = if (isAnkiAvailable) ankiDroidRepository.hasPermission() else false
                     }

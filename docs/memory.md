@@ -11,30 +11,29 @@
 
 ```text
 Project:        Yomihon fork (v0.5.2, vc28) — Android manga reader + OCR/language tooling
-Repo state:     branch main @ 6b0ad4623 (v0.5.2 + set 3
-                design-audit + translucent surface commit) +
-                UNCOMMITTED: UI modernization set 4 "Visual
-                Hierarchy / Frosted Surfaces" (2026-09-06) AND
-                post-modernization feature set (2026-09-06, this
-                session — Recent tab IA + nav reorder + Feed v2 +
-                reader-settings grouping, see 2026-09-06 blocks +
-                Agent handoff).
+Repo state:     branch main @ 708a7182d (Yomitsu rebrand) +
+                UNCOMMITTED: post-v0.5.2 stabilization set (2026-09-08,
+                this session — LEGACY OCR engine+assets removed −133MB,
+                TTS prefetch Main-thread fix, GLENS 502 retry, dead-code
+                hygiene, OCR cache retention cap 5000 pages,
+                PermissionStep runBlocking removed; batches 4+8 HELD;
+                gates green, APK 0.5.2-8263 installed + device-verified,
+                see 2026-09-08 blocks + Agent handoff).
                 v0.5.2 RELEASE PUBLISHED 2026-09-03 (tag
                 v0.5.2, 5 ABI APKs; includes exclusion rules, speech
                 cleanup, voice profiles, 3x rate, Feed tab).
 Untracked:      .opencode/ + .device-pass/ (gitignored), .codegraph/ (index,
                 gitignored)
-Primary goal:    Stabilize post-v0.5.2: device verification of uncommitted
-                UI sets, then Phase 10B backlog as PRD-gated work
-Current phase:  Post-release stabilization — UI sets uncommitted, device
-                pass NOT run.
+Primary goal:    Stabilize post-v0.5.2: stabilization batches DONE
+                (2026-09-08), then Phase 10B backlog as PRD-gated work
+Current phase:  Post-release stabilization — batches 1/2/3/5/6/7
+                COMPLETE (device-verified), pending user commit;
+                F GLENS-retry live-verify + J eviction boundary +
+                onboarding PermissionStep device test = PENDING items.
 Current status: TTS v1 + 10A + 2026-09-01 multi-feature set all shipped in
-                v0.5.2; docs re-audited 2026-09-04; visual-hierarchy
-                modernization set 4 implemented 2026-09-06 (gates green,
-                device pass pending user); IA/feature set (Recent tab,
-                nav reorder, Feed v2 controls+paging, reader settings
-                groups) implemented 2026-09-06 (gates green, device
-                pass pending user).
+                v0.5.2; visual-hierarchy + IA/feature sets committed
+                (e89104296); rebrand committed (708a7182d);
+                stabilization set implemented + verified 2026-09-08.
 ```
 
 ## Current objective
@@ -2605,24 +2604,21 @@ Injekt 91edab2317, JUnit5 6.1.1/Kotest 6.2.2/MockK 1.14.11).
 ## Testing status
 
 ```text
-Unit tests:        PASS (2026-09-03, full testDebugUnitTest — OCR exclusion
-                    regression-fix set #2; OcrExclusionMatcherTest 27/27 incl.
-                    token-concat PHRASE both directions, ・ separator,
-                    cross-region pin; BoxMostlyInsideTest 7/7; all prior
-                    suites green)
+Unit tests:        PASS (2026-09-08, full testDebugUnitTest — stabilization
+                    set: LEGACY removal + prefetch IO fix + GLENS retry +
+                    cache retention + hygiene; all prior suites green)
 Integration tests: none run (existing androidTest suites are device-gated/@Ignore)
 UI tests:          none exist in repo
-Device tests:      Phase 8 script COMPLETE (steps 1–15 executed +
-                      user-confirmed 2026-08-28). Phase 9 device items
-                      COMPLETE (leak re-verify 0 leaks; battery PASS).
-                      Phase 10A Task 7 COMPLETE (user-confirmed 2026-08-31).
-                      PENDING: post-device-test audit set device pass
-                      (9-item checklist) + regression-fix #2 A–J checklist
-                      (memory.md 2026-09-03 block).
-Lint:              spotlessCheck PASS (2026-09-06, UI modernization set 4 —
-                     visual hierarchy / frosted surfaces)
-Build:             :app:assembleDebug PASS (2026-09-06, full gate green incl.
-                     :app:+:presentation-core:compileDebugKotlin)
+Device tests:      Phase 8 script COMPLETE (2026-08-28). Phase 9 COMPLETE
+                      (2026-08-29). Phase 10A Task 7 COMPLETE (2026-08-31).
+                      Stabilization matrix 2026-09-08: A/B/C/D/E/G/H/I PASS,
+                      F (GLENS retry live) + J (eviction boundary) +
+                      onboarding PermissionStep = PENDING (no natural 502 /
+                      5000-page boundary / fresh install runnable);
+                      evidence .device-pass/stabilize-verify.log.
+Lint:              spotlessCheck PASS (2026-09-08, stabilization set)
+Build:             :app:assembleDebug PASS (2026-09-08; 5 ABI + universal
+                      verified: assets/ocr/ absent, ocr_fast present)
 Baseline (pre-TTS expectations): CI order = spotlessCheck → testDebugUnitTest →
                           verifySqlDelightMigration → assembleRelease (see rules.md §11)
 Environment: devcontainer image vsc-yomihon-e24e3bd7… (JDK 17) via docker on host;
@@ -2635,27 +2631,27 @@ Environment: devcontainer image vsc-yomihon-e24e3bd7… (JDK 17) via docker on h
 ## Last verified build
 
 ```text
-Date:     2026-09-06 (UI modernization set 4 — visual hierarchy / frosted
-          surfaces, run by orchestrator)
+Date:     2026-09-08 (post-v0.5.2 stabilization set, run by orchestrator)
 Command:  ./gradlew spotlessCheck testDebugUnitTest verifySqlDelightMigration
-          :app:compileDebugKotlin :presentation-core:compileDebugKotlin
           :app:assembleDebug (docker devcontainer JDK17, -Xmx4g, both volumes)
-Result:   ALL GREEN — BUILD SUCCESSFUL 3m43s. Change set: PreferenceGroupCard
-          (grouped settings surfaces, all SearchableSettings + Main/More/
-          About/OcrExclusions/Data/Anki/ReadAloud), SettingsMainScreen 6
-          sections (two-pane untouched), reader chrome unified on
-          asFloatingChrome (bars/navigator/TTS pill/OCR strip), TabbedDialog
-          frosted tabs, highlight-scroll index fix. UNCOMMITTED; device pass
-          pending user.
+Result:   ALL GREEN — spotless+tests+migration 2m, assembleDebug 2m24s.
+          Change set: LEGACY OCR engine + 139.9MB assets removed (batch 1),
+          TTS prefetch withIOContext fix (batch 2), GLENS transient retry
+          (batch 3), dead-code hygiene C6-C10 (batch 5; C5 disproved),
+          OCR cache 5000-page retention (batch 6), PermissionStep
+          runBlocking→lifecycleScope (batch 7). APK 0.5.2-8263 arm64
+          installed in-place on SM_M066B; device matrix executed
+          (A/B/C/D/E/G/H/I PASS, F/J/onboarding PENDING). UNCOMMITTED;
+          awaiting user commit.
 ```
 
 ## Last verified test
 
 ```text
-Date:     2026-09-06 (UI modernization set 4)
+Date:     2026-09-08 (stabilization set)
 Command:  ./gradlew testDebugUnitTest (in full gate run above)
-Result:   BUILD SUCCESSFUL — all suites green (193+ domain tests unchanged;
-          set is pure Compose presentation, no new tests required).
+Result:   BUILD SUCCESSFUL — all suites green (domain tests unchanged
+          by design; stabilization is repository/UI plumbing).
 ```
 
 ---
@@ -2880,126 +2876,340 @@ zero crashes. Full-session functional regression preserved (reselect
 → Manage Sources still works, listing chips still filter).
 
 Files changed (5): RecentTab.kt (+1), ReaderSettingsDialog.kt (+5),
-FeedScreen.kt (selector chip + transparent ListItems + customize
-sheet rewrite), ManageFeedsScreen.kt (group card + transparent
-rows), i18n base strings.xml (+1 key).
+   FeedScreen.kt (selector chip + transparent ListItems + customize
+   sheet rewrite), ManageFeedsScreen.kt (group card + transparent
+   rows), i18n base strings.xml (+1 key).
+```
+
+```text
+[COMPLETED 2026-09-08 — POST-v0.5.2 STABILIZATION SET
+(Batches 1/2/3/5/6/7), UNCOMMITTED]
+
+User-approved stabilization master task. Batches 4 (FAST removal) and
+8 (x86/x86_64/universal distribution) EXPLICITLY HELD — untouched.
+
+Batch 1 — LEGACY OCR removal (dead code, 3-way-verified unreachable:
+recognizeText redirect :218-221 + scanLocalOrFallback DetectionUnavailable
+redirect + UnavailableDetOcrEngine stub):
+- DELETED: LegacyOcrEngine.kt (356 ln), Vocab.kt (6149 ln),
+  app/src/main/assets/ocr/{decoder.tflite 98.2MB, encoder.tflite 22.8MB,
+  embeddings.bin 18.9MB} (139,893,816 B total), CI download entries
+  (build.yml 3 lines, release.yml 3 + artifact path), CONTRIBUTING model
+  instructions, prd.md engine bullet.
+- PRUNED in OcrRepositoryImpl: legacyEngine field, engineFor LEGACY
+  engine branch (→ glensEngine for exhaustive when), closeEngines legacy
+  lines. OcrEngineLocks: legacyMutex deleted; mutexFor(LEGACY) →
+  glensMutex (comment: redirects to GLENS); withAllLocks nesting fixed.
+- KEPT (compat, all device-verified): OcrModel.LEGACY enum entry,
+  EngineType.LEGACY, pref_ocr_model default LEGACY (getEnum
+  deserialization), recognizeText + scanLocalOrFallback redirects,
+  OcrQueueScreen picker Legacy entry, ocr_model_legacy i18n,
+  noCompress "tflite"/"bin" (ocr_fast + panel_detector need tflite).
+- litert dependency KEPT (FastOcrEngine + PanelDetection CPU users).
+  libLiteRtClGlAccelerator.so (~2.8MB/ABI) still packaged from AAR —
+  GPU requested by nothing now; packaging exclusion untested → deferred
+  (lazy-dlopen risk per audit).
+
+Batch 2 — TTS prefetch Main-thread I/O fix:
+- scanOnDemand body wrapped in withIOContext (tachiyomi.core.common
+  convention; import existed) — pageSourceResolver.resolve does
+  HttpSource.getPageList via Rx awaitSingle on the CALLING thread;
+  prefetch job launches on viewModelScope (Main). Explicit return type
+  OcrPageResult?. Covers main-loop caller (double withIOContext cheap)
+  + prefetch. Cancellation/finally/bitmap-recycle semantics unchanged.
+
+Batch 3 — GLENS scan transient-failure retry (mirror of
+recognizeWithFallback policy):
+- scanWithGlens split: wrapper catches firstError → CE rethrow →
+  isTransientHttpFailure (IOException message "HTTP 5"/"HTTP 429" —
+  how GlensOcrEngine.executeRequest surfaces 502/429) → WARN log +
+  ONE retry via scanWithGlensOnce → retry error suppressed onto first,
+  rethrow first. No retry storm, honest failure after exhaustion,
+  cancellation preserved (CE rethrow at both levels).
+
+Batch 5 — hygiene (each independently verified zero refs):
+- C5 MangaBakaListEntry SKIPPED — audit proved ALIVE (MangaBakaApi
+  findLibManga parses MangaBakaListResult; called by MangaBaka tracker).
+- C6 IconItem composable removed (SettingsItems.kt; zero refs repo-wide;
+  BaseSortItem keeps ImageVector import).
+- C7 69 dead i18n keys removed from base strings.xml (of 81 candidates;
+  FOUR compile rounds caught 5 live keys my first sweep missed —
+  LESSON RECORDED: sweep must cover ALL modules incl core/common +
+  BOTH reference styles MR.strings.* AND R.string.* + @string/ in XML
+  res of ALL modules incl presentation-widget. Restored exact original
+  values: information_cloudflare_bypass_failure, information_webview_
+  outdated (core/common MR.strings), appwidget_updates_description
+  (widget info XMLs), download_notifier_no_network +
+  download_notifier_text_only_wifi (app R.string). 1178→1112 keys.
+  Locale files keep stale translated copies — harmless, Weblate prunes.)
+- C8 ic_launcher_round (5 mipmap webp + anydpi-v26 xml), drawable/
+  anim_updates_enter.xml (Updates tab → Recent rename orphaned it),
+  app values/dimens.xml (appwidget radii live only in
+  presentation-widget module) — all removed, zero source refs.
+- C9 OcrExclusionZoneRepository awaitForChapter + getZonesForChapter +
+  subscribeZonesForSource + subscribeForSource removed across
+  interactor/repository-interface/impl/.sq (zonesForChapter +
+  zonesForSource queries). subscribeForManga/awaitForSpeech/awaitAll/
+  subscribeAll remain (live callers).
+- C10 loadingPreferences() @Composable added to SearchableSettings;
+  SettingsReadAloudScreen + SettingsAnkiScreen share it (were
+  byte-identical blocks). SettingsOcrExclusionsScreen loading Row →
+  Box (Dictionary-screen pattern). No visual/behavior change.
+
+Batch 6 — OCR cache retention (query-only, no schema change):
+- ocr_cache.sq +countPages, +deleteOldestPages (ORDER BY created_at
+  DESC, _id DESC LIMIT -1 OFFSET :keepCount — cascade deletes regions).
+- OcrCacheStore.upsert calls suspend pruneOldestPages(db) inside the
+  same transaction; MAX_CACHED_PAGES = 5000 companion const (ponytail
+  comment: parameterize on thrash reports). Oldest pages evict
+  atomically; recent chapters stay hot. No .sqm migration needed
+  (delete-if-outdated DB; query-only change) —
+  verifySqlDelightMigration still run GREEN.
+
+Batch 7 — PermissionStep runBlocking removal:
+- onResume: kotlinx.coroutines.runBlocking { anki... } →
+  lifecycleOwner.lifecycleScope.launch { anki... }. Repository fns
+  already suspend + withContext(Dispatchers.IO) internally. No Main
+  blocking; state updates remain compose-state (deterministic render
+  on completion). Lifecycle observer structure unchanged.
+
+GATES GREEN 2026-09-08 (docker vsc-yomihon-e24e3bd7e46d…, JDK17, -Xmx4g,
+both volumes): :core:common+data+domain+:app compileDebugKotlin BUILD
+SUCCESSFUL (after fix rounds); spotlessCheck + testDebugUnitTest +
+verifySqlDelightMigration BUILD SUCCESSFUL 2m; :app:assembleDebug BUILD
+SUCCESSFUL 2m24s.
+
+APK CONTENTS VERIFIED (5 ABI + universal): assets/ocr/ ABSENT;
+assets/ocr_fast/{decoder 12.8MB, encoder 8.45MB} PRESENT;
+data panel_detector present via universal; x86/x86_64/universal outputs
+UNCHANGED (Batch 8 held). arm64 debug APK 95,058,865 B (95.06MB); LEGACY
+assets were 139,893,816 B (133.4 MiB) — measured reduction.
+
+DEVICE VERIFICATION 2026-09-08 (SM_M066B arm64-v8a, Android 16, wireless
+adb; in-place adb install -r Success, app data + OCR cache preserved,
+0.5.2-8262 → 0.5.2-8263; evidence .device-pass/stabilize-verify.log 35.4MB
+22:51–23:10):
+- A startup: PASS — launch clean, PID 32270→7705 (device adb daemon
+  cycled mid-test; app itself stable), 0 FATAL/AndroidRuntime.
+- B OCR model compat: PASS — device pref was FAST: full session worked
+  (scans redirect → GLENS, speech, cache). Pref temporarily set to
+  LEGACY via run-as (product UI untouched): cold relaunch clean,
+  on-demand scan "OCR scanning redirected to glens" 23:04:38, prefetch
+  page 9 COMPLETE 23:04:39, TTS speech continued. Picker dialog shows
+  Legacy/Fast/Online/OwOCR incl LEGACY entry. Pref restored to FAST.
+- C cached path: PASS — cache hits (acquireMs 16–86ms), 28–32
+  sentences/page segmented, speech progress + ScrollToRegion firing.
+- D uncached path: PASS — on-demand scans complete → sentences →
+  speech; no Main-thread network exception.
+- E prefetch: PASS — "TTS prefetch start pages=5..6 rate=1.5" →
+  page-6 scan start 22:57:08.228 → "TTS prefetch complete page=6"
+  22:57:20.562 (12.3s real Glens scan; pre-fix this exact path died
+  in ~35ms with NetworkOnMainThreadException, 25×/session). Prefetch
+  completes logged for pages 1,2,4,5,6,7,12,9; cancellations only on
+  real navigation. ZERO NetworkOnMainThreadException in the whole
+  35MB log.
+- F GLENS transient retry: PENDING — no natural 502/429 occurred
+  during the session (server-side, uncontrollable); retry path is
+  code-verified only. Log shows zero "transient scan failure" lines =
+  no false-positive retries either.
+- G exclusions: PASS — live "TTS page=4 exclusion rules=10 types=
+  {PHRASE=2, WORD=4, ZONE=4} excluded=0/24" (matcher + query intact
+  post-C9); OCR exclusions screen renders all rule types + add flows.
+- H reader stability: PASS — page advance request→confirmed ~0ms ×6;
+  user-nav arbitration (swipes 5→4→3→2 win); pause/resume same
+  sentence (p3 s5→s5); sentence steps both directions; stop
+  Playing→Idle 0.7s; reader exit → TTS engine disconnect <1s; zero
+  crashes.
+- I settings: PASS — Read aloud screen loading scaffold → full voice
+  profile content (loadingPreferences() works); OCR exclusions
+  screen; Text Recognition screen + model picker; bottom nav all
+  5 tabs intact.
+- J cache retention: PASS (code path) / PENDING (eviction boundary —
+  needs 5000 cached pages, untestable in one session; cache DB healthy
+  102KB actively read/written, no SQLite errors beyond known
+  transient 3850 lock contention lines).
+- Batch 7 onboarding: PENDING device (fresh-install onboarding not
+  runnable without wiping user data — forbidden). Compile + suspend
+  pattern verified.
+
+REGRESSION PROTECTIONS intact (verified in session + diff): bitmap
+recycle finally unchanged, single-flight (cache hit + joining logs),
+prefetch debounce/guards unchanged, arbitration unchanged, utterance
+dispatch ids unique, engine disconnect <1s, LeakCanary untouched,
+WebtoonTransitionHolder/detach code untouched, backup format
+untouched, ABI outputs untouched.
+
+Files changed (20 tracked + 2 kt + assets deleted): build.yml,
+release.yml, CONTRIBUTING.md, prd.md, PermissionStep.kt,
+SearchableSettings.kt, SettingsAnkiScreen.kt,
+SettingsOcrExclusionsScreen.kt, SettingsReadAloudScreen.kt,
+TtsPlaybackController.kt, OcrCacheStore.kt, OcrEngineLocks.kt,
+OcrExclusionZoneRepositoryImpl.kt, OcrRepositoryImpl.kt, ocr_cache.sq,
+ocr_exclusion_zones.sq, OcrExclusionZoneInteractors.kt,
+OcrExclusionZoneRepository.kt, i18n base strings.xml, SettingsItems.kt
++ DELETED LegacyOcrEngine.kt, Vocab.kt, assets/ocr/, ic_launcher_round×6,
+anim_updates_enter.xml, values/dimens.xml.
+UNCOMMITTED — awaiting user review + commit.
 ```
 
 ## Agent handoff
 
 ```text
-[YOMITSU REBRAND — COMPLETED 2026-09-07, UNCOMMITTED]
+[YOMITSU REBRAND — COMPLETED 2026-09-07, UNCOMMITTED→ user commit 708a7182d]
 Audit-first controlled rebrand (user spec, 12 phases). Audit totals:
   yomihon 176 refs / mihon 1784 / tachiyomi 12327 / yomitsu 5 (pre-change).
 Every match classified A–H. Full classification + rationale:
   docs/branding.md (NEW — single source of truth).
 Changed (Category A): app_name → Yomitsu; launcher icons (legacy
-  mipmap webps + adaptive foreground rasters + monochrome, all
-  regenerated from docs/Logo/Yomitsu-logo via PIL/uv, mark inside
-  66dp safe zone); drawable/ic_mihon.xml → bitmap wrapper around
-  drawable-nodpi/ic_yomitsu_mark.png (About LogoHeader + notification
-  small icons + splash — resource name kept so zero code refs changed);
-  splash color → #000000 (logo bg); README rewritten; .github/assets/
-  logo.png replaced + cover.png added; CONTRIBUTING + issue templates;
-  release.yml artifact names yomitsu-* (upstream if-gates kept =
-  skip-on-fork by design); AppUpdateChecker.GITHUB_REPO + AboutScreen
-  GitHub link → Nikhil0921/yomitsu; settings.gradle.kts rootProject.name
-  → Yomitsu; docs titles + prd §1.1 + architecture §1/§6 wording;
-  GitHub repo renamed via API (yomitsu) + description; origin remote
-  updated; docs/branding.md created.
+   mipmap webps + adaptive foreground rasters + monochrome, all
+   regenerated from docs/Logo/Yomitsu-logo via PIL/uv, mark inside
+   66dp safe zone); drawable/ic_mihon.xml → bitmap wrapper around
+   drawable-nodpi/ic_yomitsu_mark.png (About LogoHeader + notification
+   small icons + splash — resource name kept so zero code refs changed);
+   splash color → #000000 (logo bg); README rewritten; .github/assets/
+   logo.png replaced + cover.png added; CONTRIBUTING + issue templates;
+   release.yml artifact names yomitsu-* (upstream if-gates kept =
+   skip-on-fork by design); AppUpdateChecker.GITHUB_REPO + AboutScreen
+   GitHub link → Nikhil0921/yomitsu; settings.gradle.kts rootProject.name
+   → Yomitsu; docs titles + prd §1.1 + architecture §1/§6 wording;
+   GitHub repo renamed via API (yomitsu) + description; origin remote
+   updated; docs/branding.md created.
 Preserved (B/C/D/E): applicationId app.yomihon; all code namespaces;
-  tachiyomi:// + mihon:// schemes (extension-store + tracker OAuth);
-  .tachibk + APPLICATION_ID backup filename; provider authorities;
-  TelemetryConfig gate (app.yomihon pkgs + cert fingerprint);
-  google-services.json; com.github.yomihon:{Furiganable,hoshidicts,
-  image-decoder} Maven coords (upstream org); AnkiDroid persisted names
-  (deck "Yomihon", model "Yomihon Card", YOMIHON_* constants, yomihon-*
-  media prefixes — user AnkiDroid data looks models up BY NAME);
-  DictionaryTermCard "yomihon" Anki tag (existing cards); upstream
-  yomihon.github.io doc URLs (live docs); upstream Discord + FUNDING;
-  LICENSE text + upstream copyright lines (added © 2026 Yomitsu
-  contributors line only); CHANGELOG history; release.yml upstream
-  if-gates; AGENTS.md / architect.md / architect-2.md (user-owned);
-  memory.md historical blocks.
+   tachiyomi:// + mihon:// schemes (extension-store + tracker OAuth);
+   .tachibk + APPLICATION_ID backup filename; provider authorities;
+   TelemetryConfig gate (app.yomihon pkgs + cert fingerprint);
+   google-services.json; com.github.yomihon:{Furiganable,hoshidicts,
+   image-decoder} Maven coords (upstream org); AnkiDroid persisted names
+   (deck "Yomihon", model "Yomihon Card", YOMIHON_* constants, yomihon-*
+   media prefixes — user AnkiDroid data looks models up BY NAME);
+   DictionaryTermCard "yomihon" Anki tag (existing cards); upstream
+   yomihon.github.io doc URLs (live docs); upstream Discord + FUNDING;
+   LICENSE text + upstream copyright lines (added © 2026 Yomitsu
+   contributors line only); CHANGELOG history; release.yml upstream
+   if-gates; AGENTS.md / architect.md / architect-2.md (user-owned);
+   memory.md historical blocks.
 Validation: repo-wide re-search — every remaining "yomihon" ref maps to
-  a preserved category (list above); no unexplained user-visible
-  Yomihon branding remains (aapt2 application-label:'Yomitsu').
+   a preserved category (list above); no unexplained user-visible
+   Yomihon branding remains (aapt2 application-label:'Yomitsu').
 GATES GREEN 2026-09-07 (docker, JDK17, -Xmx4g, both volumes):
-  spotlessCheck + :app:compileDebugKotlin 2m49s; testDebugUnitTest +
-  :app:assembleDebug 2m40s (after :source-local:clean :source-api:clean
-  for stale intermediates). aapt2 dump badging verified label + assets.
+   spotlessCheck + :app:compileDebugKotlin 2m49s; testDebugUnitTest +
+   :app:assembleDebug 2m40s (after :source-local:clean :source-api:clean
+   for stale intermediates). aapt2 dump badging verified label + assets.
 Files changed (28 tracked-modified + 4 new): see git status.
 Device pass PENDING user: launcher name/icon, splash, About mark,
-  notifications.
+   notifications.
 ```
 
 ```text
-Last agent:                 opencode (2026-09-07 — YOMITSU REBRAND: audit →
-                            controlled product rebrand Yomihon→Yomitsu per
-                            user spec. Full audit first (phases 0–8), then
-                            implementation. See "YOMITSU REBRAND" block in
-                            Completed work for the complete record.)
-Date:                       2026-09-07
-Task completed:             Product rebrand: app_name → "Yomitsu" (single
-                            i18n source; launcher/notifications/onboarding
-                            all read MR.strings.app_name); launcher icons +
-                            adaptive foreground/monochrome regenerated from
-                            approved docs/Logo/Yomitsu-logo (enso ring +
-                            glyph, black bg, lavender accent); About/splash
-                            mark via drawable/ic_mihon.xml → bitmap wrapper
-                            (resource name kept, zero code churn); splash
-                            bg → #000000; README rewritten (Yomitsu primary,
-                            lineage + credits preserved, +2026 Yomitsu
-                            copyright line); CONTRIBUTING + issue templates;
-                            release.yml artifacts → yomitsu-*; updater +
-                            About GitHub links → Nikhil0921/yomitsu;
-                            rootProject.name = "Yomitsu"; GitHub repo
-                            RENAMED yomitsu + new description (gh api PATCH);
-                            local origin remote updated. PRESERVED
-                            (intentionally): applicationId app.yomihon,
-                            eu.kanade.tachiyomi.*/mihon.*/tachiyomi.*
-                            namespaces, tachiyomi:// + mihon:// schemes,
-                            .tachibk backup format, AnkiDroid "Yomihon
-                            Card"/deck defaults + yomihon-* media names
-                            (persisted user data), DictionaryTermCard "yomihon"
-                            tag, com.github.yomihon Maven coords, TelemetryConfig
-                            package/fingerprint gate, google-services.json,
-                            upstream yomihon.github.io doc links, upstream
-                            Discord, FUNDING, LICENSE text + copyright lines,
-                            CHANGELOG history, AGENTS.md/architect*.md
-                            (user-owned). Full decision record:
-                            docs/branding.md (NEW).
-GATES:                      spotlessCheck + :app:compileDebugKotlin BUILD
-                            SUCCESSFUL 2m49s; testDebugUnitTest +
-                            :app:assembleDebug BUILD SUCCESSFUL 2m40s
-                            (docker, JDK17, -Xmx4g, both volumes, 2026-09-07;
-                            one DexingNoClasspathTransform failure first =
-                            stale source-local/source-api intermediates, fixed
-                            via :source-local:clean :source-api:clean —
-                            same class as Known issue #7, NOT the gradle
-                            volume). aapt2 verified: application-label
-                            'Yomitsu', Yomitsu icons + mark packaged in
-                            APK.
-Current task:               DONE — rebrand implemented + gates green.
-                            NOT committed (awaiting user). NOT device-
-                            verified (launcher/splash/About visuals pending
-                            device pass).
-Next recommended task:      User reviews diff, commits, runs device visual
-                            pass (launcher name+icon, splash, About mark,
-                            notifications). Optional follow-up: local
-                            directory still named yomihon/ (cosmetic —
-                            rename locally if desired); AGENTS.md branding
-                            line still says "Yomihon" (user-owned file —
-                            left untouched per rules).
-Files safe to modify:       app presentation/ui screens + settings + reader
-                            presentation; presentation-core components/
-                            theme; i18n base strings.xml. docs/* always.
-Known risks:                Repo rename: GitHub redirects old URL, but any
-                            external clones/forks of Nikhil0921/yomihon
-                            need remote update. Updater on OLD installed
-                            releases (v0.5.2-) still points at yomihon
-                            repo — redirect covers it. vsc-yomihon docker
-                            image name unchanged (local build artifact).
+Last agent:                 opencode (2026-09-08 — POST-v0.5.2 STABILIZATION
+                            MASTER TASK: Batches 1,2,3,5,6,7 implemented +
+                            gates green + APK 0.5.2-8263 installed + device
+                            verified. Batches 4 (FAST removal) + 8 (ABI/
+                            distribution) HELD per spec. See stabilization
+                            block in Completed work.)
+Date:                       2026-09-08
+Task completed:             B1: LEGACY OCR engine removed (LegacyOcrEngine.kt
+                            + Vocab.kt 6149 lines deleted; assets/ocr/ 133.4MB
+                            deleted; legacyEngine field/engineFor LEGACY
+                            branch/closeEngines lines/legacyMutex pruned;
+                            engineFor(LEGACY)→GlensOcrEngine for exhaustive
+                            when; OcrModel.LEGACY enum + EngineType.LEGACY +
+                            recognizeText redirect + scanLocalOrFallback
+                            redirect + picker entry ALL KEPT; CI model
+                            download steps + release artifact paths +
+                            CONTRIBUTING + prd.md updated). B2: TTS prefetch
+                            NetworkOnMainThreadException FIXED — scanOnDemand
+                            body wrapped in withIOContext (covers
+                            pageSourceResolver.resolve Rx awaitSingle for
+                            BOTH main-loop + prefetch callers; explicit
+                            OcrPageResult? return). B3: GLENS scan
+                            transient-failure retry — scanWithGlens split
+                            into retry wrapper + scanWithGlensOnce;
+                            isTransientHttpFailure (HTTP 5xx/429 via
+                            IOException message) → exactly ONE retry, CE
+                            rethrow, suppressed chaining mirrors
+                            recognizeWithFallback. B5: C5 SKIPPED
+                            (MangaBakaListEntry ALIVE — audit disproved);
+                            C6 IconItem removed (zero refs); C7 69 i18n
+                            keys removed (81→69 after repo-wide re-verify
+                            caught 5 live: information_cloudflare_bypass_
+                            failure + information_webview_outdated (core/
+                            common MR.strings), appwidget_updates_description
+                            (widget XML), download_notifier_no_network +
+                            download_notifier_text_only_wifi (app R.string)
+                            — original values restored from git; lesson:
+                            sweep ALL modules + R.string style, not just
+                            MR.strings in kotlin modules); C8
+                            ic_launcher_round (5 webp + 1 xml) +
+                            anim_updates_enter + app values/dimens.xml
+                            removed (all zero source refs); C9
+                            awaitForChapter/getZonesForChapter/
+                            subscribeForSource/subscribeZonesForSource
+                            removed (interactor+repo+impl+2 .sq queries);
+                            C10 loadingPreferences() @Composable helper on
+                            SearchableSettings shared by
+                            SettingsReadAloudScreen + SettingsAnkiScreen
+                            (byte-identical blocks), Exclusions spinner
+                            Row→Box, Dictionary variant untouched. B6: OCR
+                            cache retention — countPages + deleteOldestPages
+                            (LIMIT -1 OFFSET :keepCount) queries added;
+                            pruneOldestPages inside upsert transaction;
+                            MAX_CACHED_PAGES=5000 (ponytail comment).
+                            B7: PermissionStep runBlocking →
+                            lifecycleOwner.lifecycleScope.launch (repo fns
+                            already suspend+IO).
+GATES GREEN 2026-09-08 (docker vsc-yomihon-e24e3bd7e46d…, JDK17, -Xmx4g,
+both volumes): spotlessCheck + testDebugUnitTest + verifySqlDelightMigration
+BUILD SUCCESSFUL 2m; :app:assembleDebug BUILD SUCCESSFUL 2m24s (after
+4 compile-fix rounds: OcrEngineLocks brace rewrite, engineFor LEGACY
+branch, pruneOldestPages suspend, 5 i18n key restores).
+APK: arm64 debug 95.06MB (was ~228MB w/ legacy assets; −133.4MB measured
+assets: decoder 98.2MB + encoder 22.8MB + embeddings 18.9MB = 139,893,816B).
+Contents verified: assets/ocr/ ABSENT all 5 APKs incl universal;
+assets/ocr_fast/ + panel_detector present; libLiteRtClGlAccelerator.so
+still packaged (litert AAR auto; no code requests GPU post-Legacy;
+exclusion untested → deferred per audit). 5 ABI APKs + universal built
+(Batch 8 held).
+DEVICE (SM_M066B arm64, Android 16): in-place install Success (data
+preserved, versionName 0.5.2-8262→8263). Matrix: A startup PASS (launch
+clean, 0 FATAL); B OCR compat PASS (persisted FAST pref session works
+end-to-end; persisted pref temporarily set LEGACY via run-as → app
+relaunch clean + on-demand scans redirect to Glens + prefetch COMPLETE
+23:04:39 + speech continues; picker shows Legacy/Fast/Online/OwOcr
+entries incl LEGACY); C cached TTS PASS (cache hits + sentence
+progression); D uncached PASS (on-demand scan → segmented sentences);
+E prefetch PASS — page-6 scan start 22:57:08.228 → COMPLETE 22:57:20.562
+(12.3s Glens, previously died ~35ms NetworkOnMainThreadException ×25/
+session); ZERO NetworkOnMainThreadException in full log (35MB,
+.device-pass/stabilize-verify.log); F GLENS transient retry PENDING
+(no natural 502 during session — retry path code-verified only);
+G exclusions PASS (rules=10 types={PHRASE=2,WORD=4,ZONE=4} loaded live;
+exclusion screens render); H reader stability PASS (advance confirmed
+0ms, user nav arbitration, pause/resume same-sentence, sentence steps,
+stop Playing→Idle 0.7s, exit → engine disconnect <1s, no crash); I
+settings PASS (ReadAloud loading scaffold → full content; exclusions
+screen; Text Recognition screen + picker); J retention PASS-code-only
+(eviction boundary needs 5000 pages — untestable; cache DB healthy
+102KB, reads fine); Batch 7 onboarding PENDING (can't wipe user data;
+compile + pattern verified).
+Device pref restored to FAST after LEGACY test.
+Current task:               DONE — all approved batches implemented +
+                            verified. UNCOMMITTED (awaiting user).
+Next recommended task:      User reviews diff (20 files, +118/−215 +
+                            2 kt + 133MB assets deleted), commits. Optional
+                            follow-ups: libLiteRtClGlAccelerator.so
+                            packaging exclusion (~2.8MB/ABI) after testing
+                            litert CPU paths; GLENS retry live-verify when
+                            a natural 502 occurs; onboarding PermissionStep
+                            device test on fresh install.
+Files safe to modify:       all modules touched this session.
+Known risks:                LEGACY removal relies on redirects (recognizeText
+                            + scanLocalOrFallback) — persisted LEGACY users
+                            get GLENS scans (device-verified). ocr_cache
+                            schema untouched (query-only add) — no
+                            migration risk. i18n locale files may still
+                            carry translated copies of deleted keys
+                            (harmless, Weblate will prune).
 ```
 
 ---

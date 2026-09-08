@@ -23,6 +23,7 @@ import mihon.domain.ocr.interactor.GetOcrExclusionZones
 import mihon.domain.ocr.interactor.ScanPageOcr
 import mihon.domain.ocr.interactor.WithOcrScanSession
 import mihon.domain.ocr.model.ExclusionMatchContext
+import mihon.domain.ocr.model.OcrPageResult
 import mihon.domain.ocr.model.applyExclusions
 import mihon.domain.tts.TtsAdvanceAction
 import mihon.domain.tts.TtsAdvancePolicy
@@ -556,22 +557,26 @@ internal class TtsPlaybackController(
         sentences
     }
 
-    /** Cached-miss path: resolve the bitmap through the shared pipeline, scan, recycle. */
+    /** Cached-miss path: resolve the bitmap through the shared pipeline, scan, recycle.
+     *  Runs on IO: page-list resolution does network via Rx awaitSingle on the calling
+     *  thread, and the prefetch job launches on the Main viewModelScope. */
     private suspend fun scanOnDemand(
         ctx: TtsChapterContext,
         pageIndex: Int,
         reportFailure: Boolean = true,
-    ) = try {
+    ): OcrPageResult? = try {
         logcat(LogPriority.DEBUG) { "TTS on-demand scan start chapter=${ctx.chapter.id} page=$pageIndex" }
-        withOcrScanSession.await {
-            val pages = pageSourceResolver.resolve(ctx.manga, ctx.chapter)
-            pages.use { resolved ->
-                val input = resolved.getPageInput(pageIndex) ?: return@use null
-                val bitmap: android.graphics.Bitmap = input.openBitmap() ?: return@use null
-                try {
-                    scanPageOcr.await(ctx.chapter.id, pageIndex, bitmap.toOcrImage())
-                } finally {
-                    if (!bitmap.isRecycled) bitmap.recycle()
+        withIOContext {
+            withOcrScanSession.await {
+                val pages = pageSourceResolver.resolve(ctx.manga, ctx.chapter)
+                pages.use { resolved ->
+                    val input = resolved.getPageInput(pageIndex) ?: return@use null
+                    val bitmap: android.graphics.Bitmap = input.openBitmap() ?: return@use null
+                    try {
+                        scanPageOcr.await(ctx.chapter.id, pageIndex, bitmap.toOcrImage())
+                    } finally {
+                        if (!bitmap.isRecycled) bitmap.recycle()
+                    }
                 }
             }
         }

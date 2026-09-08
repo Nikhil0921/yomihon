@@ -55,7 +55,16 @@ internal class OcrCacheStore(
                         orientation = region.textOrientation.name,
                     )
                 }
+                pruneOldestPages(db)
             }
+        }
+    }
+
+    /** Bounded growth: keep only the most recent [MAX_CACHED_PAGES] pages. */
+    private suspend fun pruneOldestPages(db: OcrCacheDatabase) {
+        val count = db.ocr_cacheQueries.countPages().awaitAsOne()
+        if (count > MAX_CACHED_PAGES) {
+            db.ocr_cacheQueries.deleteOldestPages(keepCount = MAX_CACHED_PAGES.toLong())
         }
     }
 
@@ -267,5 +276,10 @@ internal class OcrCacheStore(
 
     companion object {
         private const val DB_NAME = "ocr_cache.db"
+
+        // Retention cap for ocr_cache.db. ~5000 pages ≈ tens of MB of OCR text;
+        // recent chapters stay hot, oldest entries evict inside the upsert transaction.
+        // ponytail: raise/parameterize if users report cache thrash on long re-reads.
+        private const val MAX_CACHED_PAGES = 5000
     }
 }

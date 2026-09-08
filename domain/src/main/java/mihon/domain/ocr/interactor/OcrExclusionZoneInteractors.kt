@@ -12,13 +12,7 @@ class GetOcrExclusionZones(
     fun subscribeForManga(mangaId: Long, sourceId: Long): Flow<List<OcrExclusionZone>> =
         repository.subscribeZonesForManga(mangaId, sourceId)
 
-    fun subscribeForSource(sourceId: Long): Flow<List<OcrExclusionZone>> =
-        repository.subscribeZonesForSource(sourceId)
-
     fun subscribeAll(): Flow<List<OcrExclusionZone>> = repository.subscribeAll()
-
-    suspend fun awaitForChapter(chapterId: Long): List<OcrExclusionZone> =
-        repository.getZonesForChapter(chapterId)
 
     suspend fun awaitForSpeech(mangaId: Long, sourceId: Long, chapterId: Long): List<OcrExclusionZone> =
         repository.getZonesForSpeech(mangaId, sourceId, chapterId)

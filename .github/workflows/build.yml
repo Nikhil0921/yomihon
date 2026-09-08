@@ -44,9 +44,6 @@ jobs:
       - name: Download ML models
         run: |
           FILES=(
-            "bluolightning/manga-ocr-tflite:mocr_2025_decoder_float32.tflite:app/src/main/assets/ocr/decoder.tflite:b6f0b49e7537abc24de4d5e7f44c71c3e04b4f30a9dac6b5704db94c963ce31b"
-            "bluolightning/manga-ocr-tflite:mocr_2025_encoder_fp32.tflite:app/src/main/assets/ocr/encoder.tflite:126441c11edb3f3c9da639647ba82d846872a7ad51d62cdbc50767fa5abf4f43"
-            "bluolightning/manga-ocr-tflite:mocr_2025_embeddings_float32.bin:app/src/main/assets/ocr/embeddings.bin:ef1959fd6b2ed011b782722d975a67332b859ccc717688ad06a16d170145bc6c"
             "bluolightning/manga-ocr-mobile:v1_fp16/decoder.tflite:app/src/main/assets/ocr_fast/decoder.tflite:116db3f02364ceac91f86f46e54979d4fd7209e8d8820f3812410b0d732ee2b8"
             "bluolightning/manga-ocr-mobile:v1_fp16/encoder.tflite:app/src/main/assets/ocr_fast/encoder.tflite:d724e5682c874b98202d4ac8f3e84848cd9d06a5e27cb0dadb27ebaea1b35f47"
             "leoxs22/manga-panel-detector-yolo26n:manga_panel_detector_int8.tflite:data/src/main/assets/panel_detector/model.tflite:b1a7d8d4492e04a777ae0d3efd9dc1fbd6e8f361971eadb813279ce3dfd1b464"

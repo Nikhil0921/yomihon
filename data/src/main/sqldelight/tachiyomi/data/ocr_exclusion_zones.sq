@@ -37,27 +37,6 @@ SELECT
     oez.rule_name
 FROM ocr_exclusion_zones oez;
 
-zonesForChapter:
-SELECT
-    oez._id,
-    oez.manga_id,
-    oez.source_id,
-    oez.chapter_id,
-    oez.page_index,
-    oez.scope,
-    oez.left_norm,
-    oez.top_norm,
-    oez.right_norm,
-    oez.bottom_norm,
-    oez.enabled,
-    oez.created_at,
-    oez.match_text,
-    oez.match_type,
-    oez.rule_name
-FROM ocr_exclusion_zones oez
-WHERE oez.chapter_id = :chapterId
-  AND oez.enabled = 1;
-
 zonesForSpeech:
 SELECT
     oez._id,
@@ -105,26 +84,6 @@ FROM ocr_exclusion_zones oez
 WHERE oez.manga_id = :mangaId
    OR oez.source_id = :sourceId
    OR oez.match_type IN ('WORD', 'PHRASE');
-
-zonesForSource:
-SELECT
-    oez._id,
-    oez.manga_id,
-    oez.source_id,
-    oez.chapter_id,
-    oez.page_index,
-    oez.scope,
-    oez.left_norm,
-    oez.top_norm,
-    oez.right_norm,
-    oez.bottom_norm,
-    oez.enabled,
-    oez.created_at,
-    oez.match_text,
-    oez.match_type,
-    oez.rule_name
-FROM ocr_exclusion_zones oez
-WHERE oez.source_id = :sourceId;
 
 insertZone:
 INSERT INTO ocr_exclusion_zones(

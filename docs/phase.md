@@ -5,23 +5,23 @@
 > A phase is COMPLETED only when its verification steps have actually been run
 > and recorded in `docs/memory.md`.
 
-Current phase pointer: **Post-v0.5.2 stabilization. UNCOMMITTED, device
-verification PENDING user (three stacked layers): (a) correction pass
-(2026-09-06, this pointer) over the post-modernization feature set —
-Recent screen structure (one "Recent" AppBar title + inset-safe tab
-row, no duplicate History/Updates titles), reselect semantics (Recent
-→ resume last-read via GetNextChapters, Feed → source selector),
-Continue sort/downloaded-only controls, Feed grid style Normal/Compact
-+ restructured customize dialog, Global Search defaults All +
-Has-results, reader-settings pages fully grouped (PreferenceGroupCard,
-solid surfaces); (b) post-modernization feature set (2026-09-06) —
-bottom nav Library→Recent→Feed→Browse→More, Recent tab IA, Feed v2
-paging, reader-settings groups (committed by user as e89104296);
-(c) UI modernization set 4 (2026-09-06) grouped settings surfaces +
-reader frost. All gates green all layers.**
+Current phase pointer: **Post-v0.5.2 stabilization — STABILIZATION
+BATCHES 1/2/3/5/6/7 COMPLETE 2026-09-08 (gates green, APK 0.5.2-8263
+installed in-place on SM_M066B, device matrix executed: A/B/C/D/E/G/H/I
+PASS; F GLENS-retry live-fire, J retention eviction boundary, onboarding
+PermissionStep fresh-install = PENDING — see memory.md 2026-09-08 block +
+.device-pass/stabilize-verify.log). Batches 4 (FAST removal) + 8
+(x86/x86_64/universal distribution) EXPLICITLY HELD by user directive.
+UNCOMMITTED awaiting user commit.**
+  Prior: Yomitsu rebrand (2026-09-07, committed 708a7182d) — docs/
+  branding.md is the source of truth for name/branding decisions.
+  Prior: correction passes + visual hierarchy sets (2026-09-06/07,
+  committed e89104296/e166cd16e/af5606a56/333dafe3a) — Recent tab IA,
+  Feed v2 + paging, reader-settings groups, grouped surfaces, frosted
+  reader chrome, device-verified.
   Prior: UI/UX modernization set 1 (2026-09-03) — floating nav pill, OCR
   exclusion phrase EDIT + collapsed rule rows + identity labels, Feed filter
-  chips, More-tab GroupHeader sections. Gates green. UNCOMMITTED.
+  chips, More-tab GroupHeader sections.
   Prior: P0 ZONE exclusion reliability fix (2026-09-03 #3) code COMPLETE +
   gates green — pure-rect page-anchored ZONE rules for all scopes (COMBINED
   now opt-in via optional text field; prefill REMOVED — match text starts

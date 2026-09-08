@@ -3,6 +3,7 @@ package eu.kanade.presentation.more.settings.screen
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -105,12 +106,11 @@ object SettingsOcrExclusionsScreen : Screen {
             },
         ) { contentPadding ->
             if (state.isLoading) {
-                Row(
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(contentPadding),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
+                    contentAlignment = Alignment.Center,
                 ) {
                     CircularProgressIndicator()
                 }

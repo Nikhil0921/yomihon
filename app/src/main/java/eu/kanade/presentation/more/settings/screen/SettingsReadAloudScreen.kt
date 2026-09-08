@@ -59,16 +59,7 @@ object SettingsReadAloudScreen : SearchableSettings {
         }
 
         if (state.isLoading) {
-            return listOf(
-                Preference.PreferenceGroup(
-                    title = "",
-                    preferenceItems = listOf(
-                        Preference.PreferenceItem.CustomPreference(title = stringResource(MR.strings.loading)) {
-                            CircularProgressIndicator()
-                        },
-                    ),
-                ),
-            )
+            return loadingPreferences()
         }
 
         if (state.loadFailed) {

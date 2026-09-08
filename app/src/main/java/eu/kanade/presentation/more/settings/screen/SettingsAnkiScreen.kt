@@ -4,7 +4,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,16 +46,7 @@ object SettingsAnkiScreen : SearchableSettings {
         }
 
         if (state.isLoading) {
-            return listOf(
-                Preference.PreferenceGroup(
-                    title = "",
-                    preferenceItems = listOf(
-                        Preference.PreferenceItem.CustomPreference(title = stringResource(MR.strings.loading)) {
-                            CircularProgressIndicator()
-                        },
-                    ),
-                ),
-            )
+            return loadingPreferences()
         }
 
         val preferences = mutableListOf<Preference>()

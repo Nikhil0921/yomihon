@@ -50,7 +50,6 @@ class OcrRepositoryImpl(
     private val textPostprocessor by lazy { TextPostprocessor() }
     private val cacheStore by lazy { OcrCacheStore(context) }
 
-    private var legacyEngine: LegacyOcrEngine? = null
     private var fastEngine: FastOcrEngine? = null
     private var glensEngine: GlensOcrEngine? = null
     private var owOcrEngine: OwOcrEngine? = null
@@ -135,14 +134,12 @@ class OcrRepositoryImpl(
 
     private fun engineFor(type: EngineType): OcrEngine {
         return when (type) {
+            EngineType.LEGACY -> glensEngine ?: GlensOcrEngine().also {
+                glensEngine = it
+            }
             EngineType.FAST -> {
                 fastEngine ?: FastOcrEngine(context, requireEnvironment(), textPostprocessor).also {
                     fastEngine = it
-                }
-            }
-            EngineType.LEGACY -> {
-                legacyEngine ?: LegacyOcrEngine(context, requireEnvironment(), textPostprocessor).also {
-                    legacyEngine = it
                 }
             }
             EngineType.GLENS -> {
@@ -379,7 +376,40 @@ class OcrRepositoryImpl(
         }
     }
 
+    /** True for transient server-side failures worth one retry (HTTP 5xx / 429 rate limit). */
+    private fun isTransientHttpFailure(error: Throwable): Boolean {
+        val message = error.message ?: return false
+        return message.contains("HTTP 5") || message.contains("HTTP 429")
+    }
+
     private suspend fun scanWithGlens(
+        chapterId: Long,
+        pageIndex: Int,
+        image: OcrImage,
+        modelKey: OcrModel,
+    ): OcrPageResult {
+        try {
+            return scanWithGlensOnce(chapterId, pageIndex, image, modelKey)
+        } catch (firstError: Throwable) {
+            if (firstError is CancellationException) throw firstError
+            // Transient server failures (HTTP 502/429 observed on the Lens endpoint)
+            // get exactly one retry, mirroring the recognizeText fallback policy.
+            if (!isTransientHttpFailure(firstError)) throw firstError
+
+            logcat(LogPriority.WARN, firstError) {
+                "OCR (glens) transient scan failure, retrying once"
+            }
+            return try {
+                scanWithGlensOnce(chapterId, pageIndex, image, modelKey)
+            } catch (retryError: Throwable) {
+                if (retryError is CancellationException) throw retryError
+                firstError.addSuppressed(retryError)
+                throw firstError
+            }
+        }
+    }
+
+    private suspend fun scanWithGlensOnce(
         chapterId: Long,
         pageIndex: Int,
         image: OcrImage,
@@ -620,9 +650,6 @@ class OcrRepositoryImpl(
 
     private suspend fun closeEngines() {
         engineLocks.withAllLocks {
-            legacyEngine?.close()
-            legacyEngine = null
-
             fastEngine?.close()
             fastEngine = null
 

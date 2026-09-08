@@ -110,8 +110,6 @@ extend it (see `docs/rules.md`).
 ### 2.3 OCR (major differentiator)
 
 - **Engines** (`data/src/main/java/mihon/data/ocr/`):
-  - `LegacyOcrEngine` — on-device LiteRT encoder/decoder (manga-ocr style),
-    assets under `app/src/main/assets/ocr/` (gitignored; fetched in CI).
   - `FastOcrEngine` — on-device TFLite, assets under `app/src/main/assets/ocr_fast/`.
   - `GlensOcrEngine` — network "Google Lens"-style engine producing ordered
     regions with vertical-text detection and furigana filtering.

@@ -13,10 +13,6 @@ interface OcrExclusionZoneRepository {
 
     fun subscribeZonesForManga(mangaId: Long, sourceId: Long): Flow<List<OcrExclusionZone>>
 
-    fun subscribeZonesForSource(sourceId: Long): Flow<List<OcrExclusionZone>>
-
-    suspend fun getZonesForChapter(chapterId: Long): List<OcrExclusionZone>
-
     /** All enabled rules that could affect the given chapter (text rules are global). */
     suspend fun getZonesForSpeech(mangaId: Long, sourceId: Long, chapterId: Long): List<OcrExclusionZone>
 

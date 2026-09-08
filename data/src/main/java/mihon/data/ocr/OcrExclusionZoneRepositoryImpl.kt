@@ -35,17 +35,6 @@ class OcrExclusionZoneRepositoryImpl(
             .asFlow()
             .mapToList(Dispatchers.IO)
 
-    override fun subscribeZonesForSource(sourceId: Long): Flow<List<OcrExclusionZone>> =
-        database.ocr_exclusion_zonesQueries
-            .zonesForSource(sourceId, ::zoneMapper)
-            .asFlow()
-            .mapToList(Dispatchers.IO)
-
-    override suspend fun getZonesForChapter(chapterId: Long): List<OcrExclusionZone> =
-        withContext(Dispatchers.IO) {
-            database.ocr_exclusion_zonesQueries.zonesForChapter(chapterId, ::zoneMapper).awaitAsList()
-        }
-
     override suspend fun getZonesForSpeech(
         mangaId: Long,
         sourceId: Long,
