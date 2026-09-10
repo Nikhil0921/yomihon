@@ -50,8 +50,8 @@ Read-Aloud TTS.
 
 ### 1.4 Core user experience
 
-- Bottom-navigation app shell (Library / History / Updates / Browse / Feed /
-  More) built with Jetpack Compose + Voyager screens; light/dark/AMOLED themes
+- Bottom-navigation app shell (Library / Recent / Feed / Browse / More)
+  built with Jetpack Compose + Voyager screens; light/dark/AMOLED themes
   with 13 color schemes plus Android 12+ dynamic color (Monet); floating
   pill-style bottom navigation bar.
 - A highly configurable reader: LTR/RTL/vertical pagers, webtoon (continuous and

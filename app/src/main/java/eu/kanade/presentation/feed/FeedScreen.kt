@@ -264,7 +264,6 @@ private fun FeedHeader(feed: FeedItem, state: FeedScreenModel.State) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = MaterialTheme.padding.medium),
         )
-        HorizontalDivider()
     }
 }
 
@@ -326,7 +325,13 @@ private fun AddFeedDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { selectedSource?.let { onConfirm(it.id, selectedListing) } },
+                onClick = {
+                    selectedSource?.let {
+                        // POPULAR is supported by every source; never confirm an
+                        // unsupported Latest selection.
+                        onConfirm(it.id, if (it.supportsLatest) selectedListing else FeedListing.POPULAR)
+                    }
+                },
                 enabled = selectedSource != null,
             ) {
                 Text(stringResource(MR.strings.action_ok))

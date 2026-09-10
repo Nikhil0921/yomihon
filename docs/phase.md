@@ -5,14 +5,15 @@
 > A phase is COMPLETED only when its verification steps have actually been run
 > and recorded in `docs/memory.md`.
 
-Current phase pointer: **Post-v0.5.2 stabilization — STABILIZATION
-BATCHES 1/2/3/5/6/7 COMPLETE 2026-09-08 (gates green, APK 0.5.2-8263
-installed in-place on SM_M066B, device matrix executed: A/B/C/D/E/G/H/I
-PASS; F GLENS-retry live-fire, J retention eviction boundary, onboarding
-PermissionStep fresh-install = PENDING — see memory.md 2026-09-08 block +
-.device-pass/stabilize-verify.log). Batches 4 (FAST removal) + 8
-(x86/x86_64/universal distribution) EXPLICITLY HELD by user directive.
-UNCOMMITTED awaiting user commit.**
+Current phase pointer: **UI audit implementation Batches 1–5 COMPLETE
+2026-09-10 (Batch 5 device-verification matrix PASS: Feed D-02/D-03/
+paging/ManageFeeds, Recent + D-01, Settings Search D-08, MangaScreen
+D-11, typography/surfaces/a11y; gates green — 1 Batch-4 test-harness
+race fixed test-only; evidence .device-pass/batch5-verify.log +
+screenshots/batch5/). ALL UNCOMMITTED awaiting user commit. Remaining
+register items D-09/D-14/D-15 = INFO only.**
+  Prior: FULL UI AUDIT + docs/ui-implementation-map.md delivered
+  (2026-09-08, docs only).
   Prior: Yomitsu rebrand (2026-09-07, committed 708a7182d) — docs/
   branding.md is the source of truth for name/branding decisions.
   Prior: correction passes + visual hierarchy sets (2026-09-06/07,

@@ -83,7 +83,10 @@ data object RecentTab : Tab {
                     scrollBehavior = scrollBehavior,
                 )
             },
-            snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+            snackbarHost = {
+                SnackbarHost(hostState = snackbarHostState)
+                SnackbarHost(hostState = resumeHostState)
+            },
         ) { padding ->
             Column(
                 modifier = Modifier

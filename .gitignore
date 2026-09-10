@@ -50,4 +50,5 @@ data/src/main/assets/panel_detector/model.tflite
 # Generated agent/session state (local only; never commit)
 .opencode/
 .superpowers/
+.zvec-grep/
 ui-captures/

@@ -2604,9 +2604,10 @@ Injekt 91edab2317, JUnit5 6.1.1/Kotest 6.2.2/MockK 1.14.11).
 ## Testing status
 
 ```text
-Unit tests:        PASS (2026-09-08, full testDebugUnitTest — stabilization
-                    set: LEGACY removal + prefetch IO fix + GLENS retry +
-                    cache retention + hygiene; all prior suites green)
+Unit tests:        PASS (2026-09-10, full testDebugUnitTest — UI audit
+                    Batches 1-4 + Batch 5 device pass; incl
+                    FeedScreenModelStateTest 9/9 and fixed
+                    MangaScreenModelErrorStateTest 4/4 full-suite)
 Integration tests: none run (existing androidTest suites are device-gated/@Ignore)
 UI tests:          none exist in repo
 Device tests:      Phase 8 script COMPLETE (2026-08-28). Phase 9 COMPLETE
@@ -2616,9 +2617,17 @@ Device tests:      Phase 8 script COMPLETE (2026-08-28). Phase 9 COMPLETE
                       onboarding PermissionStep = PENDING (no natural 502 /
                       5000-page boundary / fresh install runnable);
                       evidence .device-pass/stabilize-verify.log.
-Lint:              spotlessCheck PASS (2026-09-08, stabilization set)
-Build:             :app:assembleDebug PASS (2026-09-08; 5 ABI + universal
-                      verified: assets/ocr/ absent, ocr_fast present)
+                      UI-audit Batch 5 device matrix 2026-09-10: PASS
+                      (Feed D-02/D-03/D-04 + paging + ManageFeeds + order;
+                      Recent + D-01; Settings Search D-08; MangaScreen
+                      D-11 success-path; typography/surfaces/a11y spot;
+                      D-11 missing-path + D-04 negative + stale-source =
+                      unit/code-verified only, no safe device trigger);
+                      evidence .device-pass/batch5-verify.log +
+                      screenshots/batch5/.
+Lint:              spotlessCheck PASS (2026-09-10, Batch 5 pass)
+Build:             :app:assembleDebug PASS (2026-09-10, 0.5.2-8264 arm64;
+                      installed in-place SM_M066B)
 Baseline (pre-TTS expectations): CI order = spotlessCheck → testDebugUnitTest →
                           verifySqlDelightMigration → assembleRelease (see rules.md §11)
 Environment: devcontainer image vsc-yomihon-e24e3bd7… (JDK 17) via docker on host;
@@ -2629,6 +2638,38 @@ Environment: devcontainer image vsc-yomihon-e24e3bd7… (JDK 17) via docker on h
 ```
 
 ## Last verified build
+
+```text
+Date:     2026-09-10 (Batch 5 device-verification pass, run by orchestrator)
+Command:  ./gradlew spotlessCheck testDebugUnitTest verifySqlDelightMigration
+          :app:assembleDebug (docker devcontainer JDK17, -Xmx4g, both volumes)
+Result:   ALL GREEN — 3m22s (first run exposed a TEST-ONLY harness defect in
+          the Batch-4-added MangaScreenModelErrorStateTest: per-test
+          resetMain/setMain raced the model's flowWithLifecycle IO workers
+          (Voyager screenModelScope is process-global in JVM tests) → fixed
+          by @TestInstance(PER_CLASS) class-scoped setMain/resetMain; suite
+          then 4/4 cold (--rerun-tasks) AND full-suite green; reproducible
+          pre-fix: failed 2× in full-suite, passed isolated — real race, not
+          flake). APK 0.5.2-8264 arm64 reinstalled in-place on SM_M066B;
+          full device matrix executed (see Batch 5 block). UNCOMMITTED;
+          awaiting user commit.
+```
+
+## Last verified build (prior)
+
+```text
+Date:     2026-09-10 (Batch 4 set, run by orchestrator)
+Command:  ./gradlew spotlessCheck testDebugUnitTest verifySqlDelightMigration
+          :app:assembleDebug (docker devcontainer JDK17, -Xmx4g, both volumes)
+Result:   ALL GREEN — spotless+tests+migration 3m5s, assembleDebug 3m15s
+          (rebuild 2m33s after Dictionary-subtitle fix). Change set:
+          D-08 settings search registration, D-11 MangaScreen Error state
+          + MangaScreenModelErrorStateTest 4/4, D-12 prd docs fix. arm64
+          debug APK installed in-place on SM_M066B + device pass (see
+          Batch 4 block). UNCOMMITTED; awaiting user commit.
+```
+
+## Last verified build (prior)
 
 ```text
 Date:     2026-09-08 (post-v0.5.2 stabilization set, run by orchestrator)
@@ -2648,13 +2689,77 @@ Result:   ALL GREEN — spotless+tests+migration 2m, assembleDebug 2m24s.
 ## Last verified test
 
 ```text
-Date:     2026-09-08 (stabilization set)
-Command:  ./gradlew testDebugUnitTest (in full gate run above)
-Result:   BUILD SUCCESSFUL — all suites green (domain tests unchanged
-          by design; stabilization is repository/UI plumbing).
+Date:     2026-09-10 (Batch 4 set)
+Command:  ./gradlew testDebugUnitTest (in full gate run above) +
+          :app:testDebugUnitTest --tests MangaScreenModelErrorStateTest
+Result:   BUILD SUCCESSFUL — all suites green + NEW
+          MangaScreenModelErrorStateTest 4/4 (missing→Error.missing,
+          generic→retryable Error, retry→Success, valid→Success).
 ```
 
 ---
+
+[COMPLETED 2026-09-08 — FULL UI AUDIT + IMPLEMENTATION MAP (docs/Prompt.md
+spec), UNCOMMITTED (docs only, ZERO app source touched)]
+
+Read-only audit per docs/Prompt.md: docs system (prd/architecture/rules/
+phase/design/design-audit/memory/branding) re-read + current source
+re-verified (baseline main @ 9e7a27b08, post-stabilization). Primary
+deliverable: **docs/ui-implementation-map.md** (32-section designer→dev
+handoff: screen inventory, nav map, IA, design-system/typography/spacing/
+alignment/header/surface specs, frost rules, responsive, component
+inventory, screen-by-screen maps, feature-placement table, code-ownership
+map, discrepancy register D-01..D-15, functional VISIBLE==ACTUAL audit,
+protected systems, approval gates, batch sequence).
+
+KEY FINDINGS (re-audit, prior records treated as evidence not truth):
+1. **P0 BUG (D-02)** — Feed listing selector NO-OP on grid: chips highlight
+   but grid still shows BOTH Popular+Latest sections. ROOT CAUSE proven in
+   source: FeedScreenModel.State.visibleFeeds (FeedScreenModel.kt:64-71)
+   filters by enabled + selectedSourceId ONLY — never consults
+   listingOverride; selectListing() (:202) writes state chips read but
+   nothing applies it to feeds. Proposed fix = add listing filter to
+   visibleFeeds getter (presentation+state only; sections cache untouched;
+   source-persistence path untouched; low regression risk). Verification
+   plan written (map §15).
+2. **D-03 SECONDARY** — FeedScreenModel.kt:102 re-seeds
+   `listingOverride ?: defaultListing` on EVERY pref-emit → explicit "All"
+   (null) silently reverts to defaultListing next time any of the 4
+   collected prefs changes (e.g. toggling a customize switch). Needs
+   user-chose-All sentinel vs uninitialized distinction.
+3. **D-01** — RecentTab.kt:67 creates resumeHostState SnackbarHost but
+   NEVER mounts it in Scaffold (:86 passes snackbarHostState only) →
+   reselect no_next_chapter fallback snackbar invisible.
+4. **D-04** — AddFeedDialog: default selectedListing=LATEST persists when
+   switching to a !supportsLatest source (guard only fires on explicit
+   re-click).
+5. Minor register: D-05 Feed section divider rhythm, D-07 ManageFeeds
+   trailing density, D-08 Dictionary/OCR-exclusions absent from settings
+   search index (approval gate), D-10 Advanced loose rows, D-11 MangaScreen
+   still has NO error state (approval gate), D-12 prd.md §1.4 stale tab
+   list (6-tab History/Updates vs actual 5-tab Recent), D-13 grid-container
+   duplication, INFO: D-09 global-search 4-path, D-14 Recent AppBar no
+   actions (by design), D-15 Library reselect affordance.
+6. RESOLVED-SINCE-2026-09-04-AUDIT list (verified in source — do NOT redo):
+   grid gutters unified, itemTitle typography, AppBar/Dictionary sp hacks,
+   TrackInfo double-clip, HistoryItem heightIn, dead outer reader tree,
+   ReaderPageIndicator restored, OcrLoadingIndicator clearance, More
+   GroupHeader private dup, TabOptions index swap, Feed raw-TopAppBar +
+   custom empty/loading/error + "✓" markers, ManageFeeds AMOLED
+   transparent-row fix, customize-sheet grouping. Remaining LOW:
+   ResizableSheet geometry unification (deferred by 09-05 B-R ruling).
+7. "Create" tab (Prompt.md user reference): CONFIRMED ABSENT from source
+   (no route/destination/string); most plausible referents = Recent
+   "Continue" tab or Feed Add-dialog. Recorded, not invented.
+8. Docs-vs-source conflicts recorded (map §24): prd §1.4 stale (D-12);
+   design-audit.md superseded on 6-tab order + reselect=scroll-to-top +
+   Feed-icon finding (fixed); no conflicts in spacing/frost/reader rules.
+
+Verification: docs-only change — no Gradle gates applicable, no app source
+modified (Prompt.md §3 absolute rule honored). NEXT: user reviews/
+approves docs/ui-implementation-map.md (approval gates §27), then
+implementation begins per batch sequence §26 (Batch 1 = Feed listing fix
+D-02/D-03/D-04 + D-01 snackbar mount, device-verified per §15 plan).
 
 [COMPLETED 2026-09-06 — UI governance skill creation, UNCOMMITTED (docs-adjacent, zero app source)]
 
@@ -3101,12 +3206,514 @@ Device pass PENDING user: launcher name/icon, splash, About mark,
 ```
 
 ```text
-Last agent:                 opencode (2026-09-08 — POST-v0.5.2 STABILIZATION
-                            MASTER TASK: Batches 1,2,3,5,6,7 implemented +
-                            gates green + APK 0.5.2-8263 installed + device
-                            verified. Batches 4 (FAST removal) + 8 (ABI/
-                            distribution) HELD per spec. See stabilization
-                            block in Completed work.)
+Last agent:                 opencode (2026-09-08 — FULL UI AUDIT + MAP per
+                            docs/Prompt.md: docs/* re-read + source
+                            re-verified @ 9e7a27b08, produced
+                            docs/ui-implementation-map.md (32 sections,
+                            discrepancy register D-01..D-15, Feed listing-
+                            selector P0 root cause D-02 + fix + verification
+                            plan, approval gates). ZERO app source touched.
+                            Awaiting user review/approval of the map before
+                            ANY implementation (Prompt.md §30 STOP
+                            condition). See 2026-09-08 audit block.
+Date:                       2026-09-08
+Current task:               DONE — audit + map delivered.
+Next recommended task:      User reviews Batch 1 diff + report (D-01..D-04
+                            below), decides Batch 2. Device verification
+                            of Batch 1 PENDING screen unlock (PIN lock).
+Files safe to modify:       app/src/main/java/eu/kanade/tachiyomi/ui/recent/RecentTab.kt,
+                            app/src/main/java/eu/kanade/tachiyomi/ui/feed/FeedScreenModel.kt,
+                            app/src/main/java/eu/kanade/presentation/feed/FeedScreen.kt,
+                            app/src/test/java/eu/kanade/tachiyomi/ui/feed/.
+```
+
+```text
+Last agent:                 opencode (2026-09-08 — BATCH 1 IMPLEMENTED per
+                            user authorization message: D-01 + D-02 + D-03 +
+                            D-04, exactly the approved scope of
+                            docs/ui-implementation-map.md §26 Batch 1.
+                            D-05/06/07/08/10/11/12/13 NOT implemented.
+                            D-01: RecentTab.kt Scaffold snackbarHost slot now
+                            mounts BOTH hosts — SnackbarHost(snackbarHostState)
+                            + SnackbarHost(resumeHostState) — so reselect
+                            no_next_chapter fallback is visible; pager/tab
+                            structure, reselect channel untouched.
+                            D-02: FeedScreenModel.State.visibleFeeds now
+                            applies listingOverride filter
+                            (listingMatched = sourceMatched.filter
+                            {listingOverride==null || it.listing==listingOverride});
+                            fallback chain listingMatched→sourceMatched→enabled
+                            (empty-grid impossible; stale-source fallback
+                            preserved). Grid now changes with chips.
+                            D-03: State.listingSelected sentinel (true after
+                            ANY explicit user listing choice incl "All");
+                            pref-collector seeds defaultListing ONLY while
+                            !listingSelected — explicit "All" survives pref
+                            emissions; selectListing/setDefaultListing set
+                            flag. No persistence change.
+                            D-04: AddFeedDialog confirm now coerces to POPULAR
+                            when selectedSource.supportsLatest==false (click
+                            guards at :297/:305 unchanged); Latest default
+                            UX kept.
+                            Unit test added:
+                            app/src/test/java/eu/kanade/tachiyomi/ui/feed/
+                            FeedScreenModelStateTest.kt (9 cases: null/POPULAR/
+                            LATEST override, source+listing compose, disabled
+                            hidden, listing-no-match fallback, stale-source
+                            fallback, empty, order preserved).
+ Date:                       2026-09-10
+ Current task:               DONE — Batch 5 (device verification matrix)
+                             executed over the combined Batch 1–4 set:
+                             full matrix PASS (Feed D-02/D-03/paging/
+                             ManageFeeds/order; Recent + D-01 reselect→
+                             resume; Settings Search D-08 all queries;
+                             MangaScreen D-11 success-path regression ×2;
+                             typography/surfaces/a11y spot checks; 0
+                             crashes, 0 app leaks, 65.7MB log evidence).
+                             Gates re-run green — AND the re-run exposed a
+                             real defect in the Batch-4 test harness:
+                             MangaScreenModelErrorStateTest failed
+                             deterministically in full-suite runs (2/2)
+                             from a resetMain/setMain race vs the model's
+                             IO workers (Voyager screenModelScope is
+                             process-global in JVM tests); FIXED test-only
+                             via @TestInstance(PER_CLASS) class-scoped
+                             setMain/resetMain (see Batch 5 block). ZERO
+                             app source changes in Batch 5. All batches
+                             1–5 UNCOMMITTED awaiting user.
+ Next recommended task:      user review of Batch 1-5 diffs + commit
+                             (Batch 5 adds only the 1 test-harness file +
+                             docs); remaining register items are
+                             D-09/D-14/D-15 (INFO, no action proposed).
+                             OPEN DECISION for user (recorded, still
+                             open): TtsPlaybackBar bodyMedium-vs-bodyLarge
+                             + 16/4-vs-24/12 doc conflicts — ratify code
+                             or fix docs.
+BATCH 2 (2026-09-09, user-authorized D-05+D-07 only):
+                            D-05 DONE — HorizontalDivider() removed from
+                            FeedHeader (FeedScreen.kt, 1-line deletion;
+                            divider under section header was doubling
+                            ListGroupHeader separation). Header→label→grid
+                            rhythm verified intact on device (gaps 14dp/7dp,
+                            no collapse); no divider View nodes anywhere in
+                            Feed dumps. AddFeedDialog's internal
+                            HorizontalDivider (:308) untouched.
+                            D-07 PASS, NO CODE CHANGE — verify-first audit:
+                            all controls M3 default 48dp touch targets
+                            (device-measured 42px icons = 48dp touch target
+                            nodes, Switch 52×48dp), all icon-only controls
+                            have i18n contentDescriptions, Switch gets
+                            semantic toggle role + row headline context,
+                            controls center-aligned (y-center 299 uniform),
+                            transparent ListItem inside PreferenceGroupCard
+                            (documented AMOLED decision), spacedBy(0.dp)
+                            contiguous non-overlapping targets. No
+                            discrepancy vs design.md/map §8/§23/M3.
+                            Device matrix (SM_M066B, APK 0.5.2-8266):
+                            Feed — chips/grid sync all combos (fresh-start
+                            Latest seed, All, All-sources, source-filter,
+                            Load more paging works, append verified);
+                            sections render both listings with clean
+                            boundaries. Recent — 3 tabs switch OK, reselect
+                            → ReaderActivity (D-01 no regression).
+                            ManageFeeds — toggle persisted, move-up/down
+                            verified+restored, delete verified (Atsumaru/
+                            Popular; NOTE: its source extension vanished
+                            from device mid-test — feed NOT re-added, user
+                            config now 5 feeds vs 6 pre-test; re-add needs
+                            extension reinstalled), add flow verified
+                            (QiScans/Popular added+deleted, net zero).
+                            D-06/D-08/D-10/D-11/D-12/D-13 NOT touched.
+BATCH 3 (2026-09-09, user-authorized D-06+D-13+D-10 only):
+                            ZERO APP SOURCE CHANGED — verify-first audits
+                            resolved all three as register dispositions
+                            (docs corrections only, map §21/§6/§17/§26/§27
+                            updated).
+                            D-10 RESOLVED-STALE — SettingsAdvancedScreen
+                            ALREADY fully grouped: 8 PreferenceGroups
+                            (pref_category_general, label_background_
+                            activity, label_data, label_network, label_
+                            library, pref_category_reader, label_
+                            extensions, pref_category_dictionary_parser),
+                            0 loose rows; original claim = stale copy from
+                            design-audit.md (git disproof: 0eab09ce4
+                            2026-07-25 already had 7 groups). No code
+                            change; search breadcrumbs unaffected.
+                            D-13 LEFT UNCHANGED INTENTIONALLY — Feed grid
+                            (FeedScreen.kt:154-159 PaddingValues 8dp
+                            start/end + CommonMangaItemDefaults 4dp
+                            spacers, Adaptive(96.dp)/Fixed(N)) vs
+                            LazyLibraryGrid (hardcoded FastScrollLazy-
+                            VerticalGrid + Adaptive(128.dp) + 8dp all
+                            sides). Reuse would CHANGE BEHAVIOR (fast-
+                            scroll on Feed = documented skip; 128dp vs
+                            96dp adaptive column count); new shared helper
+                            rejected (approval-gated + unjustified for 2
+                            literals that already share real geometry
+                            constants). Option D per brief.
+                            D-06 RESOLVED — registered item (More 12dp
+                            inter-card spacers) confirmed fine-as-is;
+                            already documented map §7 frozen rhythm. Batch
+                            sweep (explore agent + orchestrator verify)
+                            found NO further authorized code changes:
+                            (a) LibraryToolbar Pill 14sp still present —
+                            map §6 previously claimed RESOLVED falsely;
+                            corrected doc + documented as intentional
+                            exception (counter-density family, same as
+                            OcrQueue/DownloadQueue triage counters);
+                            (b) TtsPlaybackBar sentence text bodyMedium
+                            vs design.md §4 bodyLarge + pill padding 16/4
+                            vs §5 24/12 — PROTECTED SYSTEM (reader TTS
+                            playback bar), doc-vs-code conflict recorded,
+                            USER DECISION REQUIRED (not Batch-3 scope);
+                            (c) upstream residue documented untouched:
+                            upcoming-calendar 16sp raw literals
+                            (CalendarDay.kt:59, Calendar.kt:32/96),
+                            SettingsDictionaryScreen card dialect
+                            (4 ad-hoc Card styles + spacedBy(16) + dead
+                            spacer items), TrackerSearch/Migration radii,
+                            search row 14dp vertical, TriStateListDialog
+                            20dp, LogoHeader 56 vs 32dp inset divergence.
+GATES GREEN 2026-09-09 Batch 3 (docker vsc-yomihon-e24e3bd7e46d…, JDK17,
+                            -Xmx4g, both volumes): spotlessCheck +
+                            testDebugUnitTest + verifySqlDelightMigration
+                            BUILD SUCCESSFUL 3m11s; :app:assembleDebug
+                            BUILD SUCCESSFUL 2m31s. (No code changed;
+                            gates run per brief mandate. No DB/schema
+                            change.)
+DEVICE VERIFIED 2026-09-09 Batch 3 (SM_M066B wireless ADB; port chaos —
+                            46761 flapped offline repeatedly, settled
+                            43737; APK 0.5.2-8264 arm64 installed
+                            in-place Success, app.yomihon.dev vc28):
+                            - D-10 PASS: Advanced screen all 8 groups
+                            rendered on device (General/Background
+                            activity/Data/Networking/Library/Reader/
+                            Extensions/Dictionary Parser headers at
+                            y204/875/1243/1585/408/1179/1008/1324), rows
+                              flat, no loose cards, matches sibling
+                              grouped settings.
+                            - D-06 PASS: More screen grouped cards
+                              render (General header y318, Library y660,
+                              rows flat); Settings screen grouped cards
+                              (Appearance y204/Library y419/Reader y761/
+                              Tracking y1357) — spacing rhythm intact.
+                            - D-13 PASS: Feed grid vs Library grid
+                              pixel-band analysis IDENTICAL geometry —
+                              both 3-column at same density, left edge
+                              21px, right edge 21px, gutters 21px (=
+                              8dp edges + 4dp gutters at 2.625x density);
+                              consistency with Library confirmed without
+                              any code change.
+                            - Regression PASS: Recent 3 tabs switch
+                              (Continue chips + rows, History Today,
+                              Updates yesterday-14h); Feed chips intact,
+                              scrolling OK, Load-more appends page 2
+                              (Murim Psychopath/The Knight King/... new
+                              items verified); zero real FATAL/
+                              AndroidRuntime in 17.5MB session log (one
+                              grep hit = adbd echo of search string,
+                              known false-positive pattern).
+                            Evidence: .device-pass/batch3-verify.log
+                            (17.5MB) + b3-feed/b3-library pixel analysis
+                            in session transcript.
+                            D-08/D-11/D-12/D-14/D-15 NOT touched
+                            (Batch 4 / docs-only, not authorized).
+GATES GREEN 2026-09-09 Batch 2: spotlessCheck + testDebugUnitTest +
+                            verifySqlDelightMigration + :app:assembleDebug
+                            BUILD SUCCESSFUL 2m25s (docker, JDK17, -Xmx4g,
+                            both host volume mounts).
+GATES GREEN 2026-09-08 (docker vsc-yomihon-e24e3bd7e46d…, JDK17, -Xmx4g,
+                            HOST ~/.gradle + ~/.android volumes — container
+                            home was empty this session, first run redownloaded
+                            Gradle 9.6.1 + failed on network; volume mounts
+                            fixed it — ALWAYS pass both volume mounts):
+                            spotlessApply+compileDebugKotlin 6m26s;
+                            spotlessCheck+target test 1m59s (first run 1 test
+                            FAIL — test expectation wrong, not code: disabled+
+                            LATEST case hits intended source-fallback → fixed
+                            test expectation, §15-conformant); full
+                            testDebugUnitTest 2m6s GREEN; :app:assembleDebug
+                            3m37s.
+DEVICE VERIFIED 2026-09-09 (SM_M066B wireless ADB, wifi flaky — port cycled
+                            37483→40641→40785→43835→43337; use
+                            ./scripts/adb-wireless reconnect pattern; screen
+                            PIN-unlocked by user). DEBUG APK TARGETS
+                            app.yomihon.dev (debug applicationIdSuffix
+                            .dev — NOT app.yomihon; old stable install on
+                            app.yomihon misled first launch attempt).
+                            D-02 PASS: chips ↔ grid synchronized in all
+                            tested combos — All+All-sources → all sections;
+                            Popular+All-sources → Popular sections only
+                            (multi-source scroll verified); Latest (default
+                            seed) → Latest only; Thunder-source+All →
+                            single source's Latest section (source+listing
+                            AND-filter composes); source dropdown selection
+                            persists.
+                            D-03 PASS: user-selected "All" survived
+                            customize-dialog pref emissions (stayed checked,
+                            grid unchanged); fresh app start seeds default
+                            LATEST pref correctly (ListingSelected=false
+                            path).
+                            D-04 PARTIAL-PASS by constraint: all 5 enabled
+                            sources on this device support Latest (incl
+                            LocalSource — supportsLatest=true hardcoded
+                            LocalSource.kt:73), so negative path (switch to
+                            !supportsLatest source) NOT device-triggerable;
+                            positive path (Latest select+confirm for
+                            supporting source) PASS — Asura/Latest feed added
+                            via dialog during testing; confirm-guard logic
+                            code-verified. Negative path needs a source whose
+                            extension sets supportsLatest=false (none
+                            installed).
+                            D-01 PASS (functional path): Recent reselect →
+                            ReaderActivity opened (resume last-read works).
+                            Snackbar no_next_chapter path NOT device-verified
+                            (requires wiping reading history — user data,
+                            not acceptable); structural: resumeHostState now
+                            mounted in same Scaffold slot as the
+                            device-proven History-tab host.
+                            Side observations: stub/removed-source feeds
+                            (e.g. Comix w/o extension) render Error section
+                            with retry — pre-existing, out of Batch 1 scope;
+                            AddFeedDialog source rows are NOT disabled for
+                            sources with existing same-listing feed (dup
+                            add silently returns via addFeed guard).
+                            Test-bed cleanup done: device prefs restored to
+                            pre-test state (single Mangakakalot/LATEST feed,
+                            selected_source=null, default=LATEST).
+ Files safe to modify:       see handoff above (Batch 1 set only).
+ ```
+
+```text
+[COMPLETED 2026-09-09 — BATCH 4 (D-08 + D-11 + D-12), UNCOMMITTED]
+
+User-authorized Batch 4 per docs/ui-implementation-map.md §26 (approval
+gates §27 items 3+4 cleared by user task message).
+
+D-08 — Settings Search registration (SettingsSearchScreen.kt only):
+- getIndex() corpus extended with unindexedSettingScreens: plain Voyager
+  Screens registered as SYNTHETIC single-entry results (SettingsData with
+  one TextPreference: title = screen title, subtitle = search corpus only
+  — results render title + breadcrumb, never the subtitle). Both targets
+  keep their existing Screen objects + custom UI (zero conversion to
+  SearchableSettings, zero screen-UI change, zero navigation change):
+  SettingsOcrExclusionsScreen (title ocr_exclusions_screen_title, subtitle
+  ocr_exclusions_summary) + SettingsDictionaryScreen (title
+  pref_category_dictionaries, subtitle label_dictionary — singular
+  "dictionary" query coverage; plural title alone misses it, device-proven
+  during the pass). Selecting a result → navigator.replace(screen) — same
+  mechanism as every registered entry. highlightKey no-op on these targets
+  (they render no PreferenceScreen; stale key self-clears on next real
+  settings visit — benign, title collision impossible: neither title equals
+  any preference title).
+- Verified honest behavior kept: search "theme" still yields pref-level
+  "App theme / Appearance > Theme" — all 11 registered screens untouched.
+
+D-11 — MangaScreen missing/error state (3 files):
+- MangaScreenModel: sealed State gained Error(missing: Boolean). init's
+  inline load extracted to public load() (Error→Loading reset; retryable).
+  try/catch (CE rethrow) → publishError: SQLDelight awaitAsOne NPE =
+  "ResultSet returned no rows" = row absent → missing=true (honest
+  "manga no longer exists"); other exceptions → generic retryable error.
+  combine-subscription (manga+chapters flow) gained .catch (CE rethrow) →
+  failWithMissingMangaCheck — mid-session row deletion now transitions
+  Success→Error instead of killing the collector silently (previous
+  behavior: uncaught NPE death, zombie screen).
+- MangaScreen.kt: Error branch renders EmptyScreen (existing component —
+  same as Feed/Continue/GlobalSearch error+empty states) with
+  manga_screen_not_found (missing) or unknown_error (generic) + actions:
+  Retry (generic only; missing manga is not retryable) + Close
+  (navigator.pop). Loading/Success branches byte-identical.
+- DI cleanup: Injekt.get<SourceManager>() inline call in load() →
+  constructor-injected sourceManager (all other deps follow this pattern;
+  required for unit-testability).
+- i18n: +1 base key manga_screen_not_found ("This manga is no longer
+  available"). No locale hand-edits.
+
+D-12 — prd.md §1.4: stale 6-tab list (Library/History/Updates/Browse/
+Feed/More) → actual 5-tab IA (Library / Recent / Feed / Browse / More).
+Docs-only; map register rows D-08/D-11/D-12 + §2/§14.9/§26/§27 updated.
+
+TESTS: NEW MangaScreenModelErrorStateTest (app/src/test/.../ui/manga/)
+4 cases GREEN: missing-manga → Error(missing=true) NOT Loading; generic
+failure → Error(missing=false); retry from generic error recovers to
+Success; valid manga → Success (existing path unchanged). Test harness
+notes: screenModelScope runs on real Dispatchers.IO via launchIO → real-time
+polling helper (not virtual advanceUntilIdle); mocked Lifecycle
+(INITIALIZED, no Looper in JVM tests); LogcatLogger.install no-op logger
+(logcat-android calls android.util.Log → not mocked in unit tests).
+
+GATES GREEN 2026-09-09 (docker vsc-yomihon-e24e3bd…, JDK17, -Xmx4g, both
+volumes): :app:compileDebugKotlin + :app:compileDebugUnitTestKotlin
+SUCCESSFUL; :app:testDebugUnitTest --tests MangaScreenModelErrorStateTest
+4/4; spotlessApply (ktlint continuation reformat of new getIndex chain) →
+spotlessCheck + FULL testDebugUnitTest + verifySqlDelightMigration BUILD
+SUCCESSFUL 3m5s; :app:assembleDebug BUILD SUCCESSFUL 3m15s (then rebuild
+after subtitle fix 2m33s). NO DB/schema change.
+
+DEVICE VERIFIED 2026-09-10 (SM_M066B wireless ADB 192.168.29.98:44521,
+user-unlocked PIN; APK 0.5.2-826x arm64 debug installed in-place ×2
+( Success → first-pass APK, then rebuilt with Dictionary-subtitle fix);
+evidence /sdcard/batch4-verify.log 131k lines, 0 FATAL/AndroidRuntime):
+- D-08 PASS: "dictionary" (singular) → "Dictionaries" result → opens
+  SettingsDictionaryScreen (import/popup prefs/recommended cards render);
+  "dictionaries" → same; "exclusions" → "OCR exclusions" result → opens
+  SettingsOcrExclusionsScreen (user's real WORD/PHRASE/ZONE rules render,
+  read-only interaction); existing entries intact ("theme" → App theme /
+  Appearance > Theme).
+- D-11 Success-path PASS (regression): Library → "Villain To Kill" →
+  full MangaScreen (info header, description, 13+ chapter rows) unchanged.
+- D-11 missing-path: unit-test-verified only (4/4). Live device trigger
+  NOT possible without unsafe acts: cold-start after DB row deletion gives
+  no stale entry point (history/updates/tracks FK-cascade, browse/feed
+  re-create rows via NetworkToLocalManga); mid-session deletion requires
+  DB write while app running (no sqlite3 on device; push-swap only safe
+  with app dead — verified DB surgery itself works: pulled db via run-as
+  cat, deleted disposable browse row id=3 "Absolute Sword Sense" + its 200
+  chapter rows locally, pushed back, app relaunches clean, library intact).
+  Error-state UI uses the same EmptyScreen/ActionButton components already
+  device-proven in Feed error rows.
+- Smoke: Settings → Read aloud & voice screen loads fully (engine/lang/
+  voice pickers, calibration) — Settings nav regression clean.
+- Test-bed cleanup: deleted row was a browse-cache stub created by the
+  test itself (favorite=0, auto-recreated on next Asura visit — harmless);
+  no prefs touched; no user manga/history/categories modified.
+
+SCOPE INTEGRITY: zero OCR/TTS/Reader/Feed-listing/Recent/nav-architecture/
+dependency/unrelated-cleanup changes. Files changed (app source 3 + test 1
++ docs 3 + i18n 1): SettingsSearchScreen.kt, MangaScreenModel.kt,
+MangaScreen.kt, MangaScreenModelErrorStateTest.kt (new), prd.md,
+ui-implementation-map.md, memory.md, i18n base strings.xml.
+
+UNCOMMITTED — awaiting user review + commit.
+```
+
+```text
+[COMPLETED 2026-09-10 — UI AUDIT BATCH 5: device verification matrix,
+UNCOMMITTED (verification pass; 1 test-harness file changed, ZERO app
+source changes)]
+
+Full device matrix over the combined Batch 1–4 implementation, per
+docs/ui-implementation-map.md §26 Batch 5. APK 0.5.2-8264 arm64 debug
+(built this session from the uncommitted B1-4 tree), installed in-place
+on SM_M066B (wireless adb for most of the pass, then USB after wifi-adb
+port churn; same device, same install, no data loss). Session logcat:
+.device-pass/batch5-verify.log (65.7MB, 0 FATAL/AndroidRuntime app
+crashes; LeakCanary 0 APPLICATION LEAKS, only <5-threshold retained
+watch-noise). Screenshots: .device-pass/screenshots/batch5/ (12 PNGs).
+
+DEVICE MATRIX RESULTS (all device-verified unless noted):
+- Feed opens: PASS (AppBar + FilterBar + grid).
+- D-02 chips↔grid sync: PASS — Popular chip → Popular section only;
+  Latest → Latest only; All → all sections; source-chip (Asura) AND
+  listing compose (source+listing single section); All sources → all
+  4 sections (Asura P, Mangakakalot L/P, Atsumaru L visible by scroll).
+- Section order = pref_feed_items order: PASS (verified against pulled
+  pref JSON + sources table cross-ref; earlier "Mangakakalot first"
+  scare was D-03 design behavior — process death resets listingSelected
+  → default LATEST re-seeds → first visible = first LATEST feed. NOT a
+  defect. Explicit All re-tap restores exact pref order with Asura
+  Popular first.)
+- D-03 explicit All survives pref emissions: PASS — customize-sheet
+  source-selector toggle off→on (2 pref emits) while All selected:
+  chip stayed, grid unchanged. Persistence across force-stop: PASS
+  (All sources + grid restored).
+- D-04 invalid-Latest coercion: PARTIAL by constraint — all enabled
+  sources on device support Latest (incl LocalSource), negative path
+  not device-triggerable (same as Batch 1); confirm-guard code-verified.
+  Positive path (Add dialog select+confirm) PASS.
+- Paging/Load more: PASS — Asura Popular page-2 append verified (new
+  titles post-tap), footer button + section per-feed isolation intact.
+- Sections separation + FeedHeader rhythm: PASS (ListGroupHeader +
+  bodySmall listing label, no divider — D-05 stands; headers y-anchored,
+  content banded clean in dumps).
+- Manage Feeds: open PASS; reorder PASS (Move down + Move up, order
+  verified in both directions + persisted); enable-switch PASS (toggled
+  Asura feeds off → grid lost both Asura sections → toggled back →
+  restored; uiautomator does not expose Compose Switch checked state —
+  verified by grid effect, not attr); delete PASS (Batch 2 pass; not
+  re-run to avoid touching user feed config); add flow PASS (Batch 2;
+  skipped re-run same reason). NOTE: Atsumaru extension reappeared on
+  device mid-pass → its old feed re-enabled itself in the list (pref
+  rows persisted all along); user feed config unchanged net.
+- Stale-source fallback: code+unit verified (FeedScreenModelStateTest
+  stale-source fallback case); not device-exercised (would require
+  deleting a feed) — same as 09-07 pass.
+- Recent: opens PASS; Continue/History/Updates tab taps PASS; pager
+  swipe PASS (Updates→History LTR); hierarchy PASS (one "Recent" AppBar
+  title + 3-tab row, Continue = chips not headers); Continue rows PASS
+  (cover+title+unread plural+Resume 48dp, heightIn alignment consistent).
+- D-01 reselect→resume: PASS — Recent tab reselect opened ReaderActivity
+  (last-read resume worked). no_next_chapter snackbar path not
+  device-triggerable (requires wiping reading history = user data);
+  host-mount verified structurally (same Scaffold slot as the
+  device-proven History host).
+- Settings Search (D-08): PASS — "dictionary" → Dictionaries result →
+  opens SettingsDictionaryScreen (custom UI intact: popup style sliders
+  + recommended cards); "exclusions" → OCR exclusions result → opens
+  SettingsOcrExclusionsScreen (user's real WORD/ZONE rules render);
+  "theme" → App theme / Appearance > Theme intact; no duplicate/broken
+  results observed.
+- MangaScreen (D-11): Success-path regression PASS ×2 (Scandal Maker:
+  full info header + chapters list; Villain To Kill: info + In library
+  + chapter rows). Missing/deleted path: UNIT-VERIFIED ONLY
+  (MangaScreenModelErrorStateTest 4/4) — no safe live-DB trigger exists
+  (same conclusion as Batch 4); Error UI reuses EmptyScreen/ActionButton
+  (code-verified, same components as device-proven Feed error rows).
+- Typography/spacing/alignment: PASS via hierarchy dumps + screenshots —
+  grid geometry identical to Batch-3 pixel-band verdict (D-13 carry-
+  forward: 8dp edges + 4dp gutters both grids); 16dp screen inset on
+  rows/cards; grouped settings surfaces render (Settings root card
+  headers y-banded); section headers ListGroupHeader one rank below
+  screen titles; no nested headers under tab rows; documented exceptions
+  untouched.
+- Surfaces/frost: PASS — normal screens solid; grouped settings use
+  PreferenceGroupCard; reader chrome unchanged (screenshots captured,
+  no frost-on-frost, no new backdrop blur); AMOLED readable throughout
+  (device runs AMOLED theme).
+- Accessibility: spot-PASS — 48dp icon targets (uiautomator geometry),
+  icon-only actions content-described (Resume/Delete/Move up/down/
+  Manage sources/Add feed all carry descs), selected chip = tonal+text
+  not color-only, Switch has toggleable semantic + row-label context
+  (D-07 Batch 2 carry-forward). Large-text scale + full screen-reader
+  ordering NOT re-run this pass (time; no source changes since last
+  verified state).
+
+REGRESSION GATES (docker, JDK17, -Xmx4g, both volumes): spotlessCheck +
+  testDebugUnitTest + verifySqlDelightMigration + :app:assembleDebug
+  BUILD SUCCESSFUL 3m22s (after test-harness fix; pre-fix full-suite
+  failed 2× on the race described above).
+
+SOURCE CHANGES: ZERO app source. 1 test file changed:
+  app/src/test/java/eu/kanade/tachiyomi/ui/manga/
+  MangaScreenModelErrorStateTest.kt — @TestInstance(PER_CLASS) +
+  @BeforeAll/@AfterAll class-scoped Dispatchers.setMain/resetMain,
+  replacing per-test @BeforeEach/@AfterEach that raced the model's
+  IO-worker repeatOnLifecycle against resetMain (Voyager screenModelScope
+  cached process-globally in JVM tests — cannot cancel per-test). This
+  was a gate-blocking defect found BY the Batch 5 gate re-run: batch 4
+  recorded "4/4 green" from an isolated/filtered run; full-suite runs
+  fail deterministically (2/2). Fix is the minimal correct one.
+
+INCIDENTS (test-harness, not app): stray Filter-sheet taps left Library
+  TriState filters in include/exclude states → grid empty; restored via
+  pref surgery (sed on pulled prefs XML, run-as push, 6 filter keys →
+  DISABLED) + user finished reset via UI. No app data lost; user
+  confirmed manga visible after.
+
+OPEN ITEMS (unchanged, NOT turned into work): D-09/D-14/D-15 INFO;
+  "Create" tab ambiguity; FeedFilterBar arrow content-desc; FeedHeader
+  label-vs-combined-header; TtsPlaybackBar bodyMedium-vs-bodyLarge +
+  16/4-vs-24/12 doc conflict (recorded, user decision).
+
+VERDICT: PASS. Batches 1–4 device-conform. Ready for user diff review +
+commit.
+```
+
+(Date/Task-completed lines 3186-3188 onward below are the SUPERSEDED
+stabilization handoff record — kept as history; the block above is current.)
+```text
+[Superseded 2026-09-08 handoff — stabilization master task record]
 Date:                       2026-09-08
 Task completed:             B1: LEGACY OCR engine removed (LegacyOcrEngine.kt
                             + Vocab.kt 6149 lines deleted; assets/ocr/ 133.4MB

@@ -692,6 +692,7 @@
     <!-- Library -->
     <string name="updating_category">Updating category</string>
     <string name="manga_from_library">From library</string>
+    <string name="manga_screen_not_found">This manga is no longer available</string>
     <string name="downloaded_chapters">Downloaded chapters</string>
     <!-- For badges/buttons on library covers. -->
     <string name="overlay_header">Overlay</string>

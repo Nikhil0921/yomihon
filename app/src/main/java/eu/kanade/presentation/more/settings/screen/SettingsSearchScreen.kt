@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import dev.icerock.moko.resources.StringResource
 import eu.kanade.presentation.components.UpIcon
 import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.presentation.util.Screen
@@ -269,7 +270,41 @@ private fun getIndex() = settingScreens
             route = screen,
             contents = screen.getPreferences(),
         )
-    }
+    } + unindexedSettingScreens.map { entry ->
+    // Plain Voyager screens (not SearchableSettings) registered as
+    // single-entry results so they remain discoverable from search.
+    SettingsData(
+        title = stringResource(entry.titleRes),
+        route = entry.screen,
+        contents = listOf(
+            Preference.PreferenceItem.TextPreference(
+                title = stringResource(entry.titleRes),
+                subtitle = entry.subtitleRes?.let { stringResource(it) },
+            ),
+        ),
+    )
+}
+
+private val unindexedSettingScreens = listOf(
+    UnindexedSettingScreen(
+        screen = SettingsOcrExclusionsScreen,
+        titleRes = MR.strings.ocr_exclusions_screen_title,
+        subtitleRes = MR.strings.ocr_exclusions_summary,
+    ),
+    UnindexedSettingScreen(
+        screen = SettingsDictionaryScreen,
+        titleRes = MR.strings.pref_category_dictionaries,
+        // Subtitle is search corpus only (results show title + breadcrumb);
+        // covers the singular "dictionary" query the plural title misses.
+        subtitleRes = MR.strings.label_dictionary,
+    ),
+)
+
+private data class UnindexedSettingScreen(
+    val screen: VoyagerScreen,
+    val titleRes: StringResource,
+    val subtitleRes: StringResource?,
+)
 
 private fun getLocalizedBreadcrumb(path: String, node: String?, isLtr: Boolean): String {
     return if (node == null) {

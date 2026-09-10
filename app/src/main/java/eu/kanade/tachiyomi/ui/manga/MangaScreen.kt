@@ -4,6 +4,9 @@ import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -62,6 +65,10 @@ import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.screens.EmptyScreen
+import tachiyomi.presentation.core.screens.EmptyScreenAction
 import tachiyomi.presentation.core.screens.LoadingScreen
 
 class MangaScreen(
@@ -93,6 +100,34 @@ class MangaScreen(
 
         if (state is MangaScreenModel.State.Loading) {
             LoadingScreen()
+            return
+        }
+
+        if (state is MangaScreenModel.State.Error) {
+            val error = state as MangaScreenModel.State.Error
+            EmptyScreen(
+                message = stringResource(
+                    if (error.missing) MR.strings.manga_screen_not_found else MR.strings.unknown_error,
+                ),
+                actions = buildList {
+                    if (!error.missing) {
+                        add(
+                            EmptyScreenAction(
+                                stringRes = MR.strings.action_retry,
+                                icon = Icons.Outlined.Refresh,
+                                onClick = screenModel::load,
+                            ),
+                        )
+                    }
+                    add(
+                        EmptyScreenAction(
+                            stringRes = MR.strings.action_close,
+                            icon = Icons.AutoMirrored.Outlined.ArrowBack,
+                            onClick = navigator::pop,
+                        ),
+                    )
+                },
+            )
             return
         }
 

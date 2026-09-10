@@ -118,6 +118,7 @@ class MangaScreenModel(
     private val getCachedChapterIdsOcr: GetCachedChapterIdsOcr = Injekt.get(),
     private val ocrScanManager: OcrScanManager = Injekt.get(),
     private val updateMangaFromRemote: UpdateMangaFromRemote = Injekt.get(),
+    private val sourceManager: SourceManager = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<MangaScreenModel.State>(State.Loading) {
 
@@ -159,6 +160,7 @@ class MangaScreenModel(
             when (it) {
                 State.Loading -> it
                 is State.Success -> func(it)
+                is State.Error -> it
             }
         }
     }
@@ -171,6 +173,11 @@ class MangaScreenModel(
                 downloadManager.queueState,
             ) { mangaAndChapters, _, _ -> mangaAndChapters }
                 .flowWithLifecycle(lifecycle)
+                .catch { error ->
+                    // Manga row disappearing mid-session kills this flow's query
+                    if (error is CancellationException) throw error
+                    failWithMissingMangaCheck(error)
+                }
                 .collectLatest { (manga, chapters) ->
                     updateSuccessState {
                         it.copy(
@@ -206,48 +213,83 @@ class MangaScreenModel(
         observeDownloads()
         observeScanCache()
 
+        load()
+    }
+
+    /**
+     * Loads the manga and chapters, publishing [State.Success] or an honest
+     * [State.Error] (missing manga vs generic failure). Retriable.
+     */
+    fun load() {
+        mutableState.update { if (it is State.Error) State.Loading else it }
         screenModelScope.launchIO {
-            val manga = getMangaAndChapters.awaitManga(mangaId)
-            val chapters = getMangaAndChapters.awaitChapters(mangaId, applyScanlatorFilter = true)
-                .toChapterListItems(manga)
+            try {
+                val manga = getMangaAndChapters.awaitManga(mangaId)
+                val chapters = getMangaAndChapters.awaitChapters(mangaId, applyScanlatorFilter = true)
+                    .toChapterListItems(manga)
 
-            if (!manga.favorite) {
-                setMangaDefaultChapterFlags.await(manga)
+                if (!manga.favorite) {
+                    setMangaDefaultChapterFlags.await(manga)
+                }
+
+                val needRefreshInfo = !manga.initialized
+                val needRefreshChapter = chapters.isEmpty()
+
+                // Show what we have earlier
+                mutableState.update {
+                    State.Success(
+                        manga = manga,
+                        source = sourceManager.getOrStub(manga.source),
+                        isFromSource = isFromSource,
+                        chapters = chapters,
+                        availableScanlators = getAvailableScanlators.await(mangaId),
+                        excludedScanlators = getExcludedScanlators.await(mangaId),
+                        isRefreshingData = needRefreshInfo || needRefreshChapter,
+                        dialog = null,
+                        hideMissingChapters = libraryPreferences.hideMissingChapters.get(),
+                    )
+                }
+
+                // Start observe tracking since it only needs mangaId
+                observeTrackers()
+
+                // Fetch info-chapters when needed
+                if ((needRefreshInfo || needRefreshChapter) && screenModelScope.isActive) {
+                    fetchAllFromSource(
+                        manualFetch = false,
+                        fetchDetails = needRefreshInfo,
+                        fetchChapters = needRefreshChapter,
+                    )
+                }
+
+                // Initial loading finished
+                updateSuccessState { it.copy(isRefreshingData = false) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR, e) { "Manga $mangaId failed to load" }
+                publishError(e)
             }
-
-            val needRefreshInfo = !manga.initialized
-            val needRefreshChapter = chapters.isEmpty()
-
-            // Show what we have earlier
-            mutableState.update {
-                State.Success(
-                    manga = manga,
-                    source = Injekt.get<SourceManager>().getOrStub(manga.source),
-                    isFromSource = isFromSource,
-                    chapters = chapters,
-                    availableScanlators = getAvailableScanlators.await(mangaId),
-                    excludedScanlators = getExcludedScanlators.await(mangaId),
-                    isRefreshingData = needRefreshInfo || needRefreshChapter,
-                    dialog = null,
-                    hideMissingChapters = libraryPreferences.hideMissingChapters.get(),
-                )
-            }
-
-            // Start observe tracking since it only needs mangaId
-            observeTrackers()
-
-            // Fetch info-chapters when needed
-            if ((needRefreshInfo || needRefreshChapter) && screenModelScope.isActive) {
-                fetchAllFromSource(
-                    manualFetch = false,
-                    fetchDetails = needRefreshInfo,
-                    fetchChapters = needRefreshChapter,
-                )
-            }
-
-            // Initial loading finished
-            updateSuccessState { it.copy(isRefreshingData = false) }
         }
+    }
+
+    /**
+     * SQLDelight's awaitAsOne signals "row absent" with NPE; anything else is
+     * a real load failure. Keeps the error state truthful: deleted/unknown
+     * manga is not presented as a network error.
+     */
+    private fun publishError(e: Exception) {
+        mutableState.update { currentState ->
+            when (currentState) {
+                is State.Success -> currentState // already showing data
+                else -> State.Error(missing = e is NullPointerException)
+            }
+        }
+    }
+
+    private suspend fun failWithMissingMangaCheck(e: Throwable) {
+        logcat(LogPriority.ERROR, e) { "Manga $mangaId subscription failed" }
+        mutableState.value = State.Error(missing = e is NullPointerException)
     }
 
     fun fetchAllFromSource(manualFetch: Boolean = true) {
@@ -1137,6 +1179,10 @@ class MangaScreenModel(
     sealed interface State {
         @Immutable
         data object Loading : State
+
+        /** The manga could not be shown: [missing] = it no longer exists. */
+        @Immutable
+        data class Error(val missing: Boolean) : State
 
         @Immutable
         data class Success(

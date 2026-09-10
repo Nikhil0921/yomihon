@@ -1,1007 +1,1215 @@
-# YOMITSU / YOMIHON UI MODERNIZATION
-## DESIGN AUDIT → DESIGN PLAN → USER APPROVAL → IMPLEMENTATION WORKFLOW
+# YOMITSU — COMPLETE UI AUDIT, DESIGN MAPPING & IMPLEMENTATION BLUEPRINT
 
-You are responsible for planning and, ONLY AFTER USER APPROVAL, implementing a complete frontend UI/UX modernization for the Yomitsu application.
+## ROLE
 
-This is a STRICTLY CONTROLLED DESIGN TASK.
+You are acting as a senior Android UI/UX architect, product designer,
+information-architecture specialist, and implementation-planning engineer.
 
-The application already has an established identity, architecture, navigation structure, Material 3 design system, themes, screenshots, and existing UI components.
+You are NOT being asked to immediately redesign or implement the UI.
 
-Your job is NOT to redesign the application from scratch.
+Your first responsibility is to fully understand the CURRENT Yomitsu
+application, audit it, map it, identify inconsistencies, and produce an
+implementation-grade UI design blueprint.
 
-Your job is to modernize the existing application while preserving its identity, functionality, structure, and core navigation logic.
+The purpose of this task is to prevent speculative UI implementation,
+incorrect feature placement, inconsistent typography/spacing, accidental
+architecture changes, and another UI regression cycle.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-## 🚨 ABSOLUTE RESTRICTION: DO NOT MODIFY CODE INITIALLY
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DO NOT start by implementing glassmorphism, blur, new cards, new navigation,
+new settings groups, or any other visual feature.
 
-During the FIRST PHASE, you MUST NOT modify any application code.
+FIRST AUDIT.
+THEN MAP.
+THEN DESIGN.
+THEN SPECIFY IMPLEMENTATION.
+IMPLEMENTATION HAPPENS ONLY AFTER THE BLUEPRINT IS REVIEWED/APPROVED.
 
-DO NOT:
+---
 
-- Edit Kotlin files
-- Edit Java files
-- Edit business logic
-- Edit repositories
-- Edit ViewModels
-- Edit domain logic
-- Edit OCR logic
-- Edit TTS logic
-- Edit database code
-- Edit networking
-- Edit dependency injection
-- Edit Gradle configuration
-- Add dependencies
-- Remove dependencies
-- Change backend functionality
-- Change APIs
-- Change data models
-- Change application behavior
-- Change feature logic
-- Change reader functionality
-- Change settings functionality
+# 1. REQUIRED DOCUMENTATION CONTEXT
 
-The first phase is ANALYSIS AND DESIGN PLANNING ONLY.
+Before doing anything else, read the following documents completely:
 
-You must first inspect the repository and create a complete modernization proposal.
-
-NO IMPLEMENTATION UNTIL THE USER EXPLICITLY APPROVES THE PLAN.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# PRIMARY OBJECTIVE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Modernize the UI of Yomitsu while preserving the application's actual layout and identity.
-
-The current application should NOT become:
-
-❌ Cyberpunk
-❌ Neon
-❌ Futuristic sci-fi
-❌ Glassmorphism-heavy
-❌ Over-animated
-❌ Overly rounded everywhere
-❌ Gradient-heavy
-❌ Dashboard-like
-❌ Visually noisy
-❌ Complicated
-❌ A completely different manga application
-
-Instead, create:
-
-✓ Modern
-✓ Minimal
-✓ Structured
-✓ Clean
-✓ Premium
-✓ Calm
-✓ Content-focused
-✓ Properly aligned
-✓ Visually hierarchical
-✓ Consistent
-✓ Easy to navigate
-✓ Native-feeling
-✓ Material 3 compatible
-
-The goal is:
-
-"THE SAME APPLICATION, BUT WITH A MUCH MORE REFINED AND STRUCTURED VISUAL SYSTEM."
-
-Do not destroy recognizability.
-
-A user familiar with the current application should immediately understand that this is the same application.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# EXISTING DESIGN SYSTEM MUST BE RESPECTED
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Before planning anything, inspect:
-
-- docs/design.md
-- docs/rules.md
+- docs/prd.md
 - docs/architecture.md
-- relevant theme files
-- Material theme implementation
-- shared presentation-core components
-- existing navigation implementation
-- screenshots/reference images provided by the user
+- docs/rules.md
+- docs/phase.md
+- docs/design.md
+- docs/design-audit.md
+- docs/memory.md
+- docs/branding.md, if present
 
-The existing design system is based around Material 3 and existing theme tokens.
+Also inspect the relevant source code, shared presentation components,
+theme implementation, settings infrastructure, navigation implementation,
+reader UI, Feed UI, Recent UI, More UI, and all currently relevant
+screens.
 
-DO NOT invent a separate visual system unless absolutely necessary.
+Treat these documents as the existing source of truth.
 
-Preserve:
+Do not silently replace documented project decisions with generic Android
+or Material recommendations.
 
-- Material 3 compatibility
-- Dynamic color support
-- Light mode
-- Dark mode
-- AMOLED support
-- Existing color schemes
-- Theme adaptability
-- Existing typography system
-- Existing accessibility principles
-- Existing shared components where possible
+If a conflict exists between documents and actual source code:
 
-Do not hard-code random colors.
+1. Identify the conflict.
+2. Record it explicitly.
+3. Determine whether the source or documentation represents the current
+   implementation.
+4. Do NOT silently modify either one during the audit.
+5. Record the required resolution in the audit/map.
 
-Use the application's existing color system and semantic theme tokens.
+---
 
-The modernization should work consistently across:
+# 2. PRIMARY OBJECTIVE
 
-- Default themes
-- Dynamic colors
-- Dark mode
-- Light mode
-- AMOLED
-- Existing selectable color schemes
+Create a complete, implementation-grade UI/UX map of the CURRENT Yomitsu
+application and the APPROVED FUTURE UI.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# DESIGN PROBLEM TO SOLVE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+The result must function like a professional designer-to-developer handoff.
 
-The current UI visually feels too flat in several areas.
+Think of this as:
 
-The modernization should improve:
+DESIGN SYSTEM
++
+SCREEN INVENTORY
++
+FIGMA-STYLE SCREEN SPECIFICATION
++
+INFORMATION ARCHITECTURE
++
+COMPONENT MAP
++
+FEATURE LOCATION MAP
++
+RESPONSIVE SPECIFICATION
++
+IMPLEMENTATION CONTRACT
++
+REGRESSION SAFETY PLAN
 
-1. Visual hierarchy
-2. Structural grouping
-3. Alignment
-4. Spacing consistency
-5. Navigation clarity
-6. Content organization
-7. Screen composition
-8. Surface hierarchy
-9. Interaction discoverability
-10. Empty-state presentation
-11. List organization
-12. Settings organization
+The final documentation must make it possible for another agent to
+implement the approved design without having to guess:
 
-IMPORTANT:
+- where something belongs
+- what component should be used
+- what surface it belongs to
+- what typography role it uses
+- how much spacing it requires
+- whether it should be grouped
+- whether it should be frosted
+- whether it should remain solid
+- how it behaves on phone/tablet/landscape
+- what existing component should be reused
+- what source file owns the UI
+- what business logic must remain untouched
 
-Do NOT solve "flatness" by adding excessive cards everywhere.
+---
 
-Do NOT put every component inside a floating container.
+# 3. ABSOLUTE PROCESS RULE
 
-The goal is controlled hierarchy.
+DO NOT IMPLEMENT THE REDESIGN DURING THE AUDIT.
 
-Use surfaces only where they create meaningful separation.
+The first pass is READ-ONLY.
 
-Think in terms of:
+Do not modify application source files while building the map.
 
-BACKGROUND
-    ↓
-PRIMARY CONTENT SURFACE
-    ↓
-GROUPED CONTENT
-    ↓
-INTERACTIVE ELEMENTS
-    ↓
-PRIMARY ACTION / FOCAL POINT
+Do not "fix something quickly" because it appears obvious.
 
-The user should visually understand the structure of a screen without excessive borders.
+Do not refactor unrelated code.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# CORE VISUAL DIRECTION
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Do not create speculative UI components.
 
-Create a design language that can be described as:
+Do not introduce a new design system.
 
-"STRUCTURED MINIMALISM"
+Do not replace existing Material 3 components without documenting why.
 
-Characteristics:
+Do not assume that a previous device verification means the current
+behavior is correct.
 
-- Calm backgrounds
-- Clear content zones
-- Strong spacing discipline
-- Subtle surface elevation
-- Consistent alignment
-- Minimal decoration
-- Purposeful rounded shapes
-- Clear section hierarchy
-- Strong typography hierarchy
-- Comfortable density
-- Minimal visual noise
+The current source code and current behavior must be rechecked.
 
-Avoid:
+---
 
-- Excessive shadows
-- Glowing borders
-- Neon colors
-- Animated backgrounds
-- Heavy gradients
-- Glassmorphism
-- Random decorative lines
-- Too many cards
-- Excessive pill components
-- Huge corner radii everywhere
+# 4. AUDIT THE ENTIRE CURRENT UI
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# PRESERVE THE ACTUAL APPLICATION STRUCTURE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Build a complete screen inventory.
 
-You MUST inspect the actual existing screens before proposing changes.
+At minimum inspect:
 
-Do NOT invent generic screens.
-
-Preserve the real structure of the application.
-
-Audit all major areas, including wherever they exist:
+## Primary navigation
 
 - Library
-- Manga/series browsing
-- Sources
-- Browse/discovery
-- Updates/feed
-- History
-- Search
-- Categories
-- Settings
-- Reader
-- Reader settings
-- OCR interfaces
-- Read Aloud/TTS interfaces
-- Dialogs
-- Bottom sheets
-- Navigation components
-- Context menus
-- Empty states
-- Loading states
-- Error states
-
-The existing functionality and information architecture must remain recognizable.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# NAVIGATION MODERNIZATION
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Analyze the existing navigation carefully.
-
-The user wants a more modern way to navigate the application, but the navigation must NOT become confusing.
-
-First determine:
-
-- What navigation currently exists
-- Which navigation patterns are redundant
-- Which actions are difficult to discover
-- Which screens require faster access
-- Which navigation elements are overloaded
-
-Then propose improvements.
-
-Possible improvements may include:
-
-- Better bottom navigation hierarchy
-- Clearer active state
-- Better separation between primary and secondary navigation
-- Contextual navigation where appropriate
-- Improved top app bar organization
-- Better use of overflow menus
-- Improved screen transitions
-- More logical grouping of secondary destinations
-
-BUT:
-
-DO NOT merge major sections blindly.
-
-DO NOT create a browser/feed hybrid unless the existing information architecture clearly benefits from it.
-
-DO NOT remove functionality merely to make the UI look cleaner.
-
-DO NOT hide important features behind multiple layers of navigation.
-
-The navigation should feel:
-
-Simple → Predictable → Fast → Contextual
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# OVERLAY AND LAYERING SYSTEM
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-This is extremely important.
-
-ALL overlays must be audited.
-
-The application currently contains or may contain:
-
-- Bottom sheets
-- Dialogs
-- Floating controls
-- Reader overlays
-- Playback controls
-- OCR controls
-- Menus
-- Snackbars
-- Loading indicators
-- Navigation bars
-
-You MUST establish a clear layering and safe-area system.
-
-STRICT RULE:
-
-NO OVERLAY MAY ACCIDENTALLY COVER OR BLOCK ANOTHER IMPORTANT ICON OR CONTROL.
-
-Examples:
-
-❌ Floating playback control covering reader controls
-❌ Bottom overlay covering bottom navigation actions
-❌ Dialog content hiding important buttons
-❌ Floating action overlapping navigation icons
-❌ Snackbar covering critical interaction controls
-❌ OCR controls colliding with TTS controls
-
-Every overlay must have:
-
-1. Defined z-order
-2. Defined anchor
-3. Defined safe area
-4. Collision behavior
-5. Priority behavior
-
-Create an explicit overlay hierarchy such as:
-
-Layer 1:
-Base application content
-
-Layer 2:
-Persistent navigation
-
-Layer 3:
-Contextual screen controls
-
-Layer 4:
-Temporary interactive surfaces
-
-Layer 5:
-Bottom sheets/dialogs
-
-Layer 6:
-Critical system feedback
-
-The actual hierarchy should be determined from the codebase.
-
-For the Reader especially:
-
-- Reader content remains the hero
-- Overlays must remain unobtrusive
-- Controls must not collide
-- Floating surfaces must respect safe insets
-- Multiple active overlays must stack intelligently
-- Auto-hide behavior must remain understandable
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# SCREEN STRUCTURE SYSTEM
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-For every major screen, establish a consistent structure.
-
-Recommended analysis structure:
-
-1. Screen identity
-2. Primary purpose
-3. Primary focal content
-4. Secondary content
-5. Navigation
-6. Actions
-7. Information hierarchy
-8. Surface hierarchy
-9. Empty state
-10. Loading state
-11. Error state
-
-Each screen should have a clear visual composition.
-
-Example conceptual structure:
-
-TOP AREA
-- Screen title
-- Contextual actions
-
-↓
-
-PRIMARY CONTENT AREA
-- Main content
-- Primary information
-
-↓
-
-SECONDARY GROUPS
-- Related filters
-- Categories
-- Supporting information
-
-↓
-
-PERSISTENT NAVIGATION
-- Clearly separated from content
-- Does not visually compete with content
-
-Do not mechanically apply this structure.
-
-Adapt it to each actual screen.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# LIBRARY DESIGN MODERNIZATION
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Audit the actual Library screen.
-
-Preserve its current functionality and content structure.
-
-Improve:
-
-- Header hierarchy
-- Category/filter discoverability
-- Grid/list alignment
-- Cover spacing
-- Metadata hierarchy
-- Empty state
-- Sorting/filter controls
-- Search access
-- Section separation
-
-The manga covers should remain visually important.
-
-Do not bury manga covers inside excessive cards.
-
-The content itself should provide visual richness.
-
-The UI chrome should support the content, not compete with it.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# BROWSE / SOURCE / DISCOVERY DESIGN
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Audit these screens individually.
-
-DO NOT automatically combine them.
-
-If the user has separate Browser, Source, and Feed structures, preserve that distinction unless there is a strong usability reason not to.
-
-Improve:
-
-- Source discovery
-- Search hierarchy
-- Filtering
-- List structure
-- Section grouping
-- Result presentation
-- Empty/loading/error states
-
-Use clear hierarchy rather than excessive containers.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# FEED / UPDATES DESIGN
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Modernize feed/update presentation without turning it into a social media interface.
-
-The feed should prioritize:
-
-- Readability
-- Chronological clarity
-- Manga identity
-- Chapter/update information
-- Quick actions
-
-Use subtle grouping where appropriate.
-
-Avoid excessive visual clutter.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# SETTINGS MODERNIZATION
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-The Settings area should become significantly more structured.
-
-The existing settings should remain accessible.
-
-Improve:
-
-- Category grouping
-- Section hierarchy
-- Descriptions
-- Visual scanning
-- Search discoverability
-- Advanced settings separation
-
-Recommended conceptual hierarchy:
-
-APPLICATION
-    General
-    Appearance
-    Navigation
-
-READING
-    Reader
-    Display
-    Behavior
-
-INTELLIGENCE
-    Text Recognition
-    OCR Models
-    Exclusions
-
-AUDIO
-    Read Aloud
-    Voice
-    Playback
-
-DATA
-    Library
-    Backup
-    Storage
-
-ABOUT
-    Application
-    Version
-    Licenses
-
-This is only a conceptual example.
-
-You MUST derive the final structure from the actual application.
-
-Do not change functionality without approval.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# TEXT RECOGNITION SETTINGS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-The Text Recognition area must receive special attention.
-
-The existing options and models must remain functionally unchanged.
-
-Organize them visually so the user can clearly understand:
-
-- What each OCR model is
-- Which model is selected
-- What its purpose is
-- Advanced options
-- Exclusion rules
-- Related controls
-
-Do NOT change OCR implementation.
-
-Do NOT change model behavior.
-
-This is a presentation and UX organization task only.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# READER DESIGN
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-The Reader is content-first.
-
-The manga/manhua/webtoon page must remain the hero.
-
-Do NOT add permanent visual chrome that distracts from reading.
-
-Improve only:
-
-- Control organization
-- Overlay positioning
-- Visual consistency
-- Safe overlay stacking
-- Control discoverability
-- Settings access
-
-Preserve the established overlay-based nature of the reader.
-
-The reader should feel:
-
-Invisible when reading
-Clear when interacting
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# READ ALOUD / TTS UI
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Respect the existing Read Aloud design specification.
-
-Do not redesign TTS into an unrelated component system.
-
-Maintain consistency with:
-
-- Existing Material 3 system
-- Floating controls
-- Reader overlay behavior
-- Existing settings components
-
-Improve visual integration only where necessary.
-
-The TTS controls must never:
-
-- Cover critical reader controls
-- Cover navigation
-- Create overlapping interaction zones
-- Consume excessive reading space
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# TYPOGRAPHY
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Do not introduce random fonts.
-
-Preserve the existing typography system.
-
-Improve hierarchy through:
-
-- Title sizing
-- Weight
-- Spacing
-- Section labels
-- Metadata contrast
-- Supporting text
-
-Typography should create structure.
-
-Do not rely only on borders and cards.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# SPACING AND ALIGNMENT SYSTEM
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Perform a complete spacing audit.
-
-Identify inconsistent:
-
-- Horizontal padding
-- Vertical spacing
-- Icon alignment
-- Text alignment
-- Card/list spacing
-- Section spacing
-- Grid gaps
-- Bottom navigation clearance
-
-Create a consistent spacing strategy based primarily on existing application conventions.
-
-Do not introduce arbitrary spacing values everywhere.
-
-Every screen should feel aligned to the same invisible grid.
-
-The UI should feel intentional.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# COMPONENT CONSISTENCY AUDIT
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Audit repeated components.
-
-Identify inconsistencies in:
-
-- Buttons
-- Icon buttons
-- Search fields
-- Cards
-- List rows
-- Switches
-- Sliders
-- Menus
-- Bottom sheets
-- Dialogs
-- Empty states
-- Loading indicators
-
-Propose a unified design approach.
-
-Prefer improving or reusing existing shared components.
-
-Do NOT create dozens of new custom components unless necessary.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# ACCESSIBILITY
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Every modernization decision must preserve or improve accessibility.
+- Recent
+- Feed
+- Browse
+- More
+
+Also inspect:
+
+- bottom navigation
+- selected/unselected states
+- labels
+- icons
+- badges
+- reselect behavior
+- navigation transitions
+- navigation spacing
+- navigation inset handling
+
+Do not assume the current five-tab implementation is visually perfect
+just because the information architecture is intentional.
+
+---
+
+# 5. RECENT SCREEN AUDIT
+
+The Recent screen requires special attention because it was introduced
+and modified recently.
 
 Audit:
 
-- Touch target sizes
-- Contrast
-- Text scaling
-- Screen reader labels
-- Icon-only actions
-- State communication
-- Light/dark compatibility
+- Recent AppBar
+- Continue tab
+- History tab
+- Updates tab
+- PrimaryTabRow
+- selected indicator
+- tab typography
+- tab horizontal spacing
+- tab height
+- tab baseline alignment
+- top inset
+- distance between AppBar and tabs
+- distance between tabs and content
+- empty states
+- filters
+- row spacing
+- history rows
+- update rows
+- badges
+- swipe behavior
+- tab-tap behavior
+- title duplication
+- nested headers
 
-Never communicate important state using color alone.
+IMPORTANT:
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# MOTION
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+There have already been previous fixes for Recent layout overlap and
+tab positioning.
 
-Keep motion subtle.
+Do not assume those fixes guarantee perfect visual consistency.
 
-Use motion only to communicate:
+Re-audit the current implementation.
 
-- Navigation
-- Hierarchy
-- Appearance/disappearance
-- Expansion/collapse
-- State changes
+Also investigate the user's reported problem with the recently introduced
+tab/screen surfaces.
 
-Avoid:
+If the user-referred "Create" tab/screen exists in the current source,
+identify it precisely and include it in the audit.
 
-- Excessive animations
-- Continuous animations
-- Decorative animations
-- Futuristic effects
-- Bouncy exaggerated transitions
+If no such destination exists, do not invent one. Record that the user's
+reference could correspond to another recently-created screen.
 
-The application should feel refined, not animated for entertainment.
+---
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# DESIGN AUDIT PROCESS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 6. TYPOGRAPHY AUDIT
 
-PHASE 1 — REPOSITORY AUDIT
+This is a REQUIRED audit category.
 
-Before proposing implementation:
+Do not only inspect colors and cards.
 
-1. Read all relevant design documentation
-2. Inspect theme architecture
-3. Inspect navigation architecture
-4. Inspect shared UI components
-5. Inspect all major screens
-6. Inspect screenshots/reference images
-7. Identify current visual problems
-8. Identify inconsistencies
-9. Identify navigation problems
-10. Identify overlay collisions
-11. Identify opportunities for modernization
+Audit every important screen for typography consistency.
 
-DO NOT MODIFY CODE.
+For each text element determine:
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# REQUIRED OUTPUT: DESIGN AUDIT REPORT
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- actual typography role
+- intended typography role
+- font family
+- font size
+- font weight
+- line height
+- letter spacing if explicitly configured
+- max lines
+- ellipsis behavior
+- baseline alignment
+- text-to-icon alignment
+- title/subtitle hierarchy
+- section-header hierarchy
+- caption/meta hierarchy
 
-After the audit, provide the user with a detailed report.
+Look specifically for:
 
-The report must include:
+- hard-coded sp values
+- unnecessary custom TextStyle values
+- inconsistent Material typography roles
+- inconsistent line spacing
+- text appearing too compressed
+- text appearing too loose
+- different screens using different title sizes for equivalent roles
+- section headers with inconsistent size/weight
+- supporting text using the wrong hierarchy
+- metadata that is visually stronger than primary content
+- text that wraps differently because of inconsistent width constraints
 
-## 1. Current UI Analysis
+Do NOT change typography during the audit.
 
-Explain:
+Record the discrepancy.
 
-- Current design strengths
-- Current design weaknesses
-- Flatness problems
-- Hierarchy problems
-- Alignment problems
-- Navigation problems
-- Component inconsistencies
+Every typography discrepancy must be classified:
 
-## 2. Existing Design System
+- PASS
+- MINOR
+- MEDIUM
+- MAJOR
 
-Explain:
+---
 
-- Current theme system
-- Existing Material system
-- Shared components
-- Color behavior
+# 7. SPACING AUDIT
+
+Perform a systematic spacing audit.
+
+Inspect:
+
+- screen horizontal margins
+- screen vertical padding
+- AppBar-to-content spacing
+- section-to-section spacing
+- card-to-card spacing
+- row padding
+- icon-to-text spacing
+- text-to-text spacing
+- chip spacing
+- tab spacing
+- bottom-navigation inset
+- dialog spacing
+- sheet spacing
+- reader overlay spacing
+- list item height
+- grid gutters
+- content-to-edge spacing
+
+Use the existing design system as the baseline.
+
+Do NOT invent a second spacing system.
+
+Check whether the current implementation consistently follows the existing
+documented metrics.
+
+Look especially for:
+
+- 8dp in one place and 12dp in an equivalent place
+- 12dp versus 16dp inconsistencies
+- unequal left/right margins
+- visually uneven vertical rhythm
+- content touching card edges
+- unnecessary nested padding
+- double padding
+- missing padding
+- inconsistent group gaps
+- inconsistent chip gaps
+- inconsistent indentation
+
+---
+
+# 8. INDENTATION AND ALIGNMENT AUDIT
+
+Audit visual alignment independently from spacing.
+
+Check:
+
+- left edges of section titles
+- left edges of rows
+- icon alignment
+- title alignment
+- subtitle alignment
+- trailing control alignment
+- switch alignment
+- checkbox alignment
+- slider alignment
+- chip alignment
+- card content alignment
+- nested setting indentation
+- dialog content alignment
+- AppBar action alignment
+- bottom navigation alignment
+
+Equivalent components should share equivalent alignment.
+
+If two visually equivalent rows begin at different horizontal positions,
+record it.
+
+If an icon and its text are not vertically centered, record it.
+
+If a section header does not align with the content below it, record it.
+
+---
+
+# 9. HEADER AUDIT
+
+Audit every major screen and destination.
+
+For every screen determine:
+
+- Does it need an AppBar?
+- Does it currently have one?
+- Is the title duplicated elsewhere?
+- Is the title missing?
+- Is the title using the correct typography role?
+- Are actions correctly placed?
+- Are actions discoverable?
+- Is there unnecessary nested AppBar/header content?
+- Is there an internal section header where an AppBar title should be used?
+- Is there an AppBar where the screen architecture requires a nested
+  destination title?
+
+Do not normalize all screens into one generic header.
+
+Document the correct header pattern for each screen.
+
+---
+
+# 10. FEED AUDIT
+
+The Feed screen requires BOTH a visual audit and a behavioral audit.
+
+Current conceptual model includes:
+
+- source selector
+- listing selector
+- All
+- Popular
+- Latest
+- feed sections
+- grid
+- customization
+- feed management
+- pagination
+
+Audit all of these.
+
+## Source selector
+
+Verify:
+
+- placement
+- alignment
+- chip styling
+- selected state
+- dropdown behavior
+- menu alignment
+- source persistence
+- All Sources behavior
+
+## Listing selector
+
+Verify specifically:
+
+- All
+- Popular
+- Latest
+
+CRITICAL BUG INVESTIGATION:
+
+The user reports that selecting Popular or Latest does not correctly
+replace All.
+
+The user reports that All remains selected and/or both listings remain
+visible.
+
+Do not assume the previous implementation is correct.
+
+Reproduce and inspect the current implementation.
+
+Determine the exact root cause.
+
+Possible areas to investigate include, but are not limited to:
+
+- listingOverride state
+- selected listing state
+- FilterChip selected state
+- FeedScreenModel filtering
+- FeedPreferences default listing
+- recomposition
+- state restoration
+- source/listing combination logic
+- duplicated FeedItem entries
+- initial-state reset
+- persisted preference overriding user selection
+
+Do not guess.
+
+Record:
+
+CURRENT BEHAVIOR
+EXPECTED BEHAVIOR
+ROOT CAUSE
+AFFECTED FILES
+PROPOSED FIX
+REGRESSION RISK
+VERIFICATION PLAN
+
+The desired behavior is:
+
+If Popular is selected:
+→ only Popular listing should be selected/displayed for the active
+source/filter context.
+
+If Latest is selected:
+→ only Latest listing should be selected/displayed.
+
+If All is selected:
+→ All configured listings should be shown.
+
+The selected visual state must match the actual data state.
+
+---
+
+# 11. MORE SCREEN TWO-LEVEL INFORMATION ARCHITECTURE AUDIT
+
+The first-level More grouping already exists.
+
+Do NOT treat this as complete.
+
+Audit:
+
+More
+├── General
+├── Library
+└── Settings
+
+Then recursively audit the destinations opened from those groups.
+
+For each destination determine:
+
+- purpose
+- related settings/features
+- whether internal grouping is required
+- existing internal grouping
+- missing grouping
+- unnecessary grouping
+- duplicate grouping
+- wrong grouping
+- correct group name
+- rows belonging to each group
+
+Examples requiring explicit investigation include:
+
+- Text Recognition
+- Dictionary
+- Dictionary settings
+- OCR-related destinations
+- other destinations launched from More
+
+Do not force every screen into cards.
+
+Only group conceptually related settings.
+
+Do not create meaningless categories.
+
+A group should exist because its rows form a coherent conceptual category,
+not merely because there are multiple rows.
+
+---
+
+# 12. SETTINGS AUDIT
+
+Audit the entire settings hierarchy.
+
+Check:
+
+- main settings
+- Appearance & Interface
+- Reader
+- Read Aloud & Voice
+- Browse
+- Library
+- Tracking
+- Data/backup/storage
+- OCR/Text Recognition
+- Dictionary
+- other existing settings destinations
+
+For every screen map:
+
+SCREEN
+→ GROUP
+→ ROW
+→ SUBSETTING
+→ RELATED FEATURE
+
+Check for:
+
+- missing internal groups
+- inconsistent group naming
+- duplicated groups
+- groups with one unrelated item
+- loose rows
+- rows that should belong together
+- incorrect placement
+- inconsistent spacing
+- inconsistent typography
+- inconsistent surfaces
+
+Preserve existing working preference keys unless the approved design
+explicitly requires a change.
+
+---
+
+# 13. DESIGN SYSTEM AUDIT
+
+Use the existing design.md as the baseline.
+
+Do not invent a new design language.
+
+Audit:
+
+## Typography
+
+Use documented Material 3 roles.
+
+## Colors
+
+Use MaterialTheme.colorScheme tokens.
+
+No feature-specific hard-coded colors unless explicitly justified.
+
+## Surfaces
+
+Maintain the semantic surface hierarchy:
+
+1. Solid surface
+2. Floating chrome
+3. Frosted modal
+
+Do not turn every surface into glass.
+
+## Grouped surfaces
+
+One conceptual settings group = one PreferenceGroupCard.
+
+Do not create a card around every row.
+
+## Shapes
+
+Reuse Material 3/shared shape tokens.
+
+## Icons
+
+Reuse existing Material icons/components.
+
+## Motion
+
+Reuse existing motion patterns.
+
+## Responsive behavior
+
+Preserve compact/expanded behavior and existing tablet/landscape logic.
+
+---
+
+# 14. GLASS / FROSTED UI AUDIT
+
+This is particularly important.
+
+NEVER write a generic instruction such as:
+
+"Add glassmorphism."
+
+Instead, define semantic surface roles.
+
+For every candidate surface classify:
+
+- SOLID
+- FLOATING CHROME
+- FROSTED MODAL
+- NO SPECIAL SURFACE
+
+For each frosted candidate document:
+
+- exact screen
+- exact component
+- exact location
+- reason
+- backdrop availability
+- expected translucency
+- fallback when translucent UI is disabled
+- performance considerations
+- accessibility considerations
+
+The following are NOT automatically glass:
+
+- settings cards
+- manga cards
+- long-form text
+- OCR result content
+- About content
+- ordinary list rows
+- large content surfaces
+
+Do not introduce true backdrop blur simply because it looks attractive.
+
+The existing project documentation explicitly records that true backdrop blur
+is deferred because of Compose rendering architecture and performance concerns.
+
+Therefore:
+
+DO NOT implement true backdrop blur during this mapping exercise.
+
+---
+
+# 15. FEATURE LOCATION MAP
+
+Every feature must have exactly one canonical location.
+
+Create a table:
+
+| Feature | Current Location | Proposed Location | Reason | Related Settings | Implementation Owner |
+|---|---|---|---|---|---|
+
+Examples:
+
+- Panorama Cover
+- Cover-based theming
+- Dynamic controls
+- Reader controls
+- OCR
+- Read Aloud
+- Voice profiles
+- Speech rate
+- Dictionary
+- Text Recognition
+- Feed customization
+- Feed listing selector
+- Feed source selector
+- Storage Manager
+- Backup & Restore
+- Theme customization
+- Wallpapers
+- Navigation customization
+- etc.
+
+Do not copy features from AnymeX or Chimahon automatically.
+
+Reference products may inspire organization and visual hierarchy, but
+Yomitsu remains its own product.
+
+---
+
+# 16. ANYMEX / CHIMAHON REFERENCE RULE
+
+When using reference applications or documentation:
+
+BORROW:
+
+- visual hierarchy
+- information architecture ideas
+- meaningful customization
+- settings organization
+- surface hierarchy
+- responsive thinking
+- discoverability
+- reader customization concepts
+
+DO NOT COPY:
+
+- branding
+- product identity
+- unrelated navigation architecture
+- anime ecosystem
+- tracking ecosystem
+- service integrations
+- unrelated features
+- visual identity wholesale
+
+For every borrowed idea document:
+
+REFERENCE
+→ OBSERVATION
+→ YOMITSU ADAPTATION
+→ WHY IT FITS YOMITSU
+
+---
+
+# 17. SCREEN-BY-SCREEN DESIGN SPECIFICATION
+
+For EVERY major screen produce a specification with:
+
+## Screen identity
+
+- Screen name
+- Route/destination
+- Purpose
+- Entry points
+- Exit/back behavior
+
+## Layout
+
+- AppBar/header
+- content container
+- sections
+- bottom navigation
+- floating elements
+- sheets/dialogs
+
+## Typography
+
+- title role
+- section header role
+- body role
+- supporting role
+- metadata role
+
+## Spacing
+
+Document the intended spacing relationships.
+
+## Surfaces
+
+Document:
+
+- background
+- card/surface
+- floating surface
+- frosted surface
+- prohibited surface treatments
+
+## Components
+
+Specify which existing component should be reused.
+
+## Interaction
+
+Document:
+
+- tap
+- long press
+- swipe
+- selection
+- expansion
+- navigation
+- menus
+- persistence
+
+## States
+
+Document:
+
+- loading
+- empty
+- error
+- selected
+- disabled
+- active
+- unavailable
+
+## Responsive behavior
+
+Document:
+
+- compact phone
+- expanded phone
+- landscape
+- tablet
+
+## Accessibility
+
+Document:
+
+- minimum touch target
+- content descriptions
+- text scaling
+- contrast
+- state communication
+
+---
+
+# 18. CODE OWNERSHIP MAP
+
+For every screen/component identify the actual source file.
+
+Example:
+
+| UI Element | Current Source File | Shared Component | State Owner | Business Logic Owner |
+|---|---|---|---|---|
+
+This is mandatory.
+
+The implementation map must prevent an agent from editing a random file
+because it "looks like" the correct location.
+
+---
+
+# 19. IMPLEMENTATION BOUNDARY
+
+For every proposed change classify it:
+
+- PRESENTATION ONLY
+- PRESENTATION + STATE
+- PREFERENCE CHANGE
+- NAVIGATION CHANGE
+- DOMAIN CHANGE
+- DATA CHANGE
+- DATABASE CHANGE
+
+Default assumption:
+
+UI modernization should remain presentation-only unless the feature
+cannot work otherwise.
+
+Do not alter:
+
+- database schema
+- OCR pipeline
+- TTS engine
+- TTS playback controller
+- reader business logic
+- source/network logic
+- backup format
+- Mihon/Tachiyomi compatibility
+- existing preference keys
+
+unless the feature explicitly requires it.
+
+If a feature appears to require a deeper architectural change, STOP and
+document the dependency rather than improvising.
+
+---
+
+# 20. PROTECTED SYSTEMS
+
+Create a dedicated "DO NOT TOUCH" section.
+
+At minimum include:
+
+- Reader playback behavior
+- OCR acquisition pipeline
+- OCR caching
+- OCR exclusion matching
+- TTS progression
+- TTS arbitration
+- bitmap lifecycle
+- database/schema
+- backup compatibility
+- existing preference semantics
+- source networking
+- Feed data fetching unless required for the listing bug
+- Mihon/Tachiyomi protocols
+- application IDs/namespaces
+- existing working navigation semantics
+
+UI work must not accidentally modify these systems.
+
+---
+
+# 21. DISCREPANCY REGISTER
+
+Create a table:
+
+| ID | Screen | Category | Current Problem | Expected | Severity | Root Cause | Proposed Resolution |
+|---|---|---|---|---|---|---|---|
+
+Categories:
+
 - Typography
-- Shapes
-- Navigation patterns
-
-## 3. Modernization Strategy
-
-Explain exactly:
-
-- What will remain unchanged
-- What will be visually improved
-- What will be reorganized
-- What will NOT be changed
-
-## 4. Screen-by-Screen Plan
-
-For every major screen:
-
-CURRENT STRUCTURE
-→
-PROPOSED STRUCTURE
-→
-VISUAL IMPROVEMENTS
-→
-NAVIGATION IMPROVEMENTS
-
-## 5. Navigation Plan
-
-Clearly explain:
-
-- Current navigation
-- Problems
-- Proposed navigation model
-- Why the new structure is better
-
-## 6. Overlay Safety Plan
-
-Create a clear table:
-
-Overlay
-Purpose
-Anchor
-Safe Area
-Priority
-Collision Behavior
-
-## 7. Component System Plan
-
-List:
-
-- Components to reuse
-- Components to refine
-- Components requiring visual standardization
-- Any proposed new presentation-only components
-
-## 8. Visual Design Direction
-
-Explain:
-
-- Surface hierarchy
 - Spacing
-- Typography
-- Shapes
-- Elevation
-- Colors
-- Dark mode behavior
+- Alignment
+- Indentation
+- Header
+- Navigation
+- Surface
+- Grouping
+- Responsive
+- Accessibility
+- Interaction
+- Functional
+- State
+- Discoverability
 
-## 9. Implementation Impact
+This register must include even small inconsistencies.
 
-Clearly state:
+Do not hide minor discrepancies.
 
-FILES EXPECTED TO CHANGE:
-[design/presentation files only]
+---
 
-FILES THAT MUST NOT CHANGE:
-[domain/backend/data/business logic files]
+# 22. FUNCTIONAL UI AUDIT
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# REQUIRED USER CONFIRMATION GATE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Visual correctness is not enough.
 
-After producing the complete design proposal:
+Audit UI behavior for controls that appear correct but do not work.
 
-STOP.
+At minimum verify:
 
-DO NOT IMPLEMENT ANYTHING.
+- Feed All/Popular/Latest
+- Feed source selector
+- Feed source persistence
+- Feed customization
+- Recent tab switching
+- Recent swipe
+- selected tab state
+- More navigation
+- settings grouping navigation
+- reader controls
+- settings toggles
+- dialogs
+- sheets
+- expandable rows
+- filters
+- sort controls
+- persistence where expected
 
-Ask the user for confirmation.
+For every control:
 
-The confirmation message MUST clearly explain:
+VISIBLE STATE
+must equal
+ACTUAL STATE.
 
-1. What will visually change
-2. What screens will be affected
-3. What navigation changes are proposed
-4. What overlay safety improvements will happen
-5. What files/layers will be touched
-6. What will NOT be changed
-7. Confirmation that business logic will remain untouched
+---
 
-Then ask:
+# 23. RECENT / FEED / MORE REGRESSION PRIORITY
 
-"Do you approve this UI modernization plan and want me to proceed with the frontend-only implementation?"
+These areas receive P0/P1 audit priority because they were recently changed.
 
-Wait for an explicit answer.
+Priority:
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# AFTER USER APPROVAL
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+P0:
+- Feed listing selector correctness
+- Recent tab layout correctness
+- More internal grouping correctness
+- typography/spacing/alignment regressions in recently modified screens
 
-ONLY after explicit approval:
+P1:
+- Feed customization
+- source selector
+- Recent empty states
+- Recent row alignment
+- More destination consistency
 
-Implement the approved plan gradually.
+P2:
+- broader visual consistency
+- minor typography/spacing cleanup
 
-Follow this order:
+---
 
-STEP 1
-Foundation and shared visual consistency
+# 24. DO NOT TRUST PREVIOUS PASS/FAIL RECORDS BLINDLY
 
-STEP 2
-Navigation improvements
+Previous device verification records are evidence, not permanent truth.
 
-STEP 3
-Library and browsing screens
+If current source behavior contradicts a previous PASS:
 
-STEP 4
-Feed and discovery screens
+- reproduce
+- investigate
+- document the discrepancy
+- determine whether the previous verification was incomplete,
+  stale, state-dependent, or testing a different behavior
 
-STEP 5
-Settings hierarchy
+Do not simply mark the new observation as invalid.
 
-STEP 6
-Text Recognition and advanced settings UI
+---
 
-STEP 7
-Reader overlay organization
+# 25. DESIGN IMPLEMENTATION MAP OUTPUT
 
-STEP 8
-Read Aloud/TTS visual integration
+Create:
 
-STEP 9
-Overlay collision verification
+docs/ui-implementation-map.md
 
-STEP 10
-Light/dark/theme verification
+This is the primary deliverable.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# IMPLEMENTATION RESTRICTIONS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+It must contain:
 
-During implementation:
+1. Document purpose
+2. Current application UI inventory
+3. Navigation map
+4. Screen hierarchy
+5. Design system reference
+6. Typography specification
+7. Spacing specification
+8. Alignment specification
+9. Header specification
+10. Surface specification
+11. Glass/frost rules
+12. Responsive specification
+13. Component inventory
+14. Screen-by-screen implementation map
+15. Feature placement map
+16. Settings information architecture
+17. More two-level grouping map
+18. Recent implementation map
+19. Feed implementation map
+20. Feed listing behavior contract
+21. Code ownership map
+22. Implementation boundaries
+23. Protected systems
+24. Discrepancy register
+25. Functional audit findings
+26. Accessibility requirements
+27. Motion requirements
+28. Reference adaptation notes
+29. Implementation sequence
+30. Acceptance criteria
+31. Regression checklist
+32. Open questions / approval gates
 
-✓ Modify frontend/presentation only
-✓ Preserve existing behavior
-✓ Preserve existing APIs
-✓ Preserve existing architecture
-✓ Preserve theme compatibility
-✓ Reuse shared components where possible
+---
 
-DO NOT:
+# 26. DESIGN SPECIFICATION MUST BE IMPLEMENTATION-GRADE
 
-❌ Refactor unrelated code
-❌ Change business logic
-❌ Change OCR behavior
-❌ Change TTS behavior
-❌ Change database logic
-❌ Change network logic
-❌ Add random dependencies
-❌ Rewrite architecture
-❌ Rename unrelated files
-❌ Perform large cleanup unrelated to UI
+Avoid vague statements such as:
 
-If a proposed UI change requires business logic changes:
+- "make it modern"
+- "improve spacing"
+- "add glass"
+- "make the tabs nicer"
+- "make settings cleaner"
+- "use better typography"
 
-STOP.
+Instead write measurable/implementable instructions such as:
 
-Explain the dependency to the user.
+- use the existing Material typography role
+- preserve the shared settings row metrics
+- use 16dp screen inset
+- use the established 12dp group gap
+- use one PreferenceGroupCard per conceptual group
+- use transparent ListItem rows inside tonal grouped surfaces
+- use FilterChip for source selection
+- keep listing selector as a single-select state
+- use existing MaterialTheme.colorScheme tokens
+- no true backdrop blur
+- no frost on readable content
+- etc.
 
-Ask for approval before touching that logic.
+If exact dimensions cannot be safely inferred from the current component
+system, explicitly mark them as "requires approval" instead of inventing
+values.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# FINAL QUALITY STANDARD
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+---
 
-The finished application should feel:
+# 27. APPROVAL GATES
 
-✓ More structured
-✓ More modern
-✓ More intentional
-✓ Cleaner
-✓ Easier to navigate
-✓ Better aligned
-✓ More visually hierarchical
-✓ Still recognizably Yomitsu
-✓ Still content-first
-✓ Still minimal
+The blueprint must identify decisions that require user approval.
 
-The user should NOT feel:
+Examples:
 
-"This is a completely different application."
+- exact feature placement
+- new settings category
+- major navigation changes
+- new component
+- new surface role
+- true blur
+- new persistent preference
+- database change
+- architecture change
 
-The user SHOULD feel:
+Do not make those decisions silently.
 
-"This is the same application, but it finally has a proper, polished visual structure."
+---
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# IMPORTANT FINAL RULE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 28. IMPLEMENTATION SEQUENCE
 
-Do not make design decisions merely because they look trendy.
+After completing the audit, propose an implementation sequence.
 
-Every visual change must have a clear purpose:
+It should NOT be:
 
-- Improve hierarchy
-- Improve navigation
-- Improve readability
-- Improve alignment
-- Improve discoverability
-- Improve consistency
-- Improve interaction safety
+"implement everything."
 
-If a visual element does not improve one of these things, strongly consider not adding it.
+Instead use controlled batches such as:
 
-Minimalism is not emptiness.
+Batch 0:
+Documentation + audit only
 
-Minimalism is deliberate structure.
+Batch 1:
+Typography + spacing + alignment corrections
+
+Batch 2:
+Recent UI corrections
+
+Batch 3:
+Feed functional + visual corrections
+
+Batch 4:
+More internal grouping
+
+Batch 5:
+Shared surface/component refinement
+
+Batch 6:
+Approved new feature placement
+
+Batch 7:
+Glass/frosted treatment only where explicitly approved
+
+Batch 8:
+Responsive/accessibility pass
+
+Batch 9:
+Device verification
+
+Each batch must have:
+
+- scope
+- files
+- protected systems
+- expected behavior
+- visual acceptance criteria
+- functional acceptance criteria
+- regression tests
+
+---
+
+# 29. FINAL QUALITY CHECK
+
+Before declaring the blueprint complete, verify:
+
+[ ] Every bottom-nav screen is mapped
+[ ] Every major destination is mapped
+[ ] Every settings screen is mapped
+[ ] More destinations have been recursively audited
+[ ] Recent is mapped
+[ ] Feed is mapped
+[ ] Feed listing bug is investigated
+[ ] Typography is audited
+[ ] Line spacing is audited
+[ ] Spacing is audited
+[ ] Indentation is audited
+[ ] Alignment is audited
+[ ] Headers are audited
+[ ] Surface hierarchy is audited
+[ ] Glass placement is explicitly mapped
+[ ] Responsive behavior is mapped
+[ ] Accessibility is mapped
+[ ] Feature placement is explicit
+[ ] Code ownership is explicit
+[ ] Protected systems are explicit
+[ ] Implementation boundaries are explicit
+[ ] Previous device-pass claims have been rechecked where necessary
+[ ] No speculative implementation was performed
+[ ] No application source files were modified during the mapping phase
+
+---
+
+# 30. STOP CONDITION
+
+STOP after producing the documentation.
+
+Do NOT begin implementing the UI redesign automatically.
+
+The user will review the resulting:
+
+docs/ui-implementation-map.md
+
+and then provide the final approved feature list / implementation scope.
+
+Only after approval should implementation begin.
+
+The implementation agent must treat the approved
+docs/ui-implementation-map.md as the UI equivalent of a Figma handoff.
+
+No guessing.
+No improvisation.
+No "while I'm here" refactors.
+No glass-everywhere.
+No random spacing values.
+No arbitrary typography.
+No moving features without an explicit IA decision.
+No functional changes hidden inside visual changes.
+
+The goal is controlled, deterministic, reviewable UI modernization.

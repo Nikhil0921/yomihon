@@ -57,6 +57,10 @@ class FeedScreenModel(
         val showAddDialog: Boolean = false,
         val selectedSourceId: Long? = null,
         val listingOverride: FeedListing? = null,
+        // True once the user has explicitly chosen a listing (including "All");
+        // distinguishes user-selected "All" (null override) from uninitialized
+        // state so preference emissions don't silently re-apply defaultListing.
+        val listingSelected: Boolean = false,
         val showSourceSelector: Boolean = true,
         val showListingSelector: Boolean = true,
         val defaultListing: FeedListing? = null,
@@ -65,9 +69,17 @@ class FeedScreenModel(
             get() {
                 val enabled = feeds.filter { it.enabled }
                 val sourceMatched = enabled.filter { selectedSourceId == null || it.sourceId == selectedSourceId }
+                val listingMatched = sourceMatched.filter { listingOverride == null || it.listing == listingOverride }
                 // A saved source with no enabled feeds left (removed/disabled)
                 // falls back to showing everything instead of an empty screen.
-                return if (sourceMatched.isEmpty() && enabled.isNotEmpty()) enabled else sourceMatched
+                // A listing selection with no matching feeds (e.g. single-listing
+                // source filtered to the other listing) falls back to the
+                // source-matched set instead of an empty grid.
+                return when {
+                    listingMatched.isNotEmpty() -> listingMatched
+                    sourceMatched.isNotEmpty() -> sourceMatched
+                    else -> enabled
+                }
             }
     }
 
@@ -99,7 +111,7 @@ class FeedScreenModel(
                             showListingSelector = prefs.showListing,
                             defaultListing = prefs.defaultListing,
                             selectedSourceId = it.selectedSourceId ?: prefs.selectedSource,
-                            listingOverride = it.listingOverride ?: prefs.defaultListing,
+                            listingOverride = if (it.listingSelected) it.listingOverride else prefs.defaultListing,
                         )
                     }
                 }
@@ -200,12 +212,12 @@ class FeedScreenModel(
     }
 
     fun selectListing(listing: FeedListing?) {
-        mutableState.update { it.copy(listingOverride = listing) }
+        mutableState.update { it.copy(listingOverride = listing, listingSelected = true) }
     }
 
     fun setDefaultListing(listing: FeedListing?) {
         feedPreferences.defaultListing().set(listing)
-        mutableState.update { it.copy(listingOverride = listing) }
+        mutableState.update { it.copy(listingOverride = listing, listingSelected = true) }
     }
 
     fun toggleSourceSelector(show: Boolean) {
