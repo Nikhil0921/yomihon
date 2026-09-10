@@ -10,6 +10,40 @@ The format is a modified version of [Keep a Changelog](https://keepachangelog.co
 - `Fixed` - for any bug fixes.
 - `Other` - for technical stuff.
 
+## [v0.5.3] - 2026-09-10
+
+### Changed
+- Rebranded to **Yomitsu**: new app name, launcher icons, splash, and About branding
+  (the app ID stays `app.yomihon`, so in-place updates keep all data)
+- Restructured **Recent** into three internal pages: Continue (with sorting and a
+  downloaded-only filter), History, and Updates — reselecting the tab resumes your
+  last-read manga
+- Reworked the **Feed** tab: per-source filter chips, All / Popular / Latest listing
+  selector with per-feed persistence, explicit load-more paging, and a central
+  manage screen (reorder / enable / remove feeds), plus an optional compact grid
+- Reader settings regrouped into organized cards; refreshed typography, spacing,
+  and surface treatment across the app
+
+### Added
+- Settings Search now covers the Dictionary and OCR exclusion screens
+- Manga detail screen now shows a proper error state with retry when a manga fails
+  to load instead of a blank screen
+
+### Improved
+- Major APK size reduction: removed the unused legacy Japanese-vocabulary OCR
+  engine and its 139.9 MB of model assets (~133 MB smaller per ABI)
+- Read-Aloud page prefetch no longer performs network requests on the main thread
+  (previously killed prefetch scans with NetworkOnMainThreadException)
+- Online OCR (GLENS) scans now retry once on transient server errors (5xx / 429)
+  before failing
+- OCR cache now retains the 5000 most recent pages, evicting oldest entries
+  atomically
+
+### Fixed
+- Fix the Feed listing selector not actually filtering the grid
+- Fix onboarding permission step briefly freezing the UI (no more main-thread
+  blocking on resume)
+
 ## [v0.5.2] - 2026-09-03
 
 ### Added
@@ -258,8 +292,10 @@ significant development on top of the upstream Yomihon v0.4.0 base.
 - The full changelog for Mihon releases is available in their [repository](https://github.com/mihonapp/mihon/blob/main/CHANGELOG.md).
 
 
-[unreleased]: https://github.com/Nikhil0921/yomihon/compare/v0.5.0...main
-[v0.5.0]: https://github.com/Nikhil0921/yomihon/compare/v0.4.0...v0.5.0
+[unreleased]: https://github.com/Nikhil0921/yomitsu/compare/v0.5.3...main
+[v0.5.3]: https://github.com/Nikhil0921/yomitsu/compare/v0.5.2...v0.5.3
+[v0.5.2]: https://github.com/Nikhil0921/yomihon/compare/v0.5.1...v0.5.2
+[v0.5.1]: https://github.com/Nikhil0921/yomihon/compare/v0.5.0...v0.5.1
 [v0.4.0]: https://github.com/Nikhil0921/yomihon/compare/v0.3.2...v0.4.0
 [v0.3.2]: https://github.com/yomihon/yomihon/compare/v0.3.1...v0.3.2
 [v0.3.1]: https://github.com/yomihon/yomihon/compare/v0.3.0...v0.3.1

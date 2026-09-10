@@ -32,8 +32,8 @@ android {
     defaultConfig {
         applicationId = "app.yomihon"
 
-        versionCode = 28
-        versionName = "0.5.2"
+        versionCode = 29
+        versionName = "0.5.3"
 
         buildConfigField("String", "COMMIT_COUNT", "\"${getLatestCommitCount()}\"")
         buildConfigField("String", "COMMIT_SHA", "\"${getLatestCommitSha()}\"")
