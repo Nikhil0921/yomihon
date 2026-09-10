@@ -11,14 +11,8 @@
 
 ```text
 Project:        Yomihon fork (v0.5.2, vc28) — Android manga reader + OCR/language tooling
-Repo state:     branch main @ 708a7182d (Yomitsu rebrand) +
-                UNCOMMITTED: post-v0.5.2 stabilization set (2026-09-08,
-                this session — LEGACY OCR engine+assets removed −133MB,
-                TTS prefetch Main-thread fix, GLENS 502 retry, dead-code
-                hygiene, OCR cache retention cap 5000 pages,
-                PermissionStep runBlocking removed; batches 4+8 HELD;
-                gates green, APK 0.5.2-8263 installed + device-verified,
-                see 2026-09-08 blocks + Agent handoff).
+Repo state:     branch main @ 1b2c56b23 (UI audit Batches 1–5
+                committed 2026-09-10; tree clean).
                 v0.5.2 RELEASE PUBLISHED 2026-09-03 (tag
                 v0.5.2, 5 ABI APKs; includes exclusion rules, speech
                 cleanup, voice profiles, 3x rate, Feed tab).
@@ -26,14 +20,15 @@ Untracked:      .opencode/ + .device-pass/ (gitignored), .codegraph/ (index,
                 gitignored)
 Primary goal:    Stabilize post-v0.5.2: stabilization batches DONE
                 (2026-09-08), then Phase 10B backlog as PRD-gated work
-Current phase:  Post-release stabilization — batches 1/2/3/5/6/7
-                COMPLETE (device-verified), pending user commit;
-                F GLENS-retry live-verify + J eviction boundary +
+Current phase:  UI audit implementation Batches 1–5 COMMITTED
+                (1b2c56b23, 2026-09-10, device-verified). Prior
+                stabilization batches 1/2/3/5/6/7 committed within that
+                set; F GLENS-retry live-verify + J eviction boundary +
                 onboarding PermissionStep device test = PENDING items.
 Current status: TTS v1 + 10A + 2026-09-01 multi-feature set all shipped in
                 v0.5.2; visual-hierarchy + IA/feature sets committed
-                (e89104296); rebrand committed (708a7182d);
-                stabilization set implemented + verified 2026-09-08.
+                (e89104296); rebrand committed (708a7182d); UI audit
+                Batches 1–5 committed 2026-09-10.
 ```
 
 ## Current objective
