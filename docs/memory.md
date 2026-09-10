@@ -3844,6 +3844,30 @@ Known risks:                LEGACY removal relies on redirects (recognizeText
 ```
 
 ```text
+[COMPLETED 2026-09-10 — PHASE 6 MASTER PLAN (planning-only, docs change),
+COMMITTED-WORKING-TREE-PENDING-USER]
+
+Per user master-planning brief: read docs/* (memory/phase/prd/design/
+ui-implementation-map/rules/architecture/Prompt) + verified open items
+against source (TtsPlaybackBar.kt:90/111 bodyMedium+16/4; FeedScreen.kt:445
+arrow desc null inside labeled chip; FeedScreen.kt:253-263 FeedHeader
+two-line). Deliverable: docs/next-phase-plan.md — baseline inventory
+(all-green c02efca25), remaining-work matrix (NO P0 items), Chimahon
+ADOPT/ADAPT/DEFER/REJECT matrix (evidence-bounded: repo holds NO Chimahon
+feature inventory — only Prompt.md §16 rules + recorded Tadami-inspired
+ideas; nothing invented), design-system STABLE verdict, architecture-risk
+matrix, 8-item decision register (TtsPlaybackBar typography+padding
+recommend ratify-code; Create-tab = user clarify; arrow desc = accept;
+FeedHeader = keep two-line; D-09/D-14 no action; D-15 future), roadmap
+(Next = v0.5.3 release batch — 10 commits unreleased incl −133MB APK +
+rebrand; After = decision micro-batch, a11y completion pass, 10B track,
+litert GPU-lib exclusion), batch spec for v0.5.3 (release-only, LOW
+rollback risk, full gates + device smoke), gate = READY FOR USER APPROVAL
+with exact decision list. ZERO app source touched; no open decisions
+silently resolved.
+```
+
+```text
 Last agent:                 opencode (2026-09-10 — POST-COMMIT BASELINE
                             VERIFICATION per user brief. VERIFICATION-ONLY:
                             no Batch 6, no source changes, no open decisions
@@ -3870,9 +3894,10 @@ Current task:               DONE — baseline verification PASS.
        (TtsPlaybackBar 24/12+bodyLarge, Create-tab referent,
        FeedFilterBar arrow desc, FeedHeader label, D-09/D-14/D-15)
        all left open, zero implementation work.
-Next recommended task:      user decides next phase (Batch 6 not
-                            started per brief); note package-disabled
-                            anomaly on device for user awareness.
+Next recommended task:      user reviews docs/next-phase-plan.md + rules on
+                            the 5 listed decisions (v0.5.3 release batch
+                            first); Batch 6 not defined until user picks
+                            from the roadmap.
 Files safe to modify:       none (verification-only session, no edits).
 ```
 
