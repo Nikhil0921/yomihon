@@ -11,8 +11,10 @@
 
 ```text
 Project:        Yomihon fork (v0.5.2, vc28) — Android manga reader + OCR/language tooling
-Repo state:     branch main @ 1b2c56b23 (UI audit Batches 1–5
-                committed 2026-09-10; tree clean).
+Repo state:     branch main @ c02efca25 (UI audit Batches 1–5
+                commit 1b2c56b23 + memory docs c02efca25, 2026-09-10;
+                tree clean; POST-COMMIT BASELINE: PASS — all 4 gates
+                green + device smoke on committed HEAD, same day).
                 v0.5.2 RELEASE PUBLISHED 2026-09-03 (tag
                 v0.5.2, 5 ABI APKs; includes exclusion rules, speech
                 cleanup, voice profiles, 3x rate, Feed tab).
@@ -2620,9 +2622,12 @@ Device tests:      Phase 8 script COMPLETE (2026-08-28). Phase 9 COMPLETE
                       unit/code-verified only, no safe device trigger);
                       evidence .device-pass/batch5-verify.log +
                       screenshots/batch5/.
-Lint:              spotlessCheck PASS (2026-09-10, Batch 5 pass)
-Build:             :app:assembleDebug PASS (2026-09-10, 0.5.2-8264 arm64;
-                      installed in-place SM_M066B)
+Lint:              spotlessCheck PASS (2026-09-10 post-commit baseline,
+                      committed HEAD c02efca25)
+Build:             :app:assembleDebug PASS (2026-09-10 post-commit baseline,
+                      0.5.2-8266 arm64; in-place install SM_M066B wired
+                      USB; launch + 5-tab + MangaScreen smoke PASS,
+                      0 crashes)
 Baseline (pre-TTS expectations): CI order = spotlessCheck → testDebugUnitTest →
                           verifySqlDelightMigration → assembleRelease (see rules.md §11)
 Environment: devcontainer image vsc-yomihon-e24e3bd7… (JDK 17) via docker on host;
@@ -2633,6 +2638,30 @@ Environment: devcontainer image vsc-yomihon-e24e3bd7… (JDK 17) via docker on h
 ```
 
 ## Last verified build
+
+```text
+Date:     2026-09-10 (POST-COMMIT BASELINE VERIFICATION of committed HEAD
+          c02efca25 — Batches 1–5 @ 1b2c56b23 + docs c02efca25.
+          VERIFICATION-ONLY task, zero source changes.)
+Command:  ./gradlew spotlessCheck (37s) → testDebugUnitTest +
+          verifySqlDelightMigration (2m59s) → :app:assembleDebug
+          (2m38s) — docker devcontainer JDK17, -Xmx4g, both volumes.
+Result:   ALL 4 GATES GREEN. APK 0.5.2-8266 vc28 arm64 debug.
+Device:   SM_M066B (wired USB), in-place install over 0.5.2-8264
+          (adb install -r, data preserved). NOTE: package was found
+          DISABLED (enabled=0) on device — pm enable app.yomihon.dev
+          run before launch (likely user-side disable; flagged, not
+          investigated). Smoke: launch OK (PID 25362), Library grid
+          renders (titles, badges, category chips), Recent opens
+          (Continue/History/Updates), Feed opens (source chips + All/
+          Latest, listings), Browse opens (sources list), More opens
+          (grouped settings), MangaScreen opens (chapters, source,
+          genres, In-library state). 0 FATAL EXCEPTION / 0 app crash
+          in full session logcat. VERDICT: POST-COMMIT BASELINE PASS —
+          committed Batches 1–5 tree is the new known-good baseline.
+```
+
+## Last verified build (prior)
 
 ```text
 Date:     2026-09-10 (Batch 5 device-verification pass, run by orchestrator)
@@ -3812,6 +3841,39 @@ Known risks:                LEGACY removal relies on redirects (recognizeText
                             migration risk. i18n locale files may still
                             carry translated copies of deleted keys
                             (harmless, Weblate will prune).
+```
+
+```text
+Last agent:                 opencode (2026-09-10 — POST-COMMIT BASELINE
+                            VERIFICATION per user brief. VERIFICATION-ONLY:
+                            no Batch 6, no source changes, no open decisions
+                            resolved, TtsPlaybackBar bodyMedium+16/4 left
+                            untouched as directed.)
+Date:                       2026-09-10
+Current task:               DONE — baseline verification PASS.
+  Git: HEAD c02efca25, both commits present (1b2c56b23 feat Batches
+       1–5, c02efca25 docs memory update), working tree clean,
+       zero uncommitted source changes.
+  Gates (committed HEAD, docker JDK17 -Xmx4g both volumes):
+       spotlessCheck PASS 37s; testDebugUnitTest +
+       verifySqlDelightMigration PASS 2m59s; :app:assembleDebug
+       PASS 2m38s. APK 0.5.2-8266 vc28.
+  Device (SM_M066B WIRED USB only per brief; no wireless attempted):
+       adb install -r in-place over 8264, data preserved. Package
+       was DISABLED (enabled=0, user 0) — pm enable run (reversible,
+       no data touched); cause unknown, flagged to user. Launch +
+       Library/Recent/Feed/Browse/More/MangaScreen all open and
+       render correct content; 0 FATAL/0 crash across session
+       logcat. No destructive tests, no feeds/history/data changes.
+  Protected areas untouched: ReaderActivity, TtsPlaybackBar, OCR/
+       TTS impls+controllers, reader navigation. Open decisions
+       (TtsPlaybackBar 24/12+bodyLarge, Create-tab referent,
+       FeedFilterBar arrow desc, FeedHeader label, D-09/D-14/D-15)
+       all left open, zero implementation work.
+Next recommended task:      user decides next phase (Batch 6 not
+                            started per brief); note package-disabled
+                            anomaly on device for user awareness.
+Files safe to modify:       none (verification-only session, no edits).
 ```
 
 ---
