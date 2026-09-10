@@ -20,9 +20,11 @@ Read-Aloud TTS.
 - Application ID: `app.yomihon` (code namespaces remain `eu.kanade.tachiyomi.*`,
   `mihon.*`, `tachiyomi.*` — see `docs/rules.md`).
 - Requires Android 8.0+ (`minSdk 26`); `targetSdk 36`, `compileSdk 37`.
-- Current release: v0.5.2 (version code 28) — includes Read-Aloud TTS v1,
-  Phase 10A voice configuration, speech cleanup pipeline, OCR exclusion
-  rules, voice profiles, 3x rate, and the Feed tab.
+- Current release: v0.5.3 (version code 29) — Yomitsu rebrand, legacy-OCR
+  removal (−133 MB/ABI), Recent/Feed tab reworks, UI audit Batches 1–5,
+  plus everything from v0.5.2: Read-Aloud TTS v1, Phase 10A voice
+  configuration, speech cleanup pipeline, OCR exclusion rules, voice
+  profiles, 3x rate, and the Feed tab.
 
 ### 1.2 Who it is for
 

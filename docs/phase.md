@@ -5,13 +5,22 @@
 > A phase is COMPLETED only when its verification steps have actually been run
 > and recorded in `docs/memory.md`.
 
-Current phase pointer: **UI audit implementation Batches 1–5 COMPLETE
-2026-09-10 (Batch 5 device-verification matrix PASS: Feed D-02/D-03/
-paging/ManageFeeds, Recent + D-01, Settings Search D-08, MangaScreen
-D-11, typography/surfaces/a11y; gates green — 1 Batch-4 test-harness
-race fixed test-only; evidence .device-pass/batch5-verify.log +
-screenshots/batch5/). ALL UNCOMMITTED awaiting user commit. Remaining
-register items D-09/D-14/D-15 = INFO only.**
+Current phase pointer: **v0.5.3 RELEASED 2026-09-11 (tag v0.5.3,
+  commit daa942738, all gates green, device smoke PASS, GitHub release
+  published with 5 ABI APKs).** Releases the verified baseline: Yomitsu
+  rebrand, legacy-OCR removal (−133MB), stabilization batches, UI audit
+  Batches 1–5. Open decision register (D-09/D-14/D-15, TtsPlaybackBar,
+  Create-tab, FeedHeader) all still open, zero implemented.
+  Next per docs/next-phase-plan.md roadmap: decision micro-batch,
+  a11y completion pass, or first 10B item (user's pick).
+  Prior: UI audit implementation Batches 1–5 COMPLETE
+  2026-09-10 (Batch 5 device-verification matrix PASS: Feed D-02/D-03/
+  paging/ManageFeeds, Recent + D-01, Settings Search D-08, MangaScreen
+  D-11, typography/surfaces/a11y; gates green — 1 Batch-4 test-harness
+  race fixed test-only; evidence .device-pass/batch5-verify.log +
+  screenshots/batch5/). All committed (1b2c56b23 + docs 2a377ef12 +
+  master-plan eaccfe6f0). Remaining register items D-09/D-14/D-15 =
+  INFO only.**
   Prior: FULL UI AUDIT + docs/ui-implementation-map.md delivered
   (2026-09-08, docs only).
   Prior: Yomitsu rebrand (2026-09-07, committed 708a7182d) — docs/

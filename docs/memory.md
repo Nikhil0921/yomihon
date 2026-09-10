@@ -10,14 +10,14 @@
 ## Current project state
 
 ```text
-Project:        Yomihon fork (v0.5.2, vc28) — Android manga reader + OCR/language tooling
-Repo state:     branch main @ c02efca25 (UI audit Batches 1–5
-                commit 1b2c56b23 + memory docs c02efca25, 2026-09-10;
-                tree clean; POST-COMMIT BASELINE: PASS — all 4 gates
-                green + device smoke on committed HEAD, same day).
-                v0.5.2 RELEASE PUBLISHED 2026-09-03 (tag
-                v0.5.2, 5 ABI APKs; includes exclusion rules, speech
-                cleanup, voice profiles, 3x rate, Feed tab).
+Project:        Yomitsu fork (v0.5.3, vc29) — Android manga reader + OCR/language tooling
+Repo state:     branch main @ daa942738 = tag v0.5.3 (RELEASED
+                2026-09-11, all gates green + device smoke PASS; release
+                published with 5 ABI APKs, GitHub Latest). Tree clean
+                except this post-release docs update (uncommitted,
+                same pattern as v0.5.2). Baseline = Batches 1–5
+                (1b2c56b23) + master-plan docs (eaccfe6f0) + release
+                (daa942738).
 Untracked:      .opencode/ + .device-pass/ (gitignored), .codegraph/ (index,
                 gitignored)
 Primary goal:    Stabilize post-v0.5.2: stabilization batches DONE
@@ -3840,7 +3840,72 @@ Known risks:                LEGACY removal relies on redirects (recognizeText
                             schema untouched (query-only add) — no
                             migration risk. i18n locale files may still
                             carry translated copies of deleted keys
-                            (harmless, Weblate will prune).
+                             (harmless, Weblate will prune).
+```
+
+```text
+[COMPLETED 2026-09-10 — v0.5.3 RELEASE CONSOLIDATION (user-approved batch,
+per docs/next-phase-plan.md Part H)]
+
+Pre-release state: tree had UNCOMMITTED master-plan docs (memory.md edit +
+next-phase-plan.md untracked) from the planning session — committed FIRST
+as separate docs commit eaccfe6f0 so the release diff stayed clean. Baseline
+HEAD before release: 2a377ef12 (3 ahead of origin).
+
+Release changes (commit daa942738 "release: v0.5.3", tag v0.5.3):
+- app/build.gradle.kts: versionCode 28→29, versionName 0.5.2→0.5.3
+- CHANGELOG.md: v0.5.3 section (rebrand, −139.9MB legacy OCR assets, Recent/
+  Feed reworks, settings-search coverage, MangaScreen error state, prefetch
+  main-thread fix, GLENS retry, cache retention 5000, Feed filter fix,
+  PermissionStep freeze fix) + compare-link block updated to yomitsu repo.
+  ZERO application-source changes beyond version metadata.
+
+GATES GREEN 2026-09-10 (docker vsc-yomihon-e24e3bd7e46d…, JDK17, -Xmx4g,
+both volumes), CI order:
+- spotlessCheck + testDebugUnitTest + verifySqlDelightMigration: BUILD
+  SUCCESSFUL 3m24s.
+- assembleRelease -Pinclude-telemetry -Penable-updater: BUILD SUCCESSFUL
+  12m36s.
+
+APK VERIFIED (aapt2 + unzip, arm64): versionCode=29, versionName=0.5.3,
+application-label='Yomitsu', assets/ocr_fast/{decoder 12.8MB, encoder
+8.45MB} present, assets/panel_detector/model.tflite (2.84MB) present,
+legacy assets/ocr/ ABSENT (removal held), libLiteRtClGlAccelerator.so
+still packaged (GPU-lib exclusion deferred per plan). Sizes: arm64
+65,295,045 B (~62.3MB); armeabi-v7a 58,740,433; x86 58,080,632; x86_64
+70,393,209; universal 128,149,391.
+
+DEVICE VERIFICATION 2026-09-10/11 (SM_M066B, WIRED USB adb only, in-place
+adb install -r over vc28, data preserved; package found suspended+disabled
+again on device — pm enable + pm unsuspend run, reversible, cause still
+unknown; flagged to user): installed vc29/0.5.3. Smoke PASS: launch clean
+(PID 14501); Yomitsu branding (aapt2 label + launcher); all 5 bottom tabs
+(Library/Recent/Feed/Browse/More); Feed grid loads (All sources + Asura
+Scans chip + All/Popular/Latest listing chips + 6 titles; one transient
+"Source unavailable → Retry" row cleared on its own — stale-source path,
+known); chip tap changes grid content (Atsumaru/Mangakakalot listings
+loaded = filter works); MangaScreen opens (Bad Born Blood details);
+ReaderActivity opens via Chapter 3; TTS started via Read-aloud button —
+Google TTS engine loaded, audio focus requested (USAGE_MEDIA/SPEECH),
+GLENS on-demand scan 11.4s completed, speech + TtsPlaybackBar (Pause/
+Stop/Prev/Next sentence, 1.25x chip) live; PAUSE→Play + resume→Pause
+button-state swap verified; Stop + reader exit clean; Settings Search:
+"dictionary"→Dictionaries row, "exclusions"→OCR exclusions row, no crash.
+Full-session logcat (.device-pass/v053-smoke.log, 220k lines): 0 FATAL
+EXCEPTION, app alive at end. NOTE: reader chrome tap-toggle appears
+disabled on this device's config (center tap = page nav) — KEYCODE_MENU
+shows chrome; recorded for future device scripts. No destructive tests.
+
+RELEASE PUBLISHED 2026-09-11: main pushed (9e7a27b08..daa942738, 5
+commits incl. docs + release), tag v0.5.3 pushed, GitHub release created
+with 5 ABI APKs (renamed yomitsu-*-release.apk per release.yml convention):
+https://github.com/Nikhil0921/yomitsu/releases/tag/v0.5.3 (Latest).
+In-app updater (points at fork) will prompt v0.5.2 users.
+
+Out of scope held (per brief): TtsPlaybackBar unchanged (bodyMedium 16/4
+still open decision), Create-tab, FeedFilterBar arrow desc, FeedHeader,
+D-09/D-14/D-15, no 10B/a11y/Batch-6 work, libLiteRt exclusion NOT done.
+Protected systems untouched.
 ```
 
 ```text
@@ -3895,9 +3960,9 @@ Current task:               DONE — baseline verification PASS.
        FeedFilterBar arrow desc, FeedHeader label, D-09/D-14/D-15)
        all left open, zero implementation work.
 Next recommended task:      user reviews docs/next-phase-plan.md + rules on
-                            the 5 listed decisions (v0.5.3 release batch
-                            first); Batch 6 not defined until user picks
-                            from the roadmap.
+                            the 5 listed decisions (decision micro-batch,
+                            a11y completion pass, or first 10B item); v0.5.3
+                            released — roadmap "After Next" now applies.
 Files safe to modify:       none (verification-only session, no edits).
 ```
 
