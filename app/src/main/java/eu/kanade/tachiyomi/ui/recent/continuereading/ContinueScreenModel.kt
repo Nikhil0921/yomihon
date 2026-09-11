@@ -33,15 +33,27 @@ class ContinueScreenModel(
         val nextChapter: Chapter?,
     )
 
+    /**
+     * Raw (unfiltered) items are retained; the displayed list is derived from
+     * the current sort/filter values so toggles are always reversible and
+     * never consume the source list.
+     */
     @Immutable
     data class State(
         val isLoading: Boolean = true,
-        val items: List<ContinueItem> = emptyList(),
+        val rawItems: List<ContinueItem> = emptyList(),
         val sort: ContinueSort = ContinueSort.LAST_READ,
         val downloadedOnly: Boolean = false,
-    )
+        val isItemDownloaded: (ContinueItem) -> Boolean = { false },
+    ) {
+        val items: List<ContinueItem>
+            get() = applyContinueFilters(rawItems, sort, downloadedOnly, isItemDownloaded)
+    }
 
     init {
+        // Wire the download check once the instance exists; stays stable
+        // across state updates.
+        mutableState.update { it.copy(isItemDownloaded = ::itemDownloaded) }
         screenModelScope.launch {
             getLibraryManga.subscribe()
                 .collectLatest { mangas ->
@@ -52,30 +64,21 @@ class ContinueScreenModel(
                     val items = resumable.map { m ->
                         ContinueItem(m, getNextUnreadChapter(m.manga))
                     }
-                    mutableState.update { it.copy(isLoading = false, items = applyFilters(items)) }
+                    mutableState.update { it.copy(isLoading = false, rawItems = items) }
                 }
         }
     }
 
     fun setSort(sort: ContinueSort) {
-        mutableState.update { it.copy(sort = sort, items = applyFilters(it.items)) }
+        mutableState.update { it.copy(sort = sort) }
     }
 
     fun setDownloadedOnly(enabled: Boolean) {
-        mutableState.update { it.copy(downloadedOnly = enabled, items = applyFilters(it.items)) }
+        mutableState.update { it.copy(downloadedOnly = enabled) }
     }
 
-    private fun applyFilters(items: List<ContinueItem>): List<ContinueItem> {
-        var result = items
-        if (state.value.downloadedOnly) {
-            result = result.filter { item ->
-                item.nextChapter?.let { isDownloaded(it, item.manga.manga) } == true
-            }
-        }
-        return when (state.value.sort) {
-            ContinueSort.LAST_READ -> result.sortedByDescending { it.manga.lastRead }
-            ContinueSort.ALPHA -> result.sortedBy { it.manga.manga.title.lowercase() }
-        }
+    private fun itemDownloaded(item: ContinueItem): Boolean {
+        return item.nextChapter?.let { isDownloaded(it, item.manga.manga) } == true
     }
 
     private fun isDownloaded(chapter: Chapter, manga: Manga): Boolean {
@@ -91,5 +94,21 @@ class ContinueScreenModel(
     private suspend fun getNextUnreadChapter(manga: Manga): Chapter? {
         val chapters = getChaptersByMangaId.await(manga.id, applyScanlatorFilter = true)
         return chapters.getNextUnread(manga, downloadManager)
+    }
+}
+
+internal fun applyContinueFilters(
+    items: List<ContinueScreenModel.ContinueItem>,
+    sort: ContinueSort,
+    downloadedOnly: Boolean,
+    isDownloaded: (ContinueScreenModel.ContinueItem) -> Boolean,
+): List<ContinueScreenModel.ContinueItem> {
+    var result = items
+    if (downloadedOnly) {
+        result = result.filter(isDownloaded)
+    }
+    return when (sort) {
+        ContinueSort.LAST_READ -> result.sortedByDescending { it.manga.lastRead }
+        ContinueSort.ALPHA -> result.sortedBy { it.manga.manga.title.lowercase() }
     }
 }

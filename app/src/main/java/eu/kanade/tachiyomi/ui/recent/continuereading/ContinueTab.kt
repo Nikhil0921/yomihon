@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.ui.recent.continuereading
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -61,10 +62,11 @@ private fun Screen.ContinueContent() {
 
     when {
         state.isLoading -> LoadingScreen()
-        state.items.isEmpty() -> EmptyScreen(MR.strings.recent_continue_empty)
         else -> {
             FastScrollLazyColumn {
-                // Compact page-level controls; content stays the hero.
+                // Compact page-level controls; content stays the hero. Rendered
+                // even when the filtered list is empty so the filter/sort can
+                // always be toggled back.
                 item(key = "continue_controls") {
                     Row(
                         modifier = Modifier
@@ -89,19 +91,32 @@ private fun Screen.ContinueContent() {
                         )
                     }
                 }
-                items(state.items, key = { it.manga.manga.id }) { item ->
-                    ContinueItemRow(
-                        item = item.manga,
-                        onClickCover = { navigator.push(MangaScreen(item.manga.manga.id)) },
-                        onClickResume = {
-                            val chapter = item.nextChapter
-                            if (chapter != null) {
-                                context.startActivity(
-                                    ReaderActivity.newIntent(context, chapter.mangaId, chapter.id),
-                                )
-                            }
-                        },
-                    )
+                if (state.items.isEmpty()) {
+                    item(key = "continue_empty") {
+                        Box(
+                            modifier = Modifier
+                                .fillParentMaxHeight()
+                                .fillMaxWidth(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            EmptyScreen(MR.strings.recent_continue_empty)
+                        }
+                    }
+                } else {
+                    items(state.items, key = { it.manga.manga.id }) { item ->
+                        ContinueItemRow(
+                            item = item.manga,
+                            onClickCover = { navigator.push(MangaScreen(item.manga.manga.id)) },
+                            onClickResume = {
+                                val chapter = item.nextChapter
+                                if (chapter != null) {
+                                    context.startActivity(
+                                        ReaderActivity.newIntent(context, chapter.mangaId, chapter.id),
+                                    )
+                                }
+                            },
+                        )
+                    }
                 }
             }
         }

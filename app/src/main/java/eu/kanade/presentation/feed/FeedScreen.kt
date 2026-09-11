@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -47,7 +48,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import eu.kanade.domain.feed.model.FeedItem
 import eu.kanade.domain.feed.model.FeedListing
@@ -437,12 +442,32 @@ private fun SourceSelectorDropdown(
     val selected = feedSources.firstOrNull { it.id == state.selectedSourceId }
     var expanded by remember { mutableStateOf(false) }
 
+    // Size the label to the widest candidate so switching sources doesn't
+    // change the chip's footprint; cap it so it can't squeeze the listing
+    // chips on narrow screens.
+    val density = LocalDensity.current
+    val textMeasurer = rememberTextMeasurer()
+    val labelStyle = MaterialTheme.typography.labelLarge
+    val allSourcesLabel = stringResource(MR.strings.feed_all_sources)
+    val maxWidth = with(density) { 160.dp.roundToPx() }
+    val labelWidth = remember(textMeasurer, labelStyle, maxWidth, feedSources, allSourcesLabel) {
+        val labels = listOf(allSourcesLabel) + feedSources.map { it.visualName }
+        labels.maxOf { textMeasurer.measure(it, labelStyle, maxLines = 1).size.width }
+            .coerceAtMost(maxWidth)
+    }
+    val labelModifier = with(density) { Modifier.width(labelWidth.toDp()) }
+
     Box {
         FilterChip(
             selected = selected != null,
             onClick = { expanded = true },
             label = {
-                Text(selected?.visualName ?: stringResource(MR.strings.feed_all_sources))
+                Text(
+                    text = selected?.visualName ?: stringResource(MR.strings.feed_all_sources),
+                    modifier = labelModifier,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             },
             trailingIcon = {
                 Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)

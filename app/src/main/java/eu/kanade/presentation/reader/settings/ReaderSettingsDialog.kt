@@ -57,10 +57,8 @@ fun ReaderSettingsDialog(
             LaunchedEffect(pagerState.currentPage) {
                 if (isColorFilterPage) {
                     window?.setDimAmount(0f)
-                    onHideMenus()
                 } else {
                     window?.setDimAmount(0.5f)
-                    onShowMenus()
                 }
             }
 

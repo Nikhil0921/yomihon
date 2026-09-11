@@ -3184,6 +3184,247 @@ UNCOMMITTED — awaiting user review + commit.
 ## Agent handoff
 
 ```text
+[BATCH 7B — FEED SOURCE-SELECTOR WIDTH STABILITY, COMPLETED 2026-09-11,
+UNCOMMITTED — all 4 gates green + device verified]
+
+Scope: presentation-only polish in FeedScreen.kt SourceSelectorDropdown.
+FeedScreenModel/state/navigation/DB/deps/i18n untouched.
+
+BEHAVIOR BEFORE: chip label = selected source's visualName → intrinsic
+width per name ("Kagane (EN)" tiny, "Mangakakalot (EN)" wide) → selector
+jumped on switch. Audit classification: expected intrinsic sizing, visual
+inconsistency only.
+
+FIX (FeedScreen.kt only): label Text gets fixed width = MAX measured
+width across ALL selectable candidates ("All sources" + every enabled
+feed source visualName), measured via rememberTextMeasurer +
+labelLarge (repo precedent: DuplicateMangaDialog.kt:321), CAPPED at
+160.dp so listing chips keep room on narrow screens. Text maxLines=1 +
+Ellipsis inside fixed slot. Switching sources now changes ZERO layout:
+chip footprint constant.
+
+A11y: Text semantics unchanged — full source name (uncut string) is the
+chip's accessible name; ellipsis is visual-only. No decorative
+contentDescriptions added (arrow icon stays null per implementation map).
+
+DEVICE VERIFIED (SM_M066B wired, real taps): chip bounds [56,209]
+[255,241] = 199px CONSTANT across: All sources → Mangakakalot (EN)
+(longest) → Kagane (EN) → All sources. Dropdown opens, all 6 sources
+listed, checkmark follows selection, grid refilters. Listing chips All/
+Popular/Latest clickable + Popular filters grid (Asura section only).
+Customize dialog opens (Grid columns/style, Show source selector,
+Default listing all present). Feed reselect → ManageFeedsScreen
+(existing semantics), back → Feed intact with persisted selection.
+Small-width n/a (single test device 720px).
+
+GATES GREEN 2026-09-11 (devcontainer, JDK17, -Xmx4g, both volumes):
+spotlessCheck + testDebugUnitTest + verifySqlDelightMigration +
+:app:assembleDebug BUILD SUCCESSFUL 2m43s (one run).
+
+Files changed (1): presentation/feed/FeedScreen.kt (+16/-2 in
+SourceSelectorDropdown + 4 imports). Batch 6/7A uncommitted set
+untouched.
+
+Remaining: none for this scope. Not started (per brief): Feed
+auto-pagination, toolbar reordering, Phase 10B, everything else.
+```
+
+```text
+[BATCH 7 — READER SETTINGS NAV/GESTURE-BAR CONSISTENCY FIX, COMPLETED
+2026-09-11, UNCOMMITTED — all 4 gates green + single device verify PASS]
+
+Scope: only ReaderSettingsDialog.kt menu-visibility asymmetry. Batch 6
+uncommitted set (Continue/Recent) + docs untouched, left as-is.
+
+ROOT CAUSE: ReaderSettingsDialog per-page LaunchedEffect(pagerState
+.currentPage) called onHideMenus() on Color Filter page, onShowMenus()
+on the other three. ReaderActivity.setMenuVisibility (l.955) shows/hides
+systemBars per call → with fullscreen pref ON, swiping settings pages
+flipped the Android nav/gesture bar per page (CF hidden, others shown).
+
+FIX (1 file, -2 lines): removed onHideMenus()/onShowMenus() from the
+per-page LaunchedEffect; dialog now NEVER touches menu/system-bar
+visibility while open. Dim handling (0f on CF for filter preview,
+0.5f otherwise) kept — cosmetic, unrelated to bars. Dialog keeps
+onShowMenus params wired to dismissal path (pre-existing, untouched:
+TabbedDialog onDismissRequest → onDismissRequest() + onShowMenus()).
+Result: bar state = whatever reader state was when dialog opened
+(settings opened from visible menu → bar visible), consistent across
+ALL pages; dismissal restores menu as before.
+
+FIRST ATTEMPT REJECTED by user (correctly): initial fix force-hid bars
+for the whole dialog (LaunchedEffect(Unit){onHideMenus()}) — over-
+reached; required behavior was consistency, not forced hiding. Reverted.
+
+GATES GREEN 2026-09-11 (devcontainer, JDK17, -Xmx4g, both volumes):
+spotlessCheck + :app:assembleDebug BUILD SUCCESSFUL 3m18s;
+testDebugUnitTest + verifySqlDelightMigration BUILD SUCCESSFUL 2m45s.
+NO DB change, NO i18n, NO deps.
+
+DEVICE VERIFICATION (SM_M066B wired R9ZY30X3SGP, arm64 debug APK,
+fresh force-stop relaunch, ONE loop per user's hard-stop rule):
+reader bar hidden (menu hidden) → menu shown bar=true → Settings open:
+ReadingMode bar=true → swipe General bar=true → swipe ColorFilter
+bar=true → (synthetic-swipe dismissal artifact on 3rd swipe, see note)
+→ reopen via tab taps: ReadAloud bar=true, CF bar=true. Bar constant
+true across every page, matches reader menu state. Dismissal restores
+normal reader behavior (logcat: setMenuVisibility show on dismiss).
+NOTE: uiautomator "input swipe" intermittently dismisses the AdaptiveSheet
+(mostly on CF→RA swipe; reproduced with OLD build too — PRE-EXISTING
+synthetic-input artifact, not a regression; tab taps + slower swipes
+keep dialog open). Not masked, not fixed (out of scope).
+
+Files changed (1): presentation/reader/settings/ReaderSettingsDialog.kt
+(-2 lines). ReaderActivity/TTS/OCR/nav/Feed/Recent/DB/deps/i18n
+UNTOUCHED (verified by git diff).
+
+Remaining: none for this scope. Feed source-selector width, Phase 10B,
+auto-pagination, toolbar customization NOT started (per brief).
+```
+
+```text
+[PHASE 6A POST-BATCH-5 BUG & FEATURE CONSOLIDATION — PLANNING-ONLY,
+COMPLETED 2026-09-11, ZERO app-source changes]
+
+Per user master brief. Read docs/* + git + source. Repo baseline CONFIRMED:
+clean @ f112df5d4 (docs), HEAD~ chain = a11y pass 212a09c7b + docs 82cce9206;
+v0.5.3 tag @ daa942738 = 5 commits back, all released. Baseline matches
+brief §1.
+
+NEW BUG INVESTIGATION MATRIX (all source-verified, no code touched):
+- A1 Recent scroll shade: EXPECTED MATERIAL BEHAVIOR (not bug).
+  RecentTab.kt:79-85 AppBar uses default Scaffold pinnedScrollBehavior +
+  default TopAppBar colors; M3 TopAppBar scrolledContainerColor =
+  surfaceColorAtElevation(3dp) activates when scrolledFraction>0 → header
+  lightens while scrolling, restores at rest. Same mechanism at U2.
+  Confidence HIGH. Classification: visual gap only IF unwanted; fix (if
+  user wants flat header) = 1-line containerColor=surface on Recent
+  AppBar; needs user taste decision.
+- A2 Continue "Alphabetically" no visible change: LIKELY BUG (HIGH conf).
+  ContinueScreenModel.kt:60-79 setSort works, BUT applyFilters reads
+  state.value.sort INSIDE mutableState.update — reads the OLD value
+  before the new sort lands (race with the state update itself), so
+  switching sorts can no-op. ALSO chips are single-select-looking but
+  state is independent (sort + downloadedOnly compose). ALSO possible
+  dataset already alphabetical by coincidence. Fix shape (Batch 6):
+  compute sort inside the update lambda from the NEW state, or store
+  unfiltered items and derive display list. Small, isolated.
+- A3 Continue Download-only stuck: CONFIRMED BUG (HIGH conf, root cause
+  A2-adjacent). Same stale-state read: applyFilters(it.items) inside
+  setDownloadedOnly re-reads state.value.downloadedOnly (pre-update
+  value) → filter can toggle "on" in state but produce stale/empty list
+  items; empty-list branch then shows recent_continue_empty
+  ("Nothing in progress…"), and since items are stored FILTERED (not
+  raw), the filter can never be reversed — raw list lost. Empty state +
+  dead-end = exactly user symptom. Force-stop resets because state is
+  in-memory (StateScreenModel, not persisted). Fix: store raw items in
+  State; apply downloadedOnly+sort as derivedStateOf at UI; keep chips
+  toggleable. Small, isolated.
+- H1 History excessive top spacing: CONFIRMED STRUCTURAL (HIGH conf).
+  History/Updates keep INNER Scaffolds (HistoryScreen.kt:42,
+  UpdatesScreen.kt:68) nested inside RecentTab outer Scaffold
+  (RecentTab.kt:79). Inner Scaffold's TopAppBar re-consumes status-bar
+  inset (contentWindowInsets default) + SearchToolbar/AppBar row adds
+  64dp → double top inset + double toolbar height. Shared root with H3.
+- H2 History search: PASS (source verified: HistoryScreenModel search
+  flow subscribe(query) + SearchToolbar wiring intact). No action.
+- H3 History search/delete toolbar lighter block: SAME root as H1 +
+  A1-family. Inner Scaffold topBar surface (surfaceColorAtElevation 0 =
+  surface) vs screen background → visible band; scroll behavior also
+  shifts it (same scrolledContainerColor mechanism as A1/U2). Classify:
+  visual gap; resolved BY the H1 structural fix (one title, one inset).
+- U1 Updates excessive spacing: same H1 nested-Scaffold root (Updates
+  inner Scaffold topBar under Recent tab row). Confidence HIGH.
+- U2 Updates scroll/refresh shade: same A1 mechanism. Confidence HIGH.
+- Feed source-selector width (§7): EXPECTED INTRINSIC SIZING (HIGH
+  conf). SourceSelectorDropdown FilterChip (FeedScreen.kt:440-450)
+  label = selected source name → chip width follows text length (All
+  Sources vs Asura Scans vs Manga Catalog). No collision: listing chips
+  row has weight(1f)+horizontalScroll (FeedScreen.kt:402-407), no
+  clipping (scrollable). Layout stable; not an a11y or responsive bug.
+  Classification: visual inconsistency only; candidate polish (optional
+  max-width ellipsize), no Batch-6 necessity.
+- Reader Settings nav-bar inconsistency (§8): ROOT CAUSE FOUND (HIGH
+  conf) — ReaderSettingsDialog.kt:56-65: LaunchedEffect(pagerState
+  .currentPage) calls onHideMenus() ONLY on ColorFilter page
+  (isColorFilterPage), onShowMenus() for others. setMenuVisibility
+  (ReaderActivity.kt:955-962) hides system bars only when
+  readerPreferences.fullscreen ON; with 3-button nav + fullscreen pref
+  ON, General/ReadAloud show menus → nav bar visible, ColorFilter hides
+  → hidden; swipe-back shows again. NOT a per-page hack need: smallest
+  safe future fix = call onHideMenus() on ALL pages (or show only on
+  dismiss), 1-line change in dialog, no ReaderActivity/TTS/OCR touch.
+  PROTECTED AREA root-cause documented, zero code changed.
+  NOTE: user described "Reading Modes visible, General hidden" — slight
+  inverse of code expectation (page 0 shows, 1 hides per source);
+  device behavior order may differ — needs 30s device verify (swipe
+  pages, watch 3-button nav bar), then Batch 6 candidate.
+
+ACCESSIBILITY FOLLOW-UPS (per brief §9, recorded, NOT auto-promoted):
+CategoryListItem drag-handle custom actions; BaseSliderItem slider
+label; SourceSelectorDropdown check contentDescriptions; spinner cds.
+Deferred — only fold into Batch 6 if user approves (small, coherent
+with Feed/Recent fixes).
+
+ORIGINAL FEATURE WORKFLOW RECOVERED (brief §10): docs/next-phase-plan.md
+PART C matrix (built from Prompt.md §16 rules + recorded ideas) + PART G
+roadmap = the authoritative recovered backlog. Already-implemented:
+grouped settings cards. Valid candidates: Feed auto-pagination (now
+eligible, Load-more stable), reader toolbar reordering (deferred #1),
+artwork-reactive tray feasibility study (deferred #3, protected-adjacent),
+a11y completion micro-batch, litert GPU-lib exclusion (~2.8MB/ABI).
+Rejected: clone aesthetics, nav customization, 6th tab, standardized
+reselect, Library Continue section (twice reverted), true backdrop blur.
+FUTURE/HOLD: Phase 10B all items. USER CLARIFICATION REQUIRED:
+"Create" tab referent (only open UI decision).
+
+PROPOSED BATCH 6 (smallest coherent unit, awaiting user approval):
+1. Continue fix (A2+A3): ContinueScreenModel store raw items; derived
+   display list; sort inside update. Files: ContinueScreenModel.kt,
+   ContinueTab.kt. Protected areas: NO. Risk LOW. Unit-testable pure
+   logic (state transitions) — 1 small test class.
+2. Recent nested-Scaffold cleanup (H1/H3/U1): collapse History/Updates
+   inner Scaffold topBar — one Recent screen title + tab row already
+   exist; strip inner toolbar surface/inset duplication (keep search
+   action + search field as row, not full toolbar), OR simplest variant:
+   set inner Scaffold contentWindowInsets to zero/consumed + flat
+   containerColor. Exact mechanism to be decided at implementation;
+   files: HistoryScreen.kt, UpdatesScreen.kt (+SearchToolbar usage).
+   Protected areas: NO. Risk MEDIUM (visual only, device verify).
+3. OPTIONAL (user taste): flat Recent AppBar color (A1/U2). 1 line.
+   Protected: NO.
+4. OPTIONAL (user approval): Reader-settings nav-bar consistency —
+   apply onHideMenus on all dialog pages (1 line, dialog file only,
+   no ReaderActivity change). Protected area TECHNICALLY NO (dialog
+   is presentation; but reader-adjacent → ask user first per freeze
+   list).
+DEVICE VERIFICATION PLAN (Batch 6): wired USB adb (R9ZY30X3SGP present
+in adb devices, 192.168.29.98 wireless entry IGNORED per brief). Tests:
+Recent → Continue: toggle Alphabetically (list reorders live), toggle
+Downloaded only on→off (list restores, no dead-end empty state,
+force-stop not needed); History/Updates top spacing + toolbar band
+gone; scroll Recent + Updates (header shade behavior consistent);
+Feed selector widths (no regression); Reader Settings page swipes with
+3-button nav (bar visibility consistent); a11y chip selected-state
+announce. Screenshots: Continue before/after chips, History/Updates
+top region, Recent scroll mid-state. Build gates: standard 4 CI-order
+gates. NO destructive tests (no history wipe, no feed deletion, no
+pref surgery beyond chip state).
+HOLD (not Batch 6): Phase 10B everything; Create tab (user
+clarification); speculative features; protected reader/TTS/OCR
+architecture; Feed auto-pagination (eligible but separate batch);
+toolbar reordering; artwork-reactive tray; a11y deferred micro-batch
+(unless user folds it in).
+
+Last agent:                 opencode (2026-09-11 — PHASE 6A planning)
+Next recommended task:      user approves/declines Batch 6 items 1–2
+                            (+optionals 3/4), then implementation
+                            session executes. No implementation prompt
+                            produced yet per brief.
+Files safe to modify:       none (planning-only session).
+```
+
+```text
 [YOMITSU REBRAND — COMPLETED 2026-09-07, UNCOMMITTED→ user commit 708a7182d]
 Audit-first controlled rebrand (user spec, 12 phases). Audit totals:
   yomihon 176 refs / mihon 1784 / tachiyomi 12327 / yomitsu 5 (pre-change).
@@ -4107,3 +4348,86 @@ section → current phase.md status → git status → task-relevant files → c
 architecture → smallest appropriate change → test → update memory.md → report
 exactly what changed. Do not redo full analysis unless architecture changed,
 docs are stale, or reality contradicts them.
+
+```text
+[BATCH 6 IMPLEMENTATION — Continue A2+A3 fix + Recent H1+H3+U1 nested-toolbar
+cleanup, COMPLETED 2026-09-11, UNCOMMITTED — all 4 gates green + device
+VERIFIED on SM_M066B]
+
+Scope: only the two approved root-cause families. Protected areas untouched
+(reader/TTS/OCR/Feed/nav/schema/deps/tokens — verified by final git diff).
+
+1. Continue A2+A3 (ContinueScreenModel.kt + ContinueTab.kt):
+- ROOT CAUSES: (A2) applyFilters read state.value.sort INSIDE
+  mutableState.update → sorted from stale pre-update value. (A3)
+  setDownloadedOnly/applyFilters destructively replaced stored items with the
+  FILTERED result → raw list lost → toggling filter off could dead-end until
+  force-stop. DEVICE CONFIRMATION of dead-end: pre-fix, Downloaded-only ON →
+  empty list ALSO HID the chips row (it rendered only in the non-empty branch)
+  → no way back without force-stop — two-layer bug (state + UI reachability).
+- FIX (SM): State now stores rawItems + sort + downloadedOnly +
+  isItemDownloaded lambda; displayed list = derived `items` property via new
+  internal pure fn applyContinueFilters(raw, sort, downloadedOnly, predicate)
+  — always computed from NEW values; setSort/setDownloadedOnly only flip their
+  flag. DownloadManager check moved to stable itemDownloaded() member wired
+  once in init (constructor-time ::member is illegal pre-super-init).
+- FIX (UI): ContinueTab controls row (sort chips + Downloaded-only chip) now
+  renders in ALL non-loading states; filtered-empty shows chips + centered
+  EmptyScreen via fillParentMaxHeight Box (LazyItemScope member fn, NOT
+  importable). Toggling OFF from filtered-empty restores the list — verified
+  live.
+- TESTS: ContinueScreenModelStateTest (new, 7 cases): alpha reorders, lastRead
+  desc default, downloaded-only filters, OFF restores raw, sort composes with
+  active filter, filter toggle preserves sort, pure-fn latest-values check.
+  One wrong initial expectation corrected (lastRead desc vs raw order).
+
+2. Recent H1+H3+U1 (HistoryScreen.kt + UpdatesScreen.kt):
+- ROOT CAUSE: both pages kept their own inner Scaffold+topBar under the
+  RecentTab host Scaffold → duplicated top-bar height, double status-bar
+  inset handling, lighter toolbar band + excessive top spacing.
+- FIX: inner Scaffolds/AppBars deleted. History: search = page-level
+  OutlinedTextField (shapes.large, bodyLarge, ImeAction.Search) + Clear
+  (x) reset + DeleteSweep (Clear history) in a controls Row; Row renders
+  even when list is empty (search-empty keeps controls reachable — mirrors
+  old always-mounted toolbar semantics). Updates: Filter/View-Upcoming/
+  Update-library IconButtons page-level right-aligned row; action mode
+  (counter + Select all/Invert/Cancel) replaces the row in selection mode;
+  MangaBottomActionMenu + SnackbarHost aligned BottomCenter in a
+  fillMaxSize Box (first attempt pinned menu to TOP — caught + fixed during
+  device verify). Pull-refresh, lastUpdated item, delete-confirm, filter
+  dialog wiring untouched. Public signatures unchanged (UpdateScreen,
+  HistoryScreen params identical; RecentTab/RecentHistoryTab/
+  RecentUpdatesTab/RecentReselect zero-diff).
+
+DEVICE VERIFICATION (SM_M066B, arm64 debug APK, uiautomator + on-device
+logcat /sdcard/batch6-verify.log): Continue list renders (Villain To Kill
+243 unread etc.); Alphabetical visibly reorders; Downloaded-only ON →
+filtered empty WITH chips visible; OFF → full list restored, no force-stop;
+alpha persists across filter cycle; History: single Recent title, search
+live-filters + Reset + Clear history reachable incl. empty state, date
+groups + per-item delete/Add-to-library intact; Updates: no duplicate
+toolbar, controls row, long-press → selection counter + select-all/
+invert/cancel + bottom action menu (bottom!), calendar opens Upcoming,
+filter icon present; Recent reselect → reader resume (12/58) works; Feed
+tab unchanged (selector + chips + manage/add); tab switching clean; 0
+FATAL exceptions attributable to app (all "FATAL" grep hits = my own
+shell-grep echoes). Visual/screenshot review via uiautomator dumps only
+(no pixel-diff tooling); no user data modified.
+
+GATES GREEN 2026-09-11 (devcontainer vsc-yomihon-e24e3bd7e46d…, JDK17,
+-Xmx4g, both volumes): spotlessCheck + testDebugUnitTest +
+verifySqlDelightMigration + :app:assembleDebug BUILD SUCCESSFUL in one
+2m38s run (plus per-iteration compile/spotless cycles during the 3
+device-found fix rounds). NO DB change; NO new i18n keys; NO dependency
+changes.
+
+Files changed (5): presentation/history/HistoryScreen.kt,
+presentation/updates/UpdatesScreen.kt, tachiyomi/ui/recent/continuereading/
+{ContinueScreenModel,ContinueTab}.kt,
+app/src/test/.../continuereading/ContinueScreenModelStateTest.kt (new).
+docs/memory.md (this record).
+
+Remaining: none observed for this scope. UpdateScreen snackbar now hosted
+in-page (BottomCenter) — previously inner-Scaffold-hosted; layout under
+keyboard/IME not explicitly re-verified (minor).
+```
