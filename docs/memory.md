@@ -3970,8 +3970,10 @@ Files safe to modify:       none (verification-only session, no edits).
 Last agent:                 opencode (2026-09-11 — PHASE 6 ACCESSIBILITY
                             COMPLETION PASS per user brief. All 14 fix
                             batches implemented, gates green, device-
-                            verified. UNCOMMITTED — user has not reviewed
-                            or committed yet.)
+                            verified. User committed the pass as
+                            212a09c7b "feat: enhance accessibility with
+                            semantics and toggleable components across
+                            multiple screens" 2026-09-11 05:45 UTC.)
 Date:                       2026-09-11
 Current task:               DONE (pending user review) — a11y pass implemented
                             + verified.
