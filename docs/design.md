@@ -78,7 +78,7 @@ No custom fonts are introduced. The app uses Material 3 defaults provided by
 | Body text | `bodyMedium` / `bodyLarge` |
 | Labels/settings descriptions | `bodySmall`, `labelMedium` |
 | Captions/meta | `labelSmall` |
-| Reader playback bar sentence text | `bodyLarge` (largest readable role that fits one line, ellipsized) |
+| Reader playback bar sentence text | `bodyMedium` (ratified 2026-09-11: compact pill chrome — bodyLarge inflates pill height over artwork at large font scales) |
 | Reader playback bar position "x/y" | `labelMedium` |
 
 ## 5. Spacing
@@ -87,7 +87,9 @@ Follow existing component metrics rather than a new scale:
 
 - Screen horizontal padding: 16 dp standard.
 - Compact bars/pills: `horizontal = 24.dp, vertical = 12.dp`
-  (`OcrLoadingIndicator` precedent).
+  (`OcrLoadingIndicator` precedent). Exception: the TTS playback pill
+  interior uses `horizontal = 16.dp, vertical = 4.dp` (ratified 2026-09-11 —
+  single-line compact chrome; 24/12 inflates height over artwork).
 - Icon spacing inside pills: `Arrangement.spacedBy(12.dp)`.
 - Settings rows use `SettingsItems` specs (their built-in paddings).
 
@@ -129,7 +131,7 @@ Placement mirrors established reader patterns:
   `widthIn(max = 560.dp)`), `Alignment.BottomCenter`, AnimatedVisibility
   slide-up/fade; rendered BEFORE the dialog block in the reader overlay so all
   dialogs/overlays draw above it. Contents:
-  - Current sentence text (single line, ellipsize, `bodyLarge`)
+  - Current sentence text (single line, ellipsize, `bodyMedium` — ratified 2026-09-11, matches shipped TtsPlaybackBar)
   - Position indicator "x/y" (`labelMedium`)
   - Controls row: previous | play/pause | next | stop (`IconButton`s)
   - Speed chip ("1x" label) with `DropdownMenu` (0.5–3x) writing the shared

@@ -50,14 +50,14 @@ unknown).
 | Item | Source | Status | User impact | Risk | Priority | Decision |
 |---|---|---|---|---|---|---|
 | v0.5.3 release (10 commits unreleased incl. 133MB APK reduction, rebrand, UI audit fixes) | git log 0286d9081..HEAD | not cut | users get no updates via in-app updater | none (build+publish only) | **P1** | recommended NEXT batch |
-| TtsPlaybackBar typography (code bodyMedium vs design.md §4 bodyLarge) | TtsPlaybackBar.kt:111,162,176,270 | open doc-vs-code conflict | none functional | LOW (visual or docs) | P2 | DECISION REQUIRED |
-| TtsPlaybackBar padding (code 16/4 vs design.md §5 24/12) | TtsPlaybackBar.kt:90 | open doc-vs-code conflict | none functional | LOW | P2 | DECISION REQUIRED |
-| FeedFilterBar arrow contentDescription = null | FeedScreen.kt:445 | decorative icon inside labeled FilterChip — correct a11y practice | none | none | INFO ONLY | recommend ACCEPT + close map §29 Q2 |
-| FeedHeader label vs combined one-line header | FeedScreen.kt:253-263 | two-line (ListGroupHeader + bodySmall listing label), device-verified rhythm | cosmetic density | none | P2 | DECISION REQUIRED (low stakes) |
-| "Create" tab referent | map §2: absent from source | user referenced; no such destination exists | none until clarified | none (invention risk if guessed) | INFO ONLY | DECISION REQUIRED (clarify, don't build) |
-| D-09 global search 4 entry paths | map §21 | intentional post-revert | none | none | INFO ONLY | no action |
-| D-14 Recent AppBar no actions | map §21 | by design (actions per-page) | none | none | INFO ONLY | no action |
-| D-15 Library reselect affordance undiscoverable | map §21 | documented convention | minor discoverability | behavior change needs IA gate | FUTURE | only with IA approval |
+| TtsPlaybackBar typography (code bodyMedium vs design.md §4 bodyLarge) | TtsPlaybackBar.kt:111,162,176,270 | RESOLVED 2026-09-11 micro-batch: code RATIFIED, design.md updated | none functional | LOW (visual or docs) | P2 | CLOSED — code ratified (bodyMedium) |
+| TtsPlaybackBar padding (code 16/4 vs design.md §5 24/12) | TtsPlaybackBar.kt:90 | RESOLVED 2026-09-11 micro-batch: code RATIFIED, design.md §5 documents 16/4 pill-interior exception | none functional | LOW | P2 | CLOSED — code ratified (16/4) |
+| FeedFilterBar arrow contentDescription = null | FeedScreen.kt:445 | RESOLVED 2026-09-11: decorative icon inside labeled FilterChip — correct a11y practice | none | none | INFO ONLY | CLOSED — NO ACTION (map §29 Q2 closed) |
+| FeedHeader label vs combined one-line header | FeedScreen.kt:253-263 | RESOLVED 2026-09-11: KEEP two-line (ListGroupHeader + bodySmall listing label), device-verified rhythm | cosmetic density | none | P2 | CLOSED — keep two-line |
+| "Create" tab referent | map §2: absent from source | user referenced; no such destination exists; referent never clarified | none until clarified | none (invention risk if guessed) | INFO ONLY | OPEN — DECISION REQUIRED (clarify, don't build) |
+| D-09 global search 4 entry paths | map §21 | intentional post-revert | none | none | INFO ONLY | CLOSED — no action |
+| D-14 Recent AppBar no actions | map §21 | by design (actions per-page) | none | none | INFO ONLY | CLOSED — no action |
+| D-15 Library reselect affordance undiscoverable | map §21 | documented convention | minor discoverability | behavior change needs IA gate | FUTURE | FUTURE — NOT PART OF CURRENT WORK (only with IA approval) |
 | D-04 negative path (source without supportsLatest) | Batch 1/5 | code-verified; not device-triggerable (all installed sources support Latest) | none | none | INFO ONLY | opportunistic verify if such a source appears |
 | D-11 missing-path live trigger | Batch 4/5 | unit-verified 4/4; no safe live trigger | none | none | INFO ONLY | closed as untriggerable |
 | GLENS transient retry live-verify (stabilization F) | memory 09-08 | code-verified; needs a natural 502/429 | none | none | INFO ONLY | opportunistic (log watch during any session) |
@@ -154,18 +154,35 @@ which stays documented-not-fixed.
 
 ---
 
-## PART F — Open decision register
+## PART F — Open decision register (RESOLVED 2026-09-11 decision micro-batch)
 
-1. **TtsPlaybackBar typography** — bodyMedium (code, TtsPlaybackBar.kt:111 etc.) vs bodyLarge (design.md §4/§8). Options: (a) ratify code, fix docs; (b) change code to bodyLarge. **Recommend (a)**: pill is single-line ellipsized compact chrome; bodyLarge inflates height over artwork at large font scales; code is the device-verified state. Consequence of (a): 3 doc rows edited. Approval: REQUIRED (protected system, either direction).
-2. **TtsPlaybackBar padding** — 16/4 (code, :90) vs 24/12 (design.md §5 pill precedent). Options: (a) ratify 16/4 as pill-interior metric, fix docs; (b) align code to 24/12. **Recommend (a)**: visual-only diff with no functional gain; clearance math already handles bar height. Bundle with decision 1 as one ruling. Approval: REQUIRED.
-3. **"Create" tab referent** — absent from source (map §2). Options: (a) user meant Recent "Continue" tab (no action); (b) Feed add-feed dialog (no action); (c) user wants a NEW create-type surface → needs its own spec + PRD. **Recommend: user clarifies; build nothing until then.** Approval: REQUIRED (only the clarification).
-4. **FeedFilterBar arrow contentDescription** — `null` (FeedScreen.kt:445). Decorative glyph inside a labeled FilterChip; M3/a11y practice treats it as decorative. **Recommend: ACCEPT + record disposition in map §29.** Approval: not required (acceptance is documentation).
-5. **FeedHeader label vs combined header** — two-line (ListGroupHeader source name + bodySmall listing label, FeedScreen.kt:253-263) vs one-line "Source · Listing". **Recommend: keep two-line** — listing is secondary metadata; combining overloads the section-header role; current rhythm device-verified incl. D-05 divider removal. Approval: low-stakes; user may overrule for density.
-6. **D-09 (global search 4 paths)** — intentional post-revert. **Recommend: no action.** Approval: not required.
-7. **D-14 (Recent AppBar no actions)** — by design; actions live per-page. **Recommend: no action.** Approval: not required.
-8. **D-15 (Library reselect affordance)** — hidden convention; standardizing or signposting = IA behavior change. **Recommend: FUTURE, only if discoverability complaints arrive.** Approval: REQUIRED if ever actioned.
+1. **TtsPlaybackBar typography** — RESOLVED: ratify code. bodyMedium stands
+   (pill is single-line ellipsized compact chrome; bodyLarge inflates height
+   over artwork at large font scales; code is the device-verified state).
+   design.md §4/§8 updated to bodyMedium. No source change.
+2. **TtsPlaybackBar padding** — RESOLVED: ratify code. 16/4 stands as the
+   playback-pill interior metric; design.md §5 now documents it as the
+   documented exception to the 24/12 pill precedent. No source change.
+3. **"Create" tab referent** — REMAINS OPEN. Absent from source (map §2);
+   plausible referents (Recent "Continue" tab; Feed add-feed dialog) noted,
+   never confirmed. User clarification required; build nothing until then.
+4. **FeedFilterBar arrow contentDescription** — RESOLVED: ACCEPT, NO ACTION.
+   Decorative glyph inside a labeled FilterChip; chip label is the accessible
+   name; a separate description would be redundant. map §29 Q2 closed.
+5. **FeedHeader label vs combined header** — RESOLVED: KEEP two-line
+   (ListGroupHeader source name + bodySmall listing label). Listing is
+   secondary metadata; combining overloads the section-header role; rhythm
+   device-verified incl. D-05 divider removal.
+6. **D-09 (global search 4 paths)** — RESOLVED: no action (intentional
+   post-revert).
+7. **D-14 (Recent AppBar no actions)** — RESOLVED: no action (by design;
+   actions live per-page).
+8. **D-15 (Library reselect affordance)** — FUTURE, NOT PART OF CURRENT
+   WORK. Standardizing or signposting = IA behavior change; only revisit with
+   IA approval if discoverability complaints arrive.
 
-None of the eight is implemented by this plan.
+Seven of eight closed by the 2026-09-11 micro-batch; Create-tab remains
+OPEN pending user clarification.
 
 ---
 
@@ -264,14 +281,15 @@ v0.6 planning.
 Exact decisions required from the user before ANY implementation:
 
 1. Approve/decline v0.5.3 release batch as Next (Part H).
-2. TtsPlaybackBar ruling — ratify code (bodyMedium + 16/4, docs fixed) or
-   change code (bodyLarge + 24/12). (Part F 1+2, one ruling.)
+2. TtsPlaybackBar ruling — RESOLVED 2026-09-11: ratified code
+   (bodyMedium + 16/4); design.md updated; no source change.
 3. "Create" tab referent — clarify meaning; no build without a spec.
-4. FeedHeader two-line vs combined — keep two-line (recommendation) or
-   overrule.
+   STILL OPEN.
+4. FeedHeader two-line vs combined — RESOLVED 2026-09-11: keep two-line.
 5. Optional early calls (not blocking the release): choose the first
    Phase 10B item if a feature track is wanted now; approve/dismiss the
    a11y completion pass scheduling.
 
-Nothing in this plan is implemented. Batch 6 does not exist until the user
-defines it from the roadmap above.
+v0.5.3 released 2026-09-11; the 2026-09-11 decision micro-batch closed
+Part F items 1, 2, 4, 5, 6, 7, 8 (Create-tab, item 3, remains open).
+Batch 6 does not exist until the user defines it from the roadmap above.

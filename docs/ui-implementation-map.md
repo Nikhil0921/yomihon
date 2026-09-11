@@ -61,7 +61,9 @@ Screens:
 string contains it (rg for "Create" under `ui/recent/` → zero hits). The
 user's reference most plausibly maps to the **Recent "Continue" tab** (newest
 recently-introduced tab surface, `recent_tab_continue` i18n) or to the Feed
-"Add feed" creation dialog. Recorded, not invented.
+"Add feed" creation dialog. Recorded, not invented. STATUS 2026-09-11:
+remains OPEN — DECISION REQUIRED (user clarification; no implementation
+without an explicit referent + spec).
 
 ## 3. Navigation map
 
@@ -562,7 +564,7 @@ audio; download manager; tracking.
 | D-03 | Feed | State | "All" selection silently reverted to defaultListing on next pref emit | explicit All persists | MEDIUM | `listingOverride ?: defaultListing` conflates user-All with uninitialized (FeedScreenModel.kt:102) | sentinel/flag distinguishing user choice; or drop re-seed after first emit |
 | D-04 | Feed→AddFeedDialog | State | selecting a source WITHOUT supportsLatest after choosing Latest leaves listing chip selected-but-unsupported until confirm | Latest auto-deselects instantly | MINOR | guard exists on click (FeedScreen.kt:297,305) but only fires on NEW selection; default LATEST persists | default selectedListing POPULAR when opening dialog, or guard on confirm | 
 | D-05 | Feed | Typography | FeedHeader listing label bodySmall + divider directly under ListGroupHeader — divider under section header doubles the ListGroupHeader separation used in History/Updates (dates) | consistent section rhythm | MINOR | local composition | consider dropping divider (matches History/Updates) — visual review first |
-| D-06 | More | Spacing | Spacer(12.dp) between cards in more — duplicated literal instead of shared rhythm constant | fine as-is (matches PreferenceScreen); document | MINOR | literal | RESOLVED 2026-09-09 (Batch 3): documented in §7 (frozen 12dp grouped-card rhythm); const extraction declined — 2 sites, shared const = abstraction for its own sake. Batch-3 typography sweep found NO further authorized residue: remaining `.sp`/dp findings are either documented exceptions (LibraryToolbar Pill 14sp added to §6 exception family — counter density, same as queue triage counters), PROTECTED-system doc conflicts (TtsPlaybackBar bodyMedium vs design.md §4 bodyLarge; pill 16/4dp vs §5 24/12 — recorded in memory.md, user decision required), or upstream residue outside this batch's register (upcoming-calendar 16sp raw, SettingsDictionaryScreen card dialect, TrackerSearch/Migration radii, search row 14dp, TriStateListDialog 20dp, LogoHeader inset divergence — documented, untouched) |
+| D-06 | More | Spacing | Spacer(12.dp) between cards in more — duplicated literal instead of shared rhythm constant | fine as-is (matches PreferenceScreen); document | MINOR | literal | RESOLVED 2026-09-09 (Batch 3): documented in §7 (frozen 12dp grouped-card rhythm); const extraction declined — 2 sites, shared const = abstraction for its own sake. Batch-3 typography sweep found NO further authorized residue: remaining `.sp`/dp findings are either documented exceptions (LibraryToolbar Pill 14sp added to §6 exception family — counter density, same as queue triage counters), PROTECTED-system doc conflicts (TtsPlaybackBar bodyMedium vs design.md §4 bodyLarge; pill 16/4dp vs §5 24/12 — RESOLVED 2026-09-11 decision micro-batch: code RATIFIED as shipped, design.md §4/§5/§8 now describe bodyMedium + 16/4; no source change), or upstream residue outside this batch's register (upcoming-calendar 16sp raw, SettingsDictionaryScreen card dialect, TrackerSearch/Migration radii, search row 14dp, TriStateListDialog 20dp, LogoHeader inset divergence — documented, untouched) |
 | D-07 | ManageFeedsScreen | Spacing | trailing row = 3×48dp IconButtons + Switch = ~216dp controls in 80dp ListItem trailing — dense on narrow screens, Switch not content-described | verify 48dp + label semantics | MINOR | layout choice | visual review on 360dp device; Switch contentDescription if missing |
 | D-08 | Settings search | Discoverability | SettingsDictionaryScreen + SettingsOcrExclusionsScreen not in settingScreens search index (SettingsSearchScreen.kt:288-300) | documented decision (either register or record exclusion) | MINOR | plain Screen objects by design | RESOLVED 2026-09-09 (Batch 4): registered via synthetic single-entry index additions in getIndex() — unindexedSettingScreens list (screen + title + subtitle) appended to the SearchableSettings corpus; results navigate with navigator.replace to the existing Screen objects; zero UI change to either screen; Dictionary subtitle = label_dictionary (search corpus only, covers singular "dictionary" query). Device-verified: queries "dictionary"/"dictionaries"/"exclusions" surface + open both screens; existing entries ("theme" → App theme) intact |
 | D-09 | Global search | Navigation | 4 scattered entry paths, none primary | intentional post-revert (Browse reselect + Sources TravelExplore visible) | INFO | set-2 revert decision | none (recorded) |
@@ -606,9 +608,10 @@ still 24dp-radius variant, LOW).
 ## 23. Accessibility requirements
 
 ≥48dp touch targets (IconButton default; ManageFeedsScreen Switch+buttons
-verify D-07); contentDescription on every icon-only action (verified:
-FeedFilterBar dropdown arrow has none but sits inside labeled chip — add if
-review demands); sp typography only; token contrast under all schemes
+verify D-07); contentDescription on every icon-only action (FeedFilterBar
+dropdown arrow is decorative inside its labeled FilterChip — CLOSED
+2026-09-11, NO ACTION: chip label is the accessible name, a separate
+description would be redundant); sp typography only; token contrast under all schemes
 incl. AMOLED+Monochrome; no color-only state (chips = selected tonal + text);
 state semantics via Switch/selected defaults; screen-reader order follows
 visual order; large-font tolerance via heightIn.
@@ -701,9 +704,13 @@ source modified.
 
 ## 29. Open questions
 
-1. "Create" tab (user-referenced) — confirmed absent; confirm intended
-   referent (Continue tab? Add-feed dialog?).
+1. "Create" tab (user-referenced) — confirmed absent from source; referent
+   never clarified. STATUS: OPEN — DECISION REQUIRED (user clarification
+   only; build nothing until a referent is specified and spec'd).
 2. FeedFilterBar source-chip trailing ArrowDropDown has no
-   contentDescription (chip label provides context) — add or accept?
-3. FeedHeader listing label — keep, or fold into ListGroupHeader text
-   ("Source · Popular") for one-line headers?
+   contentDescription — RESOLVED 2026-09-11: CLOSED, NO ACTION (decorative
+   glyph inside labeled FilterChip; chip label is the accessible name).
+3. FeedHeader listing label — RESOLVED 2026-09-11: KEEP two-line
+   structure (ListGroupHeader source name + bodySmall listing label);
+   collapsing rejected (overloads the section-header role; current rhythm
+   device-verified incl. D-05 divider removal).

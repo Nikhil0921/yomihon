@@ -4041,6 +4041,50 @@ Files safe to modify:       the 16 a11y-fix files above (pending commit);
                             everything else needs user's new instruction.
 ```
 
+```text
+Last agent:                 opencode (2026-09-11 — DECISION MICRO-BATCH per
+                            user brief. Docs-only; ZERO application source
+                            changes. Seven of eight open decisions closed;
+                            Create-tab remains OPEN.)
+Date:                       2026-09-11
+Current task:               DONE — decision register reconciled with shipped
+                            implementation.
+  Decisions (per user-approved dispositions):
+       1. TtsPlaybackBar typography — CODE RATIFIED (bodyMedium);
+          design.md §4 + §8 updated. No source change.
+       2. TtsPlaybackBar padding — CODE RATIFIED (16dp/4dp pill interior);
+          design.md §5 documents it as exception to 24/12 pill precedent.
+          No source change.
+       3. FeedFilterBar arrow — CLOSED NO ACTION (decorative glyph inside
+          labeled FilterChip; chip label is accessible name). map §23/§29
+          Q2 + plan matrix/Part F updated. FeedScreen.kt untouched.
+       4. FeedHeader — KEEP two-line (ListGroupHeader + bodySmall label).
+          map §29 Q3 + plan matrix/Part F updated. No source change.
+       5. D-09 — CLOSED no action (intentional post-revert).
+       6. D-14 — CLOSED no action (actions per-page by design).
+       7. D-15 — FUTURE, NOT PART OF CURRENT WORK (IA gate if ever).
+       8. Create-tab — REMAINS OPEN (DECISION REQUIRED; user clarification
+          only; nothing invented, nothing built).
+  Docs updated: design.md (§4 row, §5 pill exception, §8 sentence text),
+       ui-implementation-map.md (§2 Create status, §23 arrow closure,
+       §29 all three questions resolved, D-06 register row), next-phase-
+       plan.md (Part B matrix rows, Part F register, Part I gate),
+       phase.md (current pointer), memory.md (this entry).
+  Source integrity: git diff confirms ZERO application source changes;
+       TtsPlaybackBar.kt, FeedScreen.kt, all reader/TTS/OCR/nav files
+       untouched; no dependencies touched; no a11y deferred items added.
+  Verification: docs-only — full text grep confirms no contradictory
+       bodyLarge/24-12/TtsPlaybackBar-spec statements remain in normative
+       design docs (historical memory.md entries preserved as history).
+       No build required (no source changed).
+Next recommended task:      user picks next track (first Phase 10B item,
+                            deferred a11y micro-batch, or Batch 6 of their
+                            definition); Create-tab clarification stands as
+                            the only open UI decision.
+Files safe to modify:       none — docs-only session; next session needs
+                            user direction.
+```
+
 ---
 
 ## MEMORY UPDATE PROTOCOL (mandatory)

@@ -5,14 +5,22 @@
 > A phase is COMPLETED only when its verification steps have actually been run
 > and recorded in `docs/memory.md`.
 
-Current phase pointer: **v0.5.3 RELEASED 2026-09-11 (tag v0.5.3,
-  commit daa942738, all gates green, device smoke PASS, GitHub release
-  published with 5 ABI APKs).** Releases the verified baseline: Yomitsu
+Current phase pointer: **DECISION MICRO-BATCH COMPLETE 2026-09-11 (docs-
+  only, commit see memory.md). Ratified TtsPlaybackBar as shipped
+  (bodyMedium + 16/4; design.md §4/§5/§8 updated, zero source change);
+  FeedFilterBar arrow CLOSED NO ACTION; FeedHeader two-line KEPT; D-09
+  and D-14 CLOSED no action; D-15 FUTURE not current work. Create-tab
+  remains OPEN (user clarification; nothing built). A11y pass complete +
+  committed (212a09c7b + docs 82cce9206). v0.5.3 RELEASED 2026-09-11
+  (tag v0.5.3, commit daa942738, all gates green, device smoke PASS,
+  GitHub release published with 5 ABI APKs).** Releases the verified
+  baseline: Yomitsu
   rebrand, legacy-OCR removal (−133MB), stabilization batches, UI audit
-  Batches 1–5. Open decision register (D-09/D-14/D-15, TtsPlaybackBar,
-  Create-tab, FeedHeader) all still open, zero implemented.
-  Next per docs/next-phase-plan.md roadmap: decision micro-batch,
-  a11y completion pass, or first 10B item (user's pick).
+  Batches 1–5. Open decision register (Create-tab only; nothing else
+  pending). Next per docs/next-phase-plan.md roadmap: first Phase 10B
+  item, a11y deferred micro-batch (CategoryListItem drag actions,
+  BaseSliderItem label, SourceSelectorDropdown checks, spinner cds), or
+  user-defined Batch 6 — user's pick.
   Prior: UI audit implementation Batches 1–5 COMPLETE
   2026-09-10 (Batch 5 device-verification matrix PASS: Feed D-02/D-03/
   paging/ManageFeeds, Recent + D-01, Settings Search D-08, MangaScreen
