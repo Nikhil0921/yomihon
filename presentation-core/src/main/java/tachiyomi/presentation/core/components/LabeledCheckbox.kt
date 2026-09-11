@@ -1,10 +1,10 @@
 package tachiyomi.presentation.core.components
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -29,13 +29,11 @@ fun LabeledCheckbox(
             .clip(MaterialTheme.shapes.small)
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .clickable(
+            .toggleable(
+                value = checked,
+                enabled = enabled,
                 role = Role.Checkbox,
-                onClick = {
-                    if (enabled) {
-                        onCheckedChange(!checked)
-                    }
-                },
+                onValueChange = onCheckedChange,
             ),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),

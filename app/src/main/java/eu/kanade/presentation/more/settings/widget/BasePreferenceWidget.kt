@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,14 +44,25 @@ internal fun BasePreferenceWidget(
     icon: @Composable (() -> Unit)? = null,
     onClick: (() -> Unit)? = null,
     widget: @Composable (() -> Unit)? = null,
+    checked: Boolean? = null,
+    onCheckedChanged: ((Boolean) -> Unit)? = null,
 ) {
     val highlighted = LocalPreferenceHighlighted.current
     val minHeight = LocalPreferenceMinHeight.current
+    val rowModifier = if (checked != null && onCheckedChanged != null) {
+        Modifier.toggleable(
+            value = checked,
+            role = Role.Switch,
+            onValueChange = onCheckedChanged,
+        )
+    } else {
+        Modifier.clickable(enabled = onClick != null, onClick = { onClick?.invoke() })
+    }
     Row(
         modifier = modifier
             .highlightBackground(highlighted)
             .sizeIn(minHeight = minHeight)
-            .clickable(enabled = onClick != null, onClick = { onClick?.invoke() })
+            .then(rowModifier)
             .fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {

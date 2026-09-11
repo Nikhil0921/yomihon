@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
@@ -46,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import eu.kanade.domain.feed.model.FeedItem
 import eu.kanade.domain.feed.model.FeedListing
@@ -280,7 +282,7 @@ private fun AddFeedDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(MR.strings.feed_add)) },
         text = {
-            Column {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 Text(stringResource(MR.strings.feed_select_source), style = MaterialTheme.typography.header)
                 sources.forEach { source ->
                     val selected = selectedSource?.id == source.id
@@ -291,18 +293,19 @@ private fun AddFeedDialog(
                         trailingContent = {
                             RadioButton(
                                 selected = selected,
-                                onClick = {
-                                    selectedSource = source
-                                    if (!source.supportsLatest) selectedListing = FeedListing.POPULAR
-                                },
+                                onClick = null,
                             )
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable {
-                                selectedSource = source
-                                if (!source.supportsLatest) selectedListing = FeedListing.POPULAR
-                            },
+                            .selectable(
+                                selected = selected,
+                                role = Role.RadioButton,
+                                onClick = {
+                                    selectedSource = source
+                                    if (!source.supportsLatest) selectedListing = FeedListing.POPULAR
+                                },
+                            ),
                     )
                 }
                 HorizontalDivider(modifier = Modifier.padding(vertical = MaterialTheme.padding.small))

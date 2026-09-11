@@ -131,6 +131,7 @@ private fun ContinueItemRow(
         MangaCover.Book(
             modifier = Modifier.height(ContinueItemHeight),
             data = item.manga.asMangaCover(),
+            contentDescription = item.manga.title,
             onClick = onClickCover,
         )
         Column(

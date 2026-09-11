@@ -21,6 +21,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
@@ -100,12 +102,13 @@ class ManageFeedsScreen : Screen() {
         onDelete: () -> Unit,
     ) {
         val source = state.sources.firstOrNull { it.id == feed.sourceId }
+        val feedName = source?.visualName ?: stringResource(MR.strings.feed_source_unavailable)
         ListItem(
             // Transparent so the group card's tonal surface reads as one surface
             // (ListItem's surface-colored default flattens the card in AMOLED).
             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             headlineContent = {
-                Text(source?.visualName ?: stringResource(MR.strings.feed_source_unavailable))
+                Text(feedName)
             },
             supportingContent = {
                 Text(
@@ -128,7 +131,13 @@ class ManageFeedsScreen : Screen() {
                             contentDescription = stringResource(MR.strings.feed_move_down),
                         )
                     }
-                    Switch(checked = feed.enabled, onCheckedChange = onToggle)
+                    Switch(
+                        checked = feed.enabled,
+                        onCheckedChange = onToggle,
+                        modifier = Modifier.semantics {
+                            contentDescription = feedName
+                        },
+                    )
                     IconButton(onClick = onDelete) {
                         Icon(
                             Icons.Outlined.Delete,

@@ -25,6 +25,8 @@ fun TextPreferenceWidget(
     iconTint: Color = MaterialTheme.colorScheme.primary,
     widget: @Composable (() -> Unit)? = null,
     onPreferenceClick: (() -> Unit)? = null,
+    checked: Boolean? = null,
+    onCheckedChanged: ((Boolean) -> Unit)? = null,
 ) {
     BasePreferenceWidget(
         modifier = modifier,
@@ -56,6 +58,8 @@ fun TextPreferenceWidget(
         },
         onClick = onPreferenceClick,
         widget = widget,
+        checked = checked,
+        onCheckedChanged = onCheckedChanged,
     )
 }
 

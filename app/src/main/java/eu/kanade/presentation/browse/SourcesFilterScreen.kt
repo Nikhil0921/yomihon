@@ -7,6 +7,8 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import eu.kanade.presentation.browse.components.BaseSourceItem
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.more.settings.widget.SwitchPreferenceWidget
@@ -115,8 +117,12 @@ private fun SourcesFilterItem(
     onClickItem: (Source) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val stateDescription = stringResource(
+        if (enabled) MR.strings.selected else MR.strings.not_selected,
+    )
     BaseSourceItem(
-        modifier = modifier,
+        modifier = modifier
+            .semantics { this.stateDescription = stateDescription },
         source = source,
         showLanguageInContent = false,
         onClickItem = { onClickItem(source) },

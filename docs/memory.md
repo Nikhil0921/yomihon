@@ -3966,6 +3966,79 @@ Next recommended task:      user reviews docs/next-phase-plan.md + rules on
 Files safe to modify:       none (verification-only session, no edits).
 ```
 
+```text
+Last agent:                 opencode (2026-09-11 — PHASE 6 ACCESSIBILITY
+                            COMPLETION PASS per user brief. All 14 fix
+                            batches implemented, gates green, device-
+                            verified. UNCOMMITTED — user has not reviewed
+                            or committed yet.)
+Date:                       2026-09-11
+Current task:               DONE (pending user review) — a11y pass implemented
+                            + verified.
+  Scope honored: smallest targeted fixes only; protected systems untouched
+       (ReaderActivity, TtsPlayback*, OCR, reader nav); open decisions
+       (TtsPlaybackBar typography, Create-tab, FeedFilterBar arrow,
+       FeedHeader, D-09/D-14/D-15) all left open; zero new i18n keys
+       (reused selected/not_selected/disabled/ext_downloading/
+       label_downloaded/action_close/loading pattern keys).
+  Changed files (all compile + spotless clean):
+       presentation-core/SettingsItems.kt (Checkbox/Radio/TriState/Heading
+       semantics), LabeledCheckbox.kt (toggleable);
+       app BasePreferenceWidget+SwitchPreferenceWidget+TextPreferenceWidget
+       (row-level toggleable, Role.Switch), PreferenceGroupCard+ListGroupHeader
+       heading(); ChapterDownloadIndicator (state cds); MangaChapterListItem,
+       UpdatesUiItem, MigrateMangaScreen, ClearDatabaseScreen, CommonMangaItem
+       (selection semantics); HistoryItem/ContinueTab/UpdatesUiItem cover cds;
+       GlobalSearchResultItems arrow invisibleToUser; SettingsSearchScreen
+       clear cd; FeedScreen AddFeedDialog (scroll + selectable radio rows);
+       ManageFeedsScreen switch label; ExtensionDetailsScreen
+       SourceSwitchPreference checked param; SourcesFilterScreen
+       stateDescription; CommonMangaItem ContinueReadingButton size→48dp
+       default (constants removed).
+  Gates (docker JDK17 -Xmx4g both volumes): compileDebugKotlin
+       :presentation-core PASS; spotlessApply applied formatting;
+       spotlessCheck + testDebugUnitTest + verifySqlDelightMigration PASS
+       (2m37s); :app:assembleDebug PASS. APK 0.5.2-8266+ installed.
+  Device verification (SM_M066B, app.yomihon.dev, font default 0.9):
+       More/Settings switch rows: checkable+checked exposed, live toggle
+       verified (was 0 checkable anywhere). Library grid + chapter
+       selection: checked=true on selected, false siblings. Continue +
+       History covers: cd=title (was cd=""). AddFeedDialog: 9 labeled
+       selectable radio rows + scrollable container (was ~10 unlabeled,
+       no scroll). Download/OCR icons labeled. Cancelled dialog after
+       radio check — no feed created, no user data changed. One read-
+       history side effect: opened Ch.1 of Villain To Kill while probing
+       (reader advanced history one chapter) — normal read behavior, no
+       data loss.
+  Known limitations: stateDescription fixes (TriState filter rows,
+       SourcesFilterScreen) NOT verifiable via uiautomator — tool doesn't
+       serialize stateDescription; TalkBack does announce it. API-
+       conformance verified only (pattern matches TriStateListDialog
+       precedent which uses same keys). Debug-launch gotcha discovered:
+       monkey LAUNCHER intent resolves to LeakCanary LeakLauncherActivity
+       in debug builds — use am start -n app.yomihon.dev/eu.kanade.
+       tachiyomi.ui.main.MainActivity instead.
+  Documented-only findings (no code, see /tmp/opencode/a11y/ dumps):
+       TagsChip 32dp targets (deliberate density, LocalMinimumInteractive-
+       ComponentSize provides 0.dp — NOT changed); swipe-action icons
+       unlabeled/no SR path; ManageFeeds move up/down generic descs +
+       boundary no-op buttons; search-toolbar BasicTextField label (P2);
+       scrim unlabeled; badges bare numbers; MangaBottomActionMenu 48dp
+       clip (P2); BaseSettingsItem 40-44dp rows; read-state color-only
+       asymmetry + slider/desc noise.
+Next recommended task:      user reviews diff (~16 files), eyeballs
+                            /tmp/opencode/a11y/fix_{feed,recent,library}.png
+                            for visual regressions, then commits. Optional
+                            follow-up micro-batch: CategoryListItem drag
+                            handle custom a11y actions (move up/down) +
+                            BaseSliderItem slider label + FeedScreen
+                            SourceSelectorDropdown check cds + spinner cds
+                            — planned in audit but deferred to keep this
+                            change set minimal.
+Files safe to modify:       the 16 a11y-fix files above (pending commit);
+                            everything else needs user's new instruction.
+```
+
 ---
 
 ## MEMORY UPDATE PROTOCOL (mandatory)

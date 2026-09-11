@@ -28,6 +28,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastMap
 import cafe.adriel.voyager.core.model.StateScreenModel
@@ -196,6 +198,7 @@ class ClearDatabaseScreen : Screen() {
             modifier = Modifier
                 .selectedBackground(isSelected)
                 .clickable(onClick = onClickSelect)
+                .semantics { selected = isSelected }
                 .padding(horizontal = 8.dp)
                 .height(56.dp),
             verticalAlignment = Alignment.CenterVertically,

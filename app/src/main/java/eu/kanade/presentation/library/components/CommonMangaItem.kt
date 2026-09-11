@@ -33,6 +33,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -52,9 +54,6 @@ object CommonMangaItemDefaults {
     @Suppress("ConstPropertyName")
     const val BrowseFavoriteCoverAlpha = 0.34f
 }
-
-private val ContinueReadingButtonSizeSmall = 28.dp
-private val ContinueReadingButtonSizeLarge = 32.dp
 
 private val ContinueReadingButtonIconSizeSmall = 16.dp
 private val ContinueReadingButtonIconSizeLarge = 20.dp
@@ -104,7 +103,6 @@ fun MangaCompactGridItem(
                     )
                 } else if (onClickContinueReading != null) {
                     ContinueReadingButton(
-                        size = ContinueReadingButtonSizeLarge,
                         iconSize = ContinueReadingButtonIconSizeLarge,
                         onClick = onClickContinueReading,
                         modifier = Modifier
@@ -158,7 +156,6 @@ private fun BoxScope.CoverTextOverlay(
         )
         if (onClickContinueReading != null) {
             ContinueReadingButton(
-                size = ContinueReadingButtonSizeSmall,
                 iconSize = ContinueReadingButtonIconSizeSmall,
                 onClick = onClickContinueReading,
                 modifier = Modifier.padding(
@@ -206,7 +203,6 @@ fun MangaComfortableGridItem(
                 content = {
                     if (onClickContinueReading != null) {
                         ContinueReadingButton(
-                            size = ContinueReadingButtonSizeLarge,
                             iconSize = ContinueReadingButtonIconSizeLarge,
                             onClick = onClickContinueReading,
                             modifier = Modifier
@@ -301,6 +297,7 @@ private fun GridItemSelectable(
                 onClick = onClick,
                 onLongClick = onLongClick,
             )
+            .semantics { selected = isSelected }
             .selectedOutline(isSelected = isSelected, color = MaterialTheme.colorScheme.secondary)
             .padding(4.dp),
     ) {
@@ -366,7 +363,6 @@ fun MangaListItem(
         BadgeGroup(content = badge)
         if (onClickContinueReading != null) {
             ContinueReadingButton(
-                size = ContinueReadingButtonSizeSmall,
                 iconSize = ContinueReadingButtonIconSizeSmall,
                 onClick = onClickContinueReading,
                 modifier = Modifier.padding(start = ContinueReadingButtonListSpacing),
@@ -377,7 +373,6 @@ fun MangaListItem(
 
 @Composable
 private fun ContinueReadingButton(
-    size: Dp,
     iconSize: Dp,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -390,7 +385,6 @@ private fun ContinueReadingButton(
                 containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
                 contentColor = contentColorFor(MaterialTheme.colorScheme.primaryContainer),
             ),
-            modifier = Modifier.size(size),
         ) {
             Icon(
                 imageVector = Icons.Filled.PlayArrow,

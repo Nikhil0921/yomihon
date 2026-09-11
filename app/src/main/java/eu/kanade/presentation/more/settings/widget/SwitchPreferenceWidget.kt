@@ -33,7 +33,8 @@ fun SwitchPreferenceWidget(
                 modifier = Modifier.padding(start = TrailingWidgetBuffer),
             )
         },
-        onPreferenceClick = { onCheckedChanged(!checked) },
+        checked = checked,
+        onCheckedChanged = onCheckedChanged,
     )
 }
 

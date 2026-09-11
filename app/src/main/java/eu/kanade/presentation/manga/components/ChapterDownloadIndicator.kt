@@ -180,7 +180,7 @@ private fun DownloadingIndicator(
         }
         Icon(
             imageVector = Icons.Outlined.ArrowDownward,
-            contentDescription = null,
+            contentDescription = stringResource(MR.strings.ext_downloading),
             modifier = ArrowModifier,
             tint = arrowColor,
         )
@@ -207,7 +207,7 @@ private fun DownloadedIndicator(
     ) {
         Icon(
             imageVector = Icons.Filled.CheckCircle,
-            contentDescription = null,
+            contentDescription = stringResource(MR.strings.label_downloaded),
             modifier = Modifier.size(IndicatorSize),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )

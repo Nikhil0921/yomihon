@@ -130,7 +130,7 @@ class SettingsSearchScreen : Screen() {
                                 IconButton(onClick = { textFieldState.clearText() }) {
                                     Icon(
                                         imageVector = Icons.Outlined.Close,
-                                        contentDescription = null,
+                                        contentDescription = stringResource(MR.strings.action_close),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }

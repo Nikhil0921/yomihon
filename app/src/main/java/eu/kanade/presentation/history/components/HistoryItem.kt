@@ -53,6 +53,7 @@ fun HistoryItem(
         MangaCover.Book(
             modifier = Modifier.height(HistoryItemHeight),
             data = history.coverData,
+            contentDescription = history.title,
             onClick = onClickCover,
         )
         Column(

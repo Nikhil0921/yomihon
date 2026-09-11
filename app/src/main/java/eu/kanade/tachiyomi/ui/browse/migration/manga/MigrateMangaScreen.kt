@@ -19,6 +19,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
@@ -155,7 +157,9 @@ data class MigrateMangaScreen(
         modifier: Modifier = Modifier,
     ) {
         BaseMangaListItem(
-            modifier = modifier.selectedBackground(isSelected),
+            modifier = modifier
+                .selectedBackground(isSelected)
+                .semantics { selected = isSelected },
             manga = manga,
             onClickItem = { onClickItem(manga) },
             onClickCover = { onClickCover(manga) },

@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
@@ -46,6 +48,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
@@ -53,6 +59,7 @@ import dev.icerock.moko.resources.StringResource
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.core.common.preference.toggle
+import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.DISABLED_ALPHA
 import tachiyomi.presentation.core.components.material.Slider
 import tachiyomi.presentation.core.components.material.padding
@@ -77,6 +84,7 @@ fun HeadingItem(text: String) {
         text = text,
         style = MaterialTheme.typography.header,
         modifier = Modifier
+            .semantics { heading() }
             .fillMaxWidth()
             .padding(
                 horizontal = SettingsItemsPaddings.Horizontal,
@@ -131,30 +139,58 @@ fun CheckboxItem(label: String, pref: Preference<Boolean>) {
 
 @Composable
 fun CheckboxItem(label: String, checked: Boolean, onClick: () -> Unit) {
-    BaseSettingsItem(
-        label = label,
-        widget = {
-            Checkbox(
-                checked = checked,
-                onCheckedChange = null,
+    Row(
+        modifier = Modifier
+            .toggleable(
+                value = checked,
+                role = Role.Checkbox,
+                onValueChange = { onClick() },
             )
-        },
-        onClick = onClick,
-    )
+            .fillMaxWidth()
+            .padding(
+                horizontal = SettingsItemsPaddings.Horizontal,
+                vertical = SettingsItemsPaddings.Vertical,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(24.dp),
+    ) {
+        Checkbox(
+            checked = checked,
+            onCheckedChange = null,
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+    }
 }
 
 @Composable
 fun RadioItem(label: String, selected: Boolean, onClick: () -> Unit) {
-    BaseSettingsItem(
-        label = label,
-        widget = {
-            RadioButton(
+    Row(
+        modifier = Modifier
+            .selectable(
                 selected = selected,
-                onClick = null,
+                role = Role.RadioButton,
+                onClick = onClick,
             )
-        },
-        onClick = onClick,
-    )
+            .fillMaxWidth()
+            .padding(
+                horizontal = SettingsItemsPaddings.Horizontal,
+                vertical = SettingsItemsPaddings.Vertical,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(24.dp),
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = null,
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+    }
 }
 
 @Composable
@@ -322,6 +358,13 @@ fun TriStateItem(
     enabled: Boolean = true,
     onClick: ((TriState) -> Unit)?,
 ) {
+    val stateDescription = stringResource(
+        when (state) {
+            TriState.DISABLED -> MR.strings.not_selected
+            TriState.ENABLED_IS -> MR.strings.selected
+            TriState.ENABLED_NOT -> MR.strings.disabled
+        },
+    )
     Row(
         modifier = Modifier
             .clickable(
@@ -334,6 +377,7 @@ fun TriStateItem(
                     }
                 },
             )
+            .semantics { this.stateDescription = stateDescription }
             .fillMaxWidth()
             .padding(
                 horizontal = SettingsItemsPaddings.Horizontal,

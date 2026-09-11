@@ -21,6 +21,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.invisibleToUser
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import tachiyomi.i18n.MR
@@ -54,7 +56,10 @@ fun GlobalSearchResultItem(
                 )
                 Text(text = subtitle)
             }
-            IconButton(onClick = onClick) {
+            IconButton(
+                onClick = onClick,
+                modifier = Modifier.semantics { invisibleToUser() },
+            ) {
                 Icon(imageVector = Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null)
             }
         }

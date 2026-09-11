@@ -448,7 +448,8 @@ private fun SourceSwitchPreference(
                 )
             }
         },
-        onPreferenceClick = { onClickSource(source.source.id) },
+        checked = source.enabled,
+        onCheckedChanged = { onClickSource(source.source.id) },
     )
 }
 
