@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import eu.kanade.tachiyomi.R
+import eu.kanade.tachiyomi.ui.reader.setting.ReaderBottomBarAction
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import eu.kanade.tachiyomi.ui.reader.setting.ReadingMode
 import tachiyomi.i18n.MR
@@ -32,6 +33,7 @@ fun ReaderBottomBar(
     onClickReadAloud: () -> Unit,
     showOcrButton: Boolean = true,
     showReadAloudButton: Boolean = true,
+    actionOrder: List<ReaderBottomBarAction> = ReaderBottomBarAction.DEFAULT_ORDER,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -40,50 +42,56 @@ fun ReaderBottomBar(
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onClickReadingMode) {
-            Icon(
-                painter = painterResource(readingMode.iconRes),
-                contentDescription = stringResource(MR.strings.viewer),
-            )
-        }
+        actionOrder.forEach { action ->
+            when (action) {
+                ReaderBottomBarAction.READING_MODE -> IconButton(onClick = onClickReadingMode) {
+                    Icon(
+                        painter = painterResource(readingMode.iconRes),
+                        contentDescription = stringResource(MR.strings.viewer),
+                    )
+                }
 
-        IconButton(onClick = onClickOrientation) {
-            Icon(
-                imageVector = orientation.icon,
-                contentDescription = stringResource(MR.strings.rotation_type),
-            )
-        }
+                ReaderBottomBarAction.ORIENTATION -> IconButton(onClick = onClickOrientation) {
+                    Icon(
+                        imageVector = orientation.icon,
+                        contentDescription = stringResource(MR.strings.rotation_type),
+                    )
+                }
 
-        IconButton(onClick = onClickCropBorder) {
-            Icon(
-                painter = painterResource(if (cropEnabled) R.drawable.ic_crop_24dp else R.drawable.ic_crop_off_24dp),
-                contentDescription = stringResource(MR.strings.pref_crop_borders),
-            )
-        }
+                ReaderBottomBarAction.CROP_BORDERS -> IconButton(onClick = onClickCropBorder) {
+                    Icon(
+                        painter = painterResource(
+                            if (cropEnabled) R.drawable.ic_crop_24dp else R.drawable.ic_crop_off_24dp,
+                        ),
+                        contentDescription = stringResource(MR.strings.pref_crop_borders),
+                    )
+                }
 
-        if (showOcrButton) {
-            IconButton(onClick = onClickOcr) {
-                Icon(
-                    imageVector = Icons.Outlined.DocumentScanner,
-                    contentDescription = stringResource(MR.strings.action_ocr),
-                )
+                ReaderBottomBarAction.OCR -> if (showOcrButton) {
+                    IconButton(onClick = onClickOcr) {
+                        Icon(
+                            imageVector = Icons.Outlined.DocumentScanner,
+                            contentDescription = stringResource(MR.strings.action_ocr),
+                        )
+                    }
+                }
+
+                ReaderBottomBarAction.READ_ALOUD -> if (showReadAloudButton) {
+                    IconButton(onClick = onClickReadAloud) {
+                        Icon(
+                            imageVector = Icons.Outlined.RecordVoiceOver,
+                            contentDescription = stringResource(MR.strings.action_read_aloud),
+                        )
+                    }
+                }
+
+                ReaderBottomBarAction.SETTINGS -> IconButton(onClick = onClickSettings) {
+                    Icon(
+                        imageVector = Icons.Outlined.Settings,
+                        contentDescription = stringResource(MR.strings.action_settings),
+                    )
+                }
             }
-        }
-
-        if (showReadAloudButton) {
-            IconButton(onClick = onClickReadAloud) {
-                Icon(
-                    imageVector = Icons.Outlined.RecordVoiceOver,
-                    contentDescription = stringResource(MR.strings.action_read_aloud),
-                )
-            }
-        }
-
-        IconButton(onClick = onClickSettings) {
-            Icon(
-                imageVector = Icons.Outlined.Settings,
-                contentDescription = stringResource(MR.strings.action_settings),
-            )
         }
     }
 }

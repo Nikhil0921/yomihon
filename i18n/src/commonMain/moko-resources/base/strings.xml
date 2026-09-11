@@ -1327,4 +1327,17 @@
     <string name="pref_group_reader_layout">Reader layout</string>
     <string name="pref_group_behavior">Behavior</string>
     <string name="pref_group_toolbar">Toolbar &amp; display</string>
+    <string name="pref_reader_customize_toolbar">Customize toolbar</string>
+    <string name="pref_reader_customize_toolbar_summary">Reorder the actions in the reader toolbar</string>
+    <string name="pref_reader_toolbar_order">Toolbar actions</string>
+    <string name="pref_reader_toolbar_order_hint">Drag to reorder. Settings always stays last.</string>
+    <string name="pref_reader_toolbar_reset">Reset to default</string>
+    <string name="pref_reader_toolbar_reset_confirm">Reset toolbar order to default?</string>
+    <string name="pref_reader_toolbar_action_reading_mode">Reading mode</string>
+    <string name="pref_reader_toolbar_action_orientation">Rotation</string>
+    <string name="pref_reader_toolbar_action_crop_borders">Crop borders</string>
+    <string name="pref_reader_toolbar_action_ocr">OCR</string>
+    <string name="pref_reader_toolbar_action_read_aloud">Read aloud</string>
+    <string name="pref_reader_toolbar_action_settings">Settings</string>
+    <string name="pref_reader_toolbar_action_fixed">Fixed</string>
 </resources>

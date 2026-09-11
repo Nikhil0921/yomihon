@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.reader.components.ChapterNavigator
 import eu.kanade.presentation.reader.components.ChapterNavigatorType
+import eu.kanade.tachiyomi.ui.reader.setting.ReaderBottomBarAction
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import eu.kanade.tachiyomi.ui.reader.setting.ReadingMode
 import tachiyomi.presentation.core.components.material.padding
@@ -78,6 +79,7 @@ fun ReaderAppBars(
     onClickReadAloud: () -> Unit,
     showOcrButton: Boolean = true,
     showReadAloudButton: Boolean = true,
+    actionOrder: List<ReaderBottomBarAction> = ReaderBottomBarAction.DEFAULT_ORDER,
     onBottomTrayHeightChanged: ((Int) -> Unit)? = null,
 ) {
     val backgroundColor = MaterialTheme.colorScheme
@@ -185,6 +187,7 @@ fun ReaderAppBars(
                     onClickReadAloud = onClickReadAloud,
                     showOcrButton = showOcrButton,
                     showReadAloudButton = showReadAloudButton,
+                    actionOrder = actionOrder,
                 )
             }
         }

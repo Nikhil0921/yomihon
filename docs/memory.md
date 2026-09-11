@@ -4431,3 +4431,87 @@ Remaining: none observed for this scope. UpdateScreen snackbar now hosted
 in-page (BottomCenter) — previously inner-Scaffold-hosted; layout under
 keyboard/IME not explicitly re-verified (minor).
 ```
+
+```text
+[COMPLETED 2026-09-11 — Feature Batch 7: Reader toolbar customization,
+UNCOMMITTED — all 4 gates green + APK installed on SM_M066B; device
+verification script PENDING USER]
+
+Scope: first user-facing customization feature from the deferred Chimahon/
+AnymeX-inspired track (phase.md "Deferred features #1" — reader toolbar
+reordering). Protected systems untouched: ReaderActivity architecture,
+TTS/OCR pipeline, viewer/progression, overlay z-order (only param threading
++ 1 new collectAsState in setComposeOverlay).
+
+Model (app/.../ui/reader/setting/ReaderBottomBarAction.kt, new):
+- Enum: READING_MODE, ORIENTATION, CROP_BORDERS, OCR, READ_ALOUD, SETTINGS.
+- DEFAULT_ORDER = current hardcoded row order (upgrade-safe).
+- fromStoredIds(): normalize stored ID list — drop unknowns, dedupe, append
+  missing in default order, SETTINGS always pinned LAST (fixed action; drag
+  list never includes it). Never produces empty/broken bar (4 always-on
+  actions can't be hidden; OCR/READ_ALOUD visibility = existing prefs).
+- serialize(): comma-joined enum names, SETTINGS stripped (implied last).
+  Round-trips; blank pref = defaults.
+
+Persistence: ReaderPreferences.bottomBarActionOrder —
+  getString("reader_bottom_bar_action_order", ""), empty default (existing
+  users keep current order). Visibility stays in EXISTING prefs
+  (ocrTextSelectionEnabled / readAloudButtonEnabled) — order and visibility
+  stored separately, hidden actions remain in stored order, restore lands
+  at stored position. No new preference types; string-pref ordering
+  precedent (OcrScanStore queue, TtsVoicePreferences).
+
+Reader wiring: ReaderBottomBar renders via actionOrder.forEach + when
+  (replaces 6 hardcoded IconButtons; same icons/contentDescriptions);
+  ReaderAppBars threads actionOrder param; ReaderActivity collects pref +
+  fromStoredIds in remember. Defaults keep byte-identical layout.
+
+Settings UI: SettingsReaderToolbarScreen (new Voyager Screen) —
+  CategoryScreen-style drag-reorder (sh.calvin.reorderable, LazyColumn,
+  ReorderableItem + draggableHandle, ElevatedCard rows: drag handle +
+  action icon + name + Switch for optional actions); fixed Settings row
+  (lock icon, "Fixed" label) below the reorderable list; hint text;
+  Reset→confirm AlertDialog restores default order + default visibility
+  (order pref delete(), OCR/Read-aloud switches set true; unrelated reader
+  prefs untouched). A11y: row customActions = move up/down
+  (CustomAccessibilityAction), Switch contentDescription = action label,
+  drag handle contentDescription = action label; 48dp targets via default
+  IconButton/Switch metrics.
+  Entry: SettingsReaderScreen Actions group TextPreference
+  ("Customize toolbar") → navigator.push. Settings-search registration:
+  NOT added to unindexedSettingScreens (screen reachable via Reader
+  settings trail; avoids duplicate search index entries) — noted as
+  limitation.
+
+Tests: ReaderBottomBarActionTest (new, 13 cases — all 10 brief-§15
+requirements + duplicate-dedupe + settings-pin count + never-empty).
+All green: tests="13" failures="0".
+
+GATES GREEN 2026-09-11 (devcontainer vsc-yomihon-e24e3bd7e46d…, JDK17,
+-Xmx4g, both volumes): spotlessCheck + testDebugUnitTest +
+verifySqlDelightMigration BUILD SUCCESSFUL 2m56s; :app:assembleDebug
+BUILD SUCCESSFUL 3m8s. arm64 debug APK (95MB, ML models packaged)
+installed on SM_M066B (R9ZY30X3SGP) 18:4x; logcat capture running
+(/sdcard/toolbar-customize-test.log). App launch smoke-clean
+(MainActivity resumed, no crash).
+
+Files changed (9): ReaderBottomBarAction.kt (new),
+ReaderBottomBarActionTest.kt (new), SettingsReaderToolbarScreen.kt (new),
+ReaderPreferences.kt (+1 pref), ReaderBottomBar.kt (ordered render),
+ReaderAppBars.kt (+param), ReaderActivity.kt (+collect/remember/param),
+SettingsReaderScreen.kt (Actions entry), i18n base strings.xml (+13 keys).
+NO DB/schema change; NO new dependencies (reorderable already in catalog
++ used by CategoryScreen/MigrationConfigScreen).
+
+DEVICE VERIFICATION PENDING USER (script): More→Settings→Reader→Actions→
+Customize toolbar opens; rows render (5 reorderable + fixed Settings);
+drag reorder persists; OCR/Read-aloud switches hide/restore in reader bar
+at stored position; Reset restores defaults; reader bar order matches;
+OCR + Read Aloud + TTS bar + navigation regression; Library/Recent/Feed/
+Browse/More/MangaScreen regression.
+
+Limitations noted: (1) settings-search index not registered; (2) a11y
+custom actions are move-up/move-down only (TalkBack reorder-by-drag
+unsupported by reorderable lib — same as CategoryScreen precedent);
+(3) SETTINGS pinned last by design (documented).
+```

@@ -5,6 +5,8 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalView
+import cafe.adriel.voyager.navigator.LocalNavigator
+import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
@@ -430,6 +432,7 @@ object SettingsReaderScreen : SearchableSettings {
     @Composable
     private fun getActionsGroup(readerPreferences: ReaderPreferences): Preference.PreferenceGroup {
         val readWithLongTap by readerPreferences.readWithLongTap.collectAsState()
+        val navigator = LocalNavigator.currentOrThrow
 
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pref_reader_actions),
@@ -450,6 +453,11 @@ object SettingsReaderScreen : SearchableSettings {
                 Preference.PreferenceItem.SwitchPreference(
                     preference = readerPreferences.readAloudButtonEnabled,
                     title = stringResource(MR.strings.pref_reader_read_aloud_button),
+                ),
+                Preference.PreferenceItem.TextPreference(
+                    title = stringResource(MR.strings.pref_reader_customize_toolbar),
+                    subtitle = stringResource(MR.strings.pref_reader_customize_toolbar_summary),
+                    onClick = { navigator.push(SettingsReaderToolbarScreen()) },
                 ),
                 Preference.PreferenceItem.SwitchPreference(
                     preference = readerPreferences.folderPerManga,

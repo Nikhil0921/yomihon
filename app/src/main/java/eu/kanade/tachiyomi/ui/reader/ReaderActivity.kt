@@ -104,6 +104,7 @@ import eu.kanade.tachiyomi.ui.reader.ReaderViewModel.SetAsCoverResult.Success
 import eu.kanade.tachiyomi.ui.reader.model.ReaderChapter
 import eu.kanade.tachiyomi.ui.reader.model.ReaderPage
 import eu.kanade.tachiyomi.ui.reader.model.ViewerChapters
+import eu.kanade.tachiyomi.ui.reader.setting.ReaderBottomBarAction
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderSettingsScreenModel
@@ -664,6 +665,12 @@ class ReaderActivity : BaseActivity() {
             val cropBorderWebtoon by readerPreferences.cropBordersWebtoon.collectAsState()
             val showOcrButton by readerPreferences.ocrTextSelectionEnabled.collectAsState()
             val showReadAloudButton by readerPreferences.readAloudButtonEnabled.collectAsState()
+            val storedActionOrder by readerPreferences.bottomBarActionOrder.collectAsState()
+            val bottomBarActionOrder = remember(storedActionOrder) {
+                ReaderBottomBarAction.fromStoredIds(
+                    storedActionOrder.takeIf { it.isNotBlank() }?.split(',') ?: emptyList(),
+                )
+            }
             val readingMode = ReadingMode.fromPreference(
                 viewModel.getMangaReadingMode(resolveDefault = false),
             )
@@ -735,6 +742,7 @@ class ReaderActivity : BaseActivity() {
                 onClickReadAloud = viewModel::startReadAloud,
                 showOcrButton = showOcrButton,
                 showReadAloudButton = showReadAloudButton,
+                actionOrder = bottomBarActionOrder,
                 onBottomTrayHeightChanged = { bottomTrayHeightPx = it },
             )
 

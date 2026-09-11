@@ -164,6 +164,8 @@ class ReaderPreferences(
 
     val readAloudButtonEnabled: Preference<Boolean> = preferenceStore.getBoolean("reader_read_aloud_button", true)
 
+    val bottomBarActionOrder: Preference<String> = preferenceStore.getString("reader_bottom_bar_action_order", "")
+
     val readWithVolumeKeys: Preference<Boolean> = preferenceStore.getBoolean("reader_volume_keys", false)
 
     val readWithVolumeKeysInverted: Preference<Boolean> = preferenceStore.getBoolean(
