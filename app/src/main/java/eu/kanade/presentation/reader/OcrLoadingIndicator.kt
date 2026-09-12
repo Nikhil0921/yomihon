@@ -19,6 +19,7 @@ import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -28,6 +29,7 @@ import tachiyomi.presentation.core.theme.asFloatingChrome
 fun OcrLoadingIndicator(
     visible: Boolean,
     modifier: Modifier = Modifier,
+    chromeTone: Color? = null,
 ) {
     AnimatedVisibility(
         visible = visible,
@@ -41,6 +43,7 @@ fun OcrLoadingIndicator(
                 .background(
                     MaterialTheme.colorScheme
                         .surfaceColorAtElevation(3.dp)
+                        .withReaderTone(chromeTone)
                         .asFloatingChrome(),
                 )
                 .padding(horizontal = 24.dp, vertical = 12.dp),

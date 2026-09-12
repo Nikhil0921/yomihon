@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.reader.components.ChapterNavigator
 import eu.kanade.presentation.reader.components.ChapterNavigatorType
+import eu.kanade.presentation.reader.withReaderTone
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderBottomBarAction
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import eu.kanade.tachiyomi.ui.reader.setting.ReadingMode
@@ -81,9 +82,11 @@ fun ReaderAppBars(
     showReadAloudButton: Boolean = true,
     actionOrder: List<ReaderBottomBarAction> = ReaderBottomBarAction.DEFAULT_ORDER,
     onBottomTrayHeightChanged: ((Int) -> Unit)? = null,
+    chromeTone: androidx.compose.ui.graphics.Color? = null,
 ) {
     val backgroundColor = MaterialTheme.colorScheme
         .surfaceColorAtElevation(3.dp)
+        .withReaderTone(chromeTone)
         .asFloatingChrome()
 
     Column(modifier = Modifier.fillMaxHeight()) {
@@ -136,6 +139,7 @@ fun ReaderAppBars(
                                     currentPage = currentPage,
                                     totalPages = totalPages,
                                     onPageIndexChange = onPageIndexChange,
+                                    chromeTone = chromeTone,
                                 )
                             }
                         }
@@ -168,6 +172,7 @@ fun ReaderAppBars(
                         currentPage = currentPage,
                         totalPages = totalPages,
                         onPageIndexChange = onPageIndexChange,
+                        chromeTone = chromeTone,
                     )
                 }
                 ReaderBottomBar(

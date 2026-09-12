@@ -2475,11 +2475,16 @@ FUTURE BACKLOG RECORDED (docs/phase.md "Deferred features"):
    (done in architecture.md §4); optional follow-up = port Glens ordering into
    scanLocally. Do NOT silently reorder in segmenter.
 
-2. LOW | ReaderActivity | ContentOverlay internally re-calls
+2. RESOLVED (2026-09-12 audit; docs corrected 2026-09-12 RM-01) | ReaderActivity
+   | Entry claimed ContentOverlay internally re-called
    binding.composeOverlay.setComposeContent creating two parallel Compose
-   rendering blocks (outer setComposeOverlay ~l.371 vs inner ~l.613).
-   Impact: TTS bar/dialog additions must go to the correct block (inner
-   ContentOverlay, beside OcrLoadingIndicator ~l.882). Do not refactor casually.
+   rendering blocks. The 2026-09-12 master audit verified the code:
+   ReaderActivity has ONE composition block (single setComposeOverlay at
+   ReaderActivity.kt:606; grep clean of duplicates). The dual-block landmine
+   NO LONGER EXISTS — the entry was stale. Historical note: while the
+   duplicated block existed, TTS bar/dialog additions belonged in the inner
+   ContentOverlay beside OcrLoadingIndicator; current code confirms that
+   placement. No refactor happened; no refactor is needed.
 
 3. RESOLVED-locally | Build env | ML model assets were gitignored & absent;
    NOW DOWNLOADED into working tree via the exact CI step
@@ -2582,7 +2587,9 @@ FUTURE BACKLOG RECORDED (docs/phase.md "Deferred features"):
 
 ```text
 - UnavailableDetOcrEngine stub (TODO upstream) — see Known issues #1.
-- Dual Compose composition blocks in ReaderActivity — see #2.
+- Known issue #2 (dual Compose composition blocks) was found RESOLVED in code
+  by the 2026-09-12 audit (one composition block, ReaderActivity.kt:606);
+  docs corrected in RM-01. No debt remains.
 - No unit tests for repositories/download/network/UI layers (house-wide, pre-existing).
 - androidTest OcrRepositoryImplTest is @Ignore'd (needs device+models).
 (Deliberately NOT adding new debt for TTS v1: policy logic must be tested.)
@@ -4514,4 +4521,402 @@ Limitations noted: (1) settings-search index not registered; (2) a11y
 custom actions are move-up/move-down only (TalkBack reorder-by-drag
 unsupported by reorderable lib — same as CategoryScreen precedent);
 (3) SETTINGS pinned last by design (documented).
+```
+
+```text
+[COMPLETED 2026-09-11 — Feature Batch 7 DEVICE VERIFIED (user report)]
+User confirmed Reader toolbar customization working on device: reorder
+persists, OCR/Read-aloud visibility independent, Settings pinned last,
+defaults upgrade-safe. Batch 7 CLOSED — no issues reported. Deferred
+feature #1 (phase.md) fully shipped.
+
+[COMPLETED 2026-09-11 — Artwork-Reactive Reader Tray (Chimahon-track
+"ADAPT" item, phase.md deferred #3), UNCOMMITTED — all gates green + APK
+installed; device verification script PENDING USER]
+
+Feasibility (Phase A) — SAFE, minimal path, no new pipeline:
+- Artwork = View-based viewers (ReaderPageImageView/SubsamplingScaleImageView);
+  chrome = separate Compose overlay already fed Activity-state (bottomTrayHeightPx
+  precedent — same pattern reused).
+- ReaderPage.stream (existing () -> InputStream, loader-agnostic: HTTP cache
+  file / archive entry / directory file / EPUB) = artwork source. Existing
+  tachiyomi.decoder.ImageDecoder (same decoder chooseBackground uses, which
+  PagerPageHolder already runs per page) decodes a tiny sample. No Coil
+  interception, no second image-processing pipeline, no viewer touch.
+
+Implementation (Phase B–D) — "sample → average → normalize → blend",
+ALL BEFORE asFloatingChrome(); frost role stays THE surface mechanism:
+- ReaderArtworkTone.kt (new, presentation/reader): pure color math +
+  sampleReaderPageTone() (≤48px-side software bitmap, getPixels, mean,
+  guards; IO-only; recycled in place) + Color.withReaderTone().
+  Blend ratio READER_TONE_BLEND_RATIO=0.08; neutral guards: luma 0.18–0.82,
+  saturation ≥0.12 → plain b/w/gray manga pages produce NO tint at all
+  (most pages = zero visual change by design; only strong mid-luminance
+  dominant tones nudge the chrome).
+- ReaderActivity.scheduleArtworkToneUpdate(page) on onPageSelected
+  (fires for ALL viewers incl. webtoon): single-flight Job, 300ms debounce
+  (rapid paging cancels obsolete work), launchIO, tone in mutableStateOf
+  read by compose overlay. Monochrome theme → tone forced null
+  (grayscale-only scheme by design; reads uiPreferences.appTheme — the
+  exact pref TachiyomiTheme consumes).
+- 4 floating-chrome sites blend tone into surfaceColorAtElevation(3.dp)
+  before .asFloatingChrome(): ReaderAppBars background (top bar + bottom
+  tray), ChapterNavigator (both call sites), TtsPlaybackBar, OcrLoadingIndicator.
+- Fallback = absolute: null tone (neutral page / decode failure / animated
+  page / null stream / Monochrome / translucent-off) → withReaderTone(null)
+  is identity → chrome BYTE-IDENTICAL to pre-feature. AMOLED/light/dark
+  untouched (base color + alpha math unchanged; only pre-frost RGB nudge
+  ≤8%). No animated color chase; tone lands on next recomposition.
+
+Rejected (Phase C): true backdrop blur (Compose cannot sample sibling
+artwork View), fullscreen RenderEffect (perf), per-frame sampling, Coil/
+decoder interception (would create second pipeline), viewer architecture
+changes, animated color chase, new dependency.
+
+Performance budget: ≤48px-side sample decode per SETTLED page (~<40KB
+transient, recycled), zero main-thread work, no retention, no per-frame
+recomputation, no animation. Negligible vs the full-page decode display
+itself performs (and vs chooseBackground which decodes MORE per page when
+enabled).
+
+Tests: ReaderArtworkToneTest (new, 10 cases): null-tone fallback identity,
+ratio bound, channel validity, empty pixels, opaque-alpha mean, near-black/
+near-white/gray no-tint, saturated mid-luma produces tone, dark-saturated
+lineart safety. 10/10 green. (2 test expectations fixed during red-green:
+Compose Color quantizes 8-bit — 0.08→0.0784, 255/2→127.)
+
+GATES GREEN 2026-09-11 (devcontainer vsc-yomihon-e24e3bd…, JDK17, -Xmx4g,
+both volumes): spotlessApply + spotlessCheck GREEN; testDebugUnitTest +
+verifySqlDelightMigration BUILD SUCCESSFUL 2m38s (no schema change —
+verify run anyway); :app:assembleDebug BUILD SUCCESSFUL 2m57s. arm64
+debug APK (95MB, models packaged) in-place installed on SM_M066B
+(vc29, data preserved); launch smoke 0 FATAL. On-device capture running:
+/sdcard/artwork-tone-test.log.
+
+Files changed (7): ReaderArtworkTone.kt (new), ReaderActivity.kt
+(scheduleArtworkToneUpdate + tone state + 3 chromeTone pass-throughs),
+ReaderAppBars.kt (+chromeTone param, blended bg), ChapterNavigator.kt
+(+chromeTone param, blended bg), TtsPlaybackBar.kt (+chromeTone param,
+blended bg), OcrLoadingIndicator.kt (+chromeTone param, blended bg),
+ReaderArtworkToneTest.kt (new, 10). NO OCR/TTS/progression/viewer/
+z-order/DB/i18n/Batch-7 changes.
+
+DEVICE VERIFICATION PENDING USER (matrix): normal manga page, dark/light/
+AMOLED, Monochrome, webtoon, page changes, rapid page changes, chrome
+show/hide, reader toolbar, TTS playback bar, OCR loading strip;
+regressions: OCR, Read Aloud, TTS controls, page progression, Batch 7
+toolbar customization, overlay z-order, no visible perf regression.
+
+Limitations (documented): (1) dual-page split/rotate/splitTallImages —
+tone sampled from pre-transform stream (approximate by nature, safe);
+(2) animated GIF pages may decode-fail → null → stock chrome (safe
+fallback); (3) 300ms settle lag intentional (no chase); (4) no user pref
+toggle yet — translucent-off already neutralizes via opaque frost role;
+add Reader-settings toggle only if users ask.
+```
+
+```text
+[COMPLETED 2026-09-12 — Artwork-Reactive Reader Tray: device verification,
+stream-wait root-cause fix + perceptibility tuning, UNCOMMITTED]
+
+DEVICE-DRIVEN DEBUG SESSION (user report: "don't see any changes"):
+- Root cause 1 (CONFIRMED via device logs, FIXED): HTTP pages set
+  ReaderPage.stream only on Ready (HttpPageLoader.kt:189); onPageSelected
+  fires during DownloadImage → 300ms debounce sampled a null stream →
+  tone=null, NEVER resampled (no retry on later Ready). Fix:
+  samplePageToneWhenReady — await page.statusFlow until Ready (bounded
+  20s TONE_STREAM_WAIT_MS; Error/timeout → null → stock chrome).
+  Device-verified: schedule page=0 now waits → samples → tone logged.
+- Root cause 2 (CONFIRMED, expected): most manga pages are near-white/
+  gray → neutral guards correctly produce NO tint; combined with user's
+  AMOLED (near-black base) the original 8% blend was imperceptible
+  everywhere. Device screenshots: chrome pixels pure-black + SurfaceFlinger
+  dither speckle on this device — but mean deltas + warm pixel rows
+  confirmed tone rendering direction.
+
+TUNING (user-approved "Stronger tint"): READER_TONE_BLEND_RATIO 0.08→0.20
++ TONE_CHROMA_GAIN 2.5 (accepted tones amplified around page's own luma
+  so 20% registers on near-black bases). Guards unchanged: b/w/gray
+  pages still stock chrome; unit test updated (ratio bound ≤0.25, chroma
+  spread >0.2). 10/10 green.
+
+DEVICE VERIFICATION RESULTS (scripted via adb, SM_M066B, build vc29):
+- Tone sampling: page events fire across viewers; wait-for-Ready works
+  (Ready stream=true logged); warm page0 (avg 97,66,69 → amplified tone
+  0.51,0.20,0.23) vs neutral pages (avg ~200-217 grays → null) — both
+  behaviors correct per design.
+- Chrome rendering: menu screenshots over toned vs neutral pages show
+  measurable warm shift in top-bar/tray region (mean R-B +2.6 vs +0.1;
+  warm pixel rows (101,76,50) present). Screenshot color readout is
+  noisy on this device (dither/quantization) — final visual sign-off
+  left to user eyes (screenshots staged /tmp/opencode/toned-menu-v2.png
+  + neutral-menu-v2.png; not committed).
+- Rapid page changes: 6 fast dpad steps → exactly 1 settled sample
+  (debounce + single-flight working; no queue spam).
+- TTS regression: Read Aloud started, played (exclusion rules loaded,
+  pages segmented), auto-advanced page 3→4 with tone scheduling
+  alongside — zero interference; stop clean.
+- Toolbar (Batch 7): customized order renders (ReadingMode, Rotation,
+  Crop, ReadAloud, Settings; OCR hidden per user visibility pref) —
+  intact.
+- OCR button path not exercised (user pref off); pipeline untouched
+  (sampler is a read-only second consumer of page.stream).
+- Monochrome/light-mode: not device-exercised (branch = tone null +
+  covered by unit tests; token math unchanged).
+- Device quirks fought (documented for future sessions): notification
+  shade keeps stealing focus (cmd statusbar collapse unreliable; HOME
+  + re-launch workaround); leakcanary LeakLauncherActivity intercepts
+  monkey launcher intents (am start -n MainActivity to escape); input
+  events silently dropped when screen dozes (KEYCODE_WAKEUP first);
+  webtoon dpad = pixel scroll (use swipes for page turns); on-device
+  logcat file is the reliable capture (adb streaming drops).
+
+GATES GREEN 2026-09-12 (docker vsc-yomihon-e24e3bd…, JDK17, -Xmx4g,
+both volumes): spotlessCheck + testDebugUnitTest +
+verifySqlDelightMigration BUILD SUCCESSFUL 2m36s; :app:assembleDebug
+BUILD SUCCESSFUL (both fix + tuning builds). Debug log lines (tone
+sample/schedule) still in build — remove before release or gate behind
+BuildConfig.DEBUG next session.
+
+Files changed this session (vs Batch-8 baseline): ReaderActivity.kt
+(samplePageToneWhenReady + TONE_STREAM_WAIT_MS + debug logs),
+ReaderArtworkTone.kt (ratio 0.20, chroma gain 2.5, per-step debug logs),
+ReaderArtworkToneTest.kt (bounds updated), docs (this block).
+```
+
+```text
+[COMPLETED 2026-09-12 — MASTER AUDIT, RECONCILIATION & REFERENCE-IMPLEMENTATION
+ROADMAP (user master brief), UNCOMMITTED (docs only, ZERO app source touched)]
+
+Session scope honored: full audit + reconciliation + reference-repo analysis +
+ONE canonical roadmap + registers + exact next task. NO feature implementation.
+
+DELIVERABLE: docs/implementation-roadmap.md (NEW — canonical execution
+register with AGENT EXECUTION LOCK). Contains: baseline (v0.5.3 released,
+HEAD 9126e20dc + uncommitted tone set), CURRENT AUTHORIZED TASK RM-01,
+completed ledger L-01..L-16, reference register (24 candidates from 3 cloned
+repos), queue Q1..Q9, rejected/deferred/decision registers, design +
+architecture + documentation audits, verification matrix incl. 20-case OCR
+exclusion matrix, bug register BUG-001..012, change history.
+
+AUDIT METHOD: all 9 docs re-read; 3 reference repos cloned + inspected
+(Tadami @e34f353, AnymeX @a3cfde7, chimahon @091ee6a); 2 parallel explore
+subagents (TTS/OCR/reader pipeline; UI screens + typography/spacing/color)
++ codegraph source verification; GATES RE-RUN THIS SESSION: spotlessCheck +
+testDebugUnitTest + verifySqlDelightMigration BUILD SUCCESSFUL 2m57s on the
+CURRENT tree incl. uncommitted tone set (docker, JDK17, -Xmx4g, both volumes).
+
+KEY AUDIT VERDICTS:
+- NO P0/P1 anywhere. 2×P2 (both in TTS pause/chapter-advance seam):
+  BUG-001 pause() no-op during LoadingPage/Preparing (focus-loss/onStop
+  during OCR acquire leaves playback unfocused; TtsPlaybackController.kt:
+  172-180 phase guard); BUG-002 NextChapter host-load failure wedges
+  controller in Preparing forever (loadAdjacent swallows errors,
+  ReaderViewModel.kt:563-570; no event → no Error/retry). Both → RM-01.
+- 3×P3: resumeIndex carried across Paused page change (:237-240);
+  OCR cache getPage ignores ocr_model → engine switch serves stale-model
+  text (ocr_cache.sq:40-46 + OcrRepositoryImpl.kt:230-233); INFO log note.
+- TONE-LOG NOTE CORRECTED: memory line "remove tone DEBUG logs before
+  release" was priority-inverted — tone logs are LogPriority.DEBUG and
+  release min is INFO (App.kt:171-179) → already suppressed in release.
+  Only 3 INFO lines ship (Glens scan timings ×2, TTS startup) — harmless,
+  rules-§7-compliant.
+- KNOWN ISSUE #2 DISPROVED: ReaderActivity has ONE composition block
+  (setComposeOverlay l.606; grep clean) — dual-block landmine doc entry is
+  STALE. memory Known-issue #2 + next-phase-plan Part B row 12 flagged for
+  RM-01 docs correction. (Not edited this session beyond the plan banner
+  + phase pointer — full correction lands in RM-01.)
+- OCR exclusion system: matcher semantics verified against source; 33
+  current test fns in OcrExclusionMatcherTest (memory said 35 — recount;
+  suite green in gates). 20-case master matrix: all VERIFIED via
+  unit + device logs; case 17 (crop-OCR detect) N/A — feature removed with
+  prefill deletion 09-03; cases 9/10 guarded by honest original-dims
+  rejection (inverse transform remains documented follow-up).
+- UI sweep: ZERO new .sp violations (all 9 raw hits documented exceptions);
+  ONE Color literal (CommonMangaItem 0xAA000000 cover scrim — scrim-family);
+  screen-level dp paddings consistent-but-token-bypassing (~91 sites,
+  cosmetic); all screens PASS or MINOR — no BROKEN/MAJOR. Findings: 10
+  MINORs (dead badgeNumber param, pointerInput no-op, ManageFeeds network
+  waste, dictionary card clickable{} no-op, settings-search blank flash,
+  dict OCR-results group loose header, etc.) → registered as BUG-004..012 /
+  DS-01..07 / U-7..U-9.
+- Architecture: KEEP everywhere; 2 INVESTIGATE (ManageFeeds SM reuse waste;
+  setVoice result ignored); dead-code deletion candidates enumerated.
+- Reference register: ADOPT/ADAPT queue = REF-TAD-001 genre-chip search
+  (Q2), REF-CHI-001 recursive lookup (Q3), REF-CHI-004 e-ink popup style
+  (Q4), REF-TAD-002+REF-ANY-003 tap-zone investigation (Q5), REF-CHI-002
+  dict history/favorites (Q6). REJECT: all anime/novel/reels/player/
+  achievement subsystems, Aurora identity, reader-control themes, screen-
+  OCR-any-app (permissions), local-OCR reinstatement (contradicts −133MB
+  shipped decision), nav customization, standardized reselect, Browse
+  search tab. ALREADY IMPLEMENTED/COVERED: grouped settings, pitch accent,
+  Anki field mapping, scanlator filters, appearance organization, download
+  info, chapter transition.
+
+DOCS CHANGES (this session, all docs-only):
+- NEW docs/implementation-roadmap.md (canonical; agent execution lock).
+- docs/next-phase-plan.md: SUPERSEDED banner added (kept as evidence).
+- docs/phase.md: current pointer now points at the master roadmap + RM-01.
+- docs/memory.md: this record.
+- prd.md / architecture.md / rules.md / design.md / branding.md: NOT
+  modified (no factual contradictions found by the audit beyond Known-issue
+  #2, which is a memory/plan entry — corrected in RM-01 per minimal-diff
+  rule; architecture.md gets its header/#2 note in RM-01's docs pass).
+
+CURRENT AUTHORIZED TASK (one, from roadmap §B): RM-01 — cleanup &
+pre-release consolidation (tone-set disposition U-2, pause-guard fix,
+chapter-advance failure fix, dead-code sweep, stale-doc corrections).
+Awaiting user go/no-go + U-2 commit decision. Implementation agents: read
+docs/implementation-roadmap.md FIRST; execute ONLY RM-01; STOP on
+contradiction and record it.
+
+Next recommended task: RM-01 (after user approval + U-2 tone-commit call).
+```
+
+```text
+[COMPLETED 2026-09-12 — RM-01 CLEANUP & PRE-RELEASE CONSOLIDATION, UNCOMMITTED]
+Unattended implementation session per roadmap §B. Only RM-01 executed.
+
+ROOT CAUSES RE-VERIFIED before editing (both matched roadmap):
+- BUG-001: TtsPlaybackController.pause() phase guard
+  `if (phase != Playing && !paused) return` rejected pause during
+  Preparing/LoadingPage.
+- BUG-002: ReaderViewModel.loadAdjacent() catch only logged (ERROR) — no
+  controller signal; TTS auto-advance waits in Preparing for a chapter
+  that never becomes active (rebind fires only on currChapter id change).
+
+FIXES (smallest-change, existing architecture only):
+1. BUG-001 pause guard (TtsPlaybackController.kt:172):
+   - Old guard replaced by exit on {Idle, Finished, Error} — pause now
+     takes effect in Preparing/LoadingPage/Playing/Paused. paused=true,
+     engine.stop() (safe pre-init: tts==null early-return), phase→Paused.
+   - Guard added in acquireSentences (:489): skip phase=LoadingPage update
+     while paused, so a mid-acquire pause stays visibly Paused (runPlayback
+     holds speech via awaitWhilePaused; resume() restarts from resumeIndex
+     — this pre-existing BUG-003-family path, not touched).
+   - Pause still cannot START playback (unchanged resume/start logic).
+2. BUG-002 chapter-advance failure wedge (ReaderViewModel.kt:563-570,
+   TtsPlaybackController.kt fail()):
+   - Controller.fail() made public (host-callable, same body).
+   - New TtsError.ChapterLoadFailed + i18n base string
+     tts_error_chapter_load ("Couldn't load the next chapter for reading
+     aloud"); wired in ReaderActivity.toMessageRes + TtsPlaybackBar
+     errorMessage (both exhaustive-when sites updated).
+   - loadAdjacent catch now notifies the controller ONLY when it is
+     actually waiting on the transition (phase Preparing or LoadingPage):
+     controller.fail(ChapterLoadFailed) → Error phase + TtsEvent.Failed →
+     Event.TtsError toast + TtsPlaybackBar Retry (retryReadAloud restarts
+     on the stored old-chapter page). Manual chapter navigation, page
+     navigation, successful transitions: untouched (guard prevents
+     healthy Playing/Paused sessions from being failed by an unrelated
+     manual loadAdjacent error).
+3. Dead code sweep (zero-risk, all references verified first):
+   - RecentTabContent.badgeNumber param deleted + RecentTab.kt TabText
+     badgeCount arg removed (RecentTabContent is Recent-tab-only;
+     TabbedScreen/ExtensionsTab badgeNumber is a DIFFERENT data class —
+     untouched, still live).
+   - ReaderBottomBar.kt: no-op Modifier.pointerInput(Unit){} removed +
+     import dropped. Touch behavior unchanged (modifier consumed no
+     events). Note: BrowseSourceScreen.kt:134 has the same no-op but is
+     NOT in RM-01's file list — left untouched.
+   - OcrRepositoryImpl.detectionEngine(): identical if-branch collapsed
+     to plain UnavailableDetOcrEngine() (TODO comment kept); orphaned
+     private localOcrAvailable() deleted (no remaining callers). OCR
+     pipeline/matcher/crop logic untouched.
+
+DEAD-CODE CONTRADICTION CHECK (none found): detectionEngine branch was
+genuinely behavior-identical (both arms returned UnavailableDetOcrEngine);
+badgeNumber never populated; pointerInput{} consumed no events.
+
+DOCS CORRECTIONS (BUG-012 / stale Known-issue #2):
+- memory.md Known-issue #2 → RESOLVED with audit evidence (ONE composition
+  block, setComposeOverlay ReaderActivity.kt:606); Technical-debt entry
+  updated. Historical evidence kept.
+- architecture.md: header v0.5.2→v0.5.3/vc29 + 2026-09-12 re-verification
+  note; §3.8 gained historical RESOLVED note (dual-block landmine no longer
+  exists; z-order contract codified at the Box comment).
+- next-phase-plan.md: Part B row 12 → RESOLVED/CLOSED; protected-systems
+  paragraph + Rejected list no longer cite #2 as open. SUPERSEDED banner
+  kept.
+- implementation-roadmap.md: §M history + bug register BUG-001/002/011/012
+  statuses updated. Authority model unchanged.
+
+ARTWORK-TONE SET DISPOSITION (Task A): UNTOUCHED + UNCOMMITTED. No
+authorization to commit exists in the repo (roadmap U-2 OPEN; session
+directive: do not invent user decisions). 7-file set (OcrLoadingIndicator,
+TtsPlaybackBar, ReaderAppBars, ChapterNavigator, ReaderActivity,
+ReaderArtworkTone.kt new, tone test dir new) remains exactly as the
+2026-09-11/12 sessions left it. RM-01 code changes are disjoint files.
+NOTE: docs/memory.md + docs/phase.md + docs/next-phase-plan.md contain BOTH
+the pre-existing uncommitted tone-session edits AND RM-01 doc edits —
+inseparable within those files (docs are append/correct-in-place).
+
+GATES (docker devcontainer, image vsc-yomihon-e24e3bd…, JDK17, -Xmx4g,
+BOTH volumes yomihon-gradle-home + yomihon-android-home, CI order):
+- spotlessCheck: BUILD SUCCESSFUL 51s (PASS)
+- testDebugUnitTest + verifySqlDelightMigration: BUILD SUCCESSFUL 4m29s
+  (PASS — 252 tasks; no DB change, migration gate run anyway per protocol)
+- :app:assembleDebug: BUILD SUCCESSFUL 3m20s (PASS; 0.5.3-8275 APKs built)
+
+DEVICE (SM_M066B — unattended session 1 + attended session 2, USB
+R9ZY30X3SGP after wireless shell hung; captures .device-pass/rm01-verify*.log):
+- arm64 debug APK 0.5.3-8275 installed -r: Success (same signature via
+  yomihon-android-home volume; production app.yomihon 0.5.3 NOT touched —
+  debug installs under app.yomihon.dev).
+- App launched, MainActivity resumed, no crash in capture (no FATAL for
+  app PIDs 3065/20764 across both sessions).
+- TEST 1 TTS happy path: DEVICE VERIFIED — Limitless Predation ch1
+  (mangaId 190): play, page progression (advance confirmed 1-2ms),
+  prefetch working; Pause from Playing (`TTS pause page=11 sentence=1`,
+  UI Play+Paused); Resume (`TTS resume page=11 sentence=1`, same
+  textHash 578538595, advances). PASS.
+- TEST 2 pause during LoadingPage: DEVICE VERIFIED via onStop — HOME
+  mid-OCR-acquire → `TTS pause page=4 sentence=0` during LoadingPage
+  (old code no-op); zero dispatch/speech after. PASS.
+- TEST 3 chapter-advance failure: DEVICE VERIFIED on cold process
+  (PID 20764, force-stop): ch7 p20 dispatched → both radios off →
+  `TTS chapter advance request` → `Loading adjacent .../chapter/8` →
+  E/ReaderViewModel UnknownHost → phase Error, UI shows exact
+  `tts_error_chapter_load` string ("Couldn't load the next chapter for
+  reading aloud") + Retry (Preparing wedge gone). Stop-from-Error works
+  (`TTS stop (phase=Error)`). Recovery with network: fresh Read aloud
+  → dispatch ch8 p11 + prefetch scans → `advance confirmed`. Cold
+  chapter transition (ch6→ch7, fresh loadAdjacent) also observed working.
+  PASS. (Same session also showed the OcrError-at-boundary variant when
+  the next page list was memory-cached: Error + Retry + tts_error_ocr,
+  Retry re-attempts cleanly.)
+- TEST 4 toolbar regression: DEVICE VERIFIED — bottom bar renders 5
+  actions in default order (Reading mode, Rotation, Crop, Read aloud,
+  Settings; OCR hidden by pref); Settings opens reader settings sheet;
+  Crop toggles without crash; no touch regression from pointerInput
+  removal. PASS.
+- TEST 5 artwork-tone regression: DEVICE VERIFIED (log-level) —
+  ReaderArtworkTone sampling + `schedule ... status=Ready` per page on
+  cold process, no crash; TTS bar + OCR progress indicator rendered
+  throughout. Visual tint not eyeball-checked (no image input). PASS
+  with that caveat.
+- CONTRADICTION vs roadmap device procedure (recorded per protocol):
+  roadmap says "tap Pause during Preparing" but TtsPlaybackBar renders
+  spinner + Stop ONLY during Preparing/LoadingPage — no Pause affordance
+  in that phase, so TEST 2 verified via the onStop path instead (same
+  pause() code path). Procedure should say "background the app / use
+  Stop" for that phase, or add a Pause affordance.
+- Device left as found: radios re-enabled (wifi + mobile_data=1), reader
+  exited to manga detail, TTS idle. Shared-device caveat: user touches
+  observed mid-session (extra Retry/Stop taps in log); all claims above
+  rest on logcat lines + UI dumps, not on assumed tap ownership.
+- Regression coverage note (Task B test): no JVM harness exists for the
+  controller by design (thin orchestration, roadmap says don't build fake
+  test architecture); behavior left to device verification per roadmap.
+
+REMAINING KNOWN ISSUES (unchanged, from roadmap §Appendix): BUG-003
+resumeIndex across Paused page change (P3), BUG-004 OCR cache ocr_model
+(P3), BUG-005/006/007 P4s, U-7/8/9 minors. scanLocally/cropBitmap dead
+code (~60 lines) intentionally KEPT (det-engine ceiling, architecture
+table J).
+
+GIT STATE: branch main @ 9126e20dc, no commit made (no authorization);
+RM-01 changes uncommitted beside the pre-existing tone set. No release,
+no tag, no v0.5.4. Next per roadmap queue: user commit decision (U-2) →
+Q1 v0.5.4 release batch.
 ```

@@ -41,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import eu.kanade.tachiyomi.ui.reader.tts.TtsError
@@ -69,6 +70,7 @@ fun TtsPlaybackBar(
     onStop: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
+    chromeTone: Color? = null,
 ) {
     AnimatedVisibility(
         visible = state.phase != TtsPhase.Idle,
@@ -85,6 +87,7 @@ fun TtsPlaybackBar(
                 .background(
                     MaterialTheme.colorScheme
                         .surfaceColorAtElevation(3.dp)
+                        .withReaderTone(chromeTone)
                         .asFloatingChrome(),
                 )
                 .padding(horizontal = 16.dp, vertical = 4.dp),
@@ -292,5 +295,6 @@ private fun errorMessage(error: TtsError?): String = stringResource(
         TtsError.EngineError -> MR.strings.tts_error_engine
         TtsError.OcrError, null -> MR.strings.tts_error_ocr
         TtsError.NoTextFound -> MR.strings.no_results_found
+        TtsError.ChapterLoadFailed -> MR.strings.tts_error_chapter_load
     },
 )

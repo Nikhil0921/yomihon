@@ -70,6 +70,8 @@ import eu.kanade.core.util.ifSourcesLoaded
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.dictionary.DictionaryPreferences
 import eu.kanade.domain.dictionary.OcrResultPresentation
+import eu.kanade.domain.ui.UiPreferences
+import eu.kanade.domain.ui.model.AppTheme
 import eu.kanade.presentation.reader.DisplayRefreshHost
 import eu.kanade.presentation.reader.ExclusionZoneScopeDialog
 import eu.kanade.presentation.reader.OcrExclusionZonesSheet
@@ -85,6 +87,7 @@ import eu.kanade.presentation.reader.ReadingModeSelectDialog
 import eu.kanade.presentation.reader.TtsPlaybackBar
 import eu.kanade.presentation.reader.appbars.ReaderAppBars
 import eu.kanade.presentation.reader.components.ChapterNavigatorType
+import eu.kanade.presentation.reader.sampleReaderPageTone
 import eu.kanade.presentation.reader.settings.ReaderSettingsDialog
 import eu.kanade.presentation.util.ioCoroutineScope
 import eu.kanade.tachiyomi.R
@@ -94,6 +97,7 @@ import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.data.saver.Image
 import eu.kanade.tachiyomi.data.saver.ImageSaver
 import eu.kanade.tachiyomi.databinding.ReaderActivityBinding
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.ui.base.activity.BaseActivity
 import eu.kanade.tachiyomi.ui.dictionary.DictionarySearchScreenModel
@@ -127,16 +131,19 @@ import eu.kanade.tachiyomi.util.view.setComposeContent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import logcat.LogPriority
 import mihon.domain.dictionary.model.DictionaryTerm
 import mihon.domain.tts.service.TtsPreferences
@@ -167,10 +174,17 @@ class ReaderActivity : BaseActivity() {
                 addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
             }
         }
+
+        // Artwork tone: debounce so rapid swiping only samples the settled page.
+        const val TONE_SETTLE_DEBOUNCE_MS = 300L
+
+        // Artwork tone: max wait for a still-downloading page to become Ready.
+        const val TONE_STREAM_WAIT_MS = 20_000L
     }
 
     private val readerPreferences = Injekt.get<ReaderPreferences>()
     private val preferences = Injekt.get<BasePreferences>()
+    private val uiPreferences = Injekt.get<UiPreferences>()
     private val dictionaryPreferences = Injekt.get<DictionaryPreferences>()
     private val ankiDroidPreferences = Injekt.get<AnkiDroidPreferences>()
     private val ttsPreferences = Injekt.get<TtsPreferences>()
@@ -210,6 +224,15 @@ class ReaderActivity : BaseActivity() {
 
     // Height (px) of the bottom reader tray incl. nav-bar insets; 0 when hidden.
     private var bottomTrayHeightPx by mutableStateOf(0)
+
+    // Artwork-derived tone for the floating reader chrome (see ReaderArtworkTone.kt).
+    // Null = neutral/unknown → chrome stays exactly as before this feature.
+    private var readerChromeTone by mutableStateOf<androidx.compose.ui.graphics.Color?>(null)
+    private var artworkToneJob: Job? = null
+
+    // Monochrome theme hard-disables the tint (grayscale-only scheme by design).
+    private val isMonochromeTheme: Boolean
+        get() = uiPreferences.appTheme.get() == AppTheme.MONOCHROME
 
     private data class ActiveOcrOverlaySession(
         val selection: ReaderOcrRegionSelection,
@@ -744,6 +767,7 @@ class ReaderActivity : BaseActivity() {
                 showReadAloudButton = showReadAloudButton,
                 actionOrder = bottomBarActionOrder,
                 onBottomTrayHeightChanged = { bottomTrayHeightPx = it },
+                chromeTone = if (isMonochromeTheme) null else readerChromeTone,
             )
 
             // OCR selection overlay
@@ -798,6 +822,7 @@ class ReaderActivity : BaseActivity() {
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .offset { IntOffset(x = 0, y = -pillClearancePx) },
+                    chromeTone = if (isMonochromeTheme) null else readerChromeTone,
                 )
             }
 
@@ -953,6 +978,7 @@ class ReaderActivity : BaseActivity() {
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .offset { IntOffset(x = 0, y = -pillClearancePx) },
+                chromeTone = if (isMonochromeTheme) null else readerChromeTone,
             )
         }
     }
@@ -1149,7 +1175,48 @@ class ReaderActivity : BaseActivity() {
         ) {
             dismissActiveOcrOverlaySession()
         }
+        scheduleArtworkToneUpdate(page)
         viewModel.onPageSelected(page)
+    }
+
+    /**
+     * Artwork-reactive chrome (ReaderArtworkTone): debounced per settled
+     * page, IO dispatcher, tiny decode; cancellation drops the update so
+     * rapid page changes never queue work. Monochrome theme and animated
+     * pages keep the stock chrome.
+     */
+    private fun scheduleArtworkToneUpdate(page: ReaderPage) {
+        if (isMonochromeTheme) {
+            readerChromeTone = null
+            artworkToneJob?.cancel()
+            artworkToneJob = null
+            return
+        }
+        artworkToneJob?.cancel()
+        artworkToneJob = lifecycleScope.launchIO {
+            delay(TONE_SETTLE_DEBOUNCE_MS)
+            val tone = samplePageToneWhenReady(page)
+            logcat(LogPriority.DEBUG) {
+                "ReaderArtworkTone schedule: page=${page.index} status=${page.status} " +
+                    "stream=${page.stream != null} tone=${tone ?: androidx.compose.ui.graphics.Color.Unspecified}"
+            }
+            if (tone != readerChromeTone) {
+                readerChromeTone = tone
+            }
+        }
+    }
+
+    /**
+     * HTTP pages set [ReaderPage.stream] only when Ready; the debounce can
+     * expire mid-download. Awaits the page's status flow (bounded) so the
+     * tone samples the finished artwork instead of aborting early.
+     */
+    private suspend fun samplePageToneWhenReady(page: ReaderPage): androidx.compose.ui.graphics.Color? {
+        if (page.stream != null) return sampleReaderPageTone(page.stream)
+        val status = withTimeoutOrNull(TONE_STREAM_WAIT_MS) {
+            page.statusFlow.first { it is Page.State.Ready || it is Page.State.Error }
+        } ?: return null
+        return if (status is Page.State.Ready) sampleReaderPageTone(page.stream) else null
     }
 
     /**
@@ -1611,6 +1678,7 @@ class ReaderActivity : BaseActivity() {
         TtsError.EngineError -> MR.strings.tts_error_engine
         TtsError.OcrError -> MR.strings.tts_error_ocr
         TtsError.NoTextFound -> MR.strings.no_results_found
+        TtsError.ChapterLoadFailed -> MR.strings.tts_error_chapter_load
     }
 
     /**

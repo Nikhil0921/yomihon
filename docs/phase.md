@@ -5,7 +5,23 @@
 > A phase is COMPLETED only when its verification steps have actually been run
 > and recorded in `docs/memory.md`.
 
-Current phase pointer: **DECISION MICRO-BATCH COMPLETE 2026-09-11 (docs-
+Current phase pointer: **MASTER ROADMAP CANONICAL 2026-09-12 —
+  docs/implementation-roadmap.md is now THE execution register (agent
+  execution lock inside it). Current authorized task: RM-01 cleanup &
+  pre-release consolidation (TTS pause-guard P2 + chapter-advance-failure
+  P2 + dead-code sweep + stale-doc corrections: Known-issue #2 found
+  RESOLVED in code by the audit). Full-audit verdict: no P0/P1; 2×P2,
+  3×P3, rest P4. Reference candidates registered (Tadami/AnymeX/Chimahon);
+  queue = v0.5.4 release → genre-chip search → recursive dictionary
+  lookup → e-ink popup style → tap-zone investigation → dict
+  history/favorites → 10B → Feed auto-pagination → a11y completion.**
+  Prior: ARTWORK-REACTIVE READER TRAY COMPLETE
+  2026-09-12 (Chimahon/AnymeX-track "ADAPT" item, deferred #3): device
+  verification done (stream-wait root-cause fix + user-approved 20%/2.5x
+  chroma tuning after 8% proved invisible on AMOLED); gates green;
+  debug logs pending removal before next release. Batch 7 toolbar
+  customization USER-VERIFIED → CLOSED (2026-09-11).** Prior:
+  DECISION MICRO-BATCH COMPLETE 2026-09-11 (docs-
   only, commit see memory.md). Ratified TtsPlaybackBar as shipped
   (bodyMedium + 16/4; design.md §4/§5/§8 updated, zero source change);
   FeedFilterBar arrow CLOSED NO ACTION; FeedHeader two-line KEPT; D-09
@@ -354,10 +370,10 @@ PRODUCT PIVOT 2026-08-25: English is the primary v1 Read-Aloud language;
 These were intentionally NOT implemented in the 2026-09-06 post-modernization
 feature set and must not be forgotten:
 
-1. **Reader toolbar reordering** — reorder reader toolbar actions (drag &
-   drop, persist ordering, restore defaults, respect feature availability,
-   preserve mandatory/core actions). Current phase keeps toolbar VISIBILITY
-   controls only; the settings structure is ready for the ordering feature.
+1. **Reader toolbar reordering** — SHIPPED 2026-09-11 as Feature Batch 7;
+    reordering + persistence + upgrade-safe defaults + OCR/Read-Aloud
+    visibility independence + Settings pinned last; 13 unit tests;
+    user-verified on device. CLOSED.
 2. **True backdrop blur investigation** — reader floating chrome currently
    uses semantic color roles, NOT true backdrop blur (Compose cannot sample
    the sibling artwork View; fullscreen RenderEffect was rejected on
@@ -365,11 +381,12 @@ feature set and must not be forgotten:
    architecture, performance impact, battery impact, memory impact,
    compatibility, AMOLED/light/dark behavior, reader scrolling performance.
    Do not "just add a blur modifier."
-3. **Artwork-reactive reader tray** — subtle top/bottom tray appearance
-   derived from the manga artwork behind it (Tadami-inspired contextual
-   behavior, not its visual identity). Requirements: subtle, content-first,
-   no aura/rim lighting/glass-everywhere, reader performance first,
-   readability preserved.
+  3. **Artwork-reactive reader tray** — IMPLEMENTED 2026-09-11 (see
+    memory.md same-date block): feasibility proven SAFE; minimal blend
+    implementation (sample → average → normalize → 8% blend before
+    asFloatingChrome, debounced per settled page, IO-only, full fallback
+    identity). Gates green; device verification PENDING user. True
+    backdrop blur remains REJECTED (unrelated; not the shipped path).
 4. **Automatic Feed pagination** — near-end automatic loading, ONLY after
    the explicit Load-more paging (shipped 2026-09-06) is device-tested and
    stable. No auto infinite scroll in the current phase.

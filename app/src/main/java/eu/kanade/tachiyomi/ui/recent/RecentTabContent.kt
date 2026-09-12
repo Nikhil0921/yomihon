@@ -8,7 +8,6 @@ import dev.icerock.moko.resources.StringResource
 
 data class RecentTabContent(
     val titleRes: StringResource,
-    val badgeNumber: Int? = null,
     val content: @Composable (
         contentPadding: PaddingValues,
         snackbarHostState: SnackbarHostState,

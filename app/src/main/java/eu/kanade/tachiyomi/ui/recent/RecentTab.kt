@@ -102,7 +102,6 @@ data object RecentTab : Tab {
                             text = {
                                 TabText(
                                     text = stringResource(tab.titleRes),
-                                    badgeCount = tab.badgeNumber,
                                 )
                             },
                             unselectedContentColor = MaterialTheme.colorScheme.onSurface,

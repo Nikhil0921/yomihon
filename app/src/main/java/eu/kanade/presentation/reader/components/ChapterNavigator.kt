@@ -43,6 +43,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import eu.kanade.presentation.reader.withReaderTone
 import eu.kanade.presentation.theme.TachiyomiPreviewTheme
 import eu.kanade.presentation.util.isTabletUi
 import tachiyomi.i18n.MR
@@ -71,6 +72,7 @@ fun ChapterNavigator(
     totalPages: Int,
     onPageIndexChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    chromeTone: androidx.compose.ui.graphics.Color? = null,
 ) {
     val haptic = LocalHapticFeedback.current
 
@@ -98,6 +100,7 @@ fun ChapterNavigator(
     // Match with toolbar background color set in ReaderAppBars
     val backgroundColor = MaterialTheme.colorScheme
         .surfaceColorAtElevation(3.dp)
+        .withReaderTone(chromeTone)
         .asFloatingChrome()
     val buttonColor = IconButtonDefaults.filledIconButtonColors(
         containerColor = backgroundColor,

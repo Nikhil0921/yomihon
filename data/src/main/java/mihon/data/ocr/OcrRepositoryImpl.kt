@@ -128,10 +128,6 @@ class OcrRepositoryImpl(
         }
     }
 
-    private fun localOcrAvailable(): Boolean {
-        return environmentResult.isSuccess
-    }
-
     private fun engineFor(type: EngineType): OcrEngine {
         return when (type) {
             EngineType.LEGACY -> glensEngine ?: GlensOcrEngine().also {
@@ -156,13 +152,9 @@ class OcrRepositoryImpl(
     }
 
     private fun detectionEngine(): DetOcrEngine {
-        return detEngine ?: (
-            if (localOcrAvailable()) {
-                UnavailableDetOcrEngine() // TODO: replace with real DetOcrEngine with a local model
-            } else {
-                UnavailableDetOcrEngine()
-            }
-            ).also {
+        // TODO: replace with a real local-model DetOcrEngine when available;
+        // until then every scan redirects to Glens via the fallback chain.
+        return detEngine ?: UnavailableDetOcrEngine().also {
             detEngine = it
         }
     }

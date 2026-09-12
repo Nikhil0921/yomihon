@@ -1206,6 +1206,7 @@
     <string name="tts_finished">Finished</string>
     <string name="tts_error_engine">Text-to-speech engine failed</string>
     <string name="tts_error_ocr">Couldn\'t get page text for reading aloud</string>
+    <string name="tts_error_chapter_load">Couldn\'t load the next chapter for reading aloud</string>
     <string name="pref_tts_speech_rate">Speech rate</string>
     <string name="pref_tts_pitch">Pitch</string>
     <string name="pref_tts_auto_page_turn">Turn pages automatically</string>

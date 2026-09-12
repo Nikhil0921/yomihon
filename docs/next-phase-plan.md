@@ -1,5 +1,13 @@
 # Yomitsu — Phase 6 Master Plan (Post UI-Audit Batches 1–5)
 
+> **STATUS: SUPERSEDED (2026-09-12).** For ALL next-task decisions, read
+> **docs/implementation-roadmap.md** — the canonical execution register
+> produced by the 2026-09-12 master audit. This file is retained as
+> historical planning evidence (its Part A baseline and Part F decision
+> closures are still valid history; Part G "Next = v0.5.3 release" is
+> SHIPPED; Part B row 12 was disproved — ReaderActivity has ONE composition
+> block in current code). Do NOT select work from this file.
+
 > PLANNING DOCUMENT. Produced 2026-09-10 from the clean baseline
 > (HEAD c02efca25, +docs 2a377ef12; Batches 1–5 committed 1b2c56b23).
 > NO application source changes. NO design decisions silently resolved.
@@ -68,7 +76,7 @@ unknown).
 | Known issue #1 local Fast scan ordering | memory | mitigated (redirects → GLENS); port Glens ordering to local scan = 10B item | JP vertical text on local scans | medium (OCR engine) | FUTURE | 10B |
 | Known issue #6 seam-bubble fragments (IoU 0.45 ceiling) | memory | accepted v1 ceiling | rare duplicate/fragment speech | low | FUTURE | cross-tile merge, 10B |
 | Known issue #12 Glance widget LocalContext error | memory | non-fatal, pre-existing | minor | low | P2 | investigate only if widget complaints |
-| Known issue #2 ReaderActivity dual setComposeContent | memory | documented landmine (TTS bar placement) | dev-only | refactor risk | FUTURE | do not refactor casually |
+| Known issue #2 ReaderActivity dual setComposeContent | memory | RESOLVED 2026-09-12 audit (docs corrected in RM-01): ReaderActivity has ONE composition block (setComposeOverlay l.606); dual-block landmine no longer exists | none | none | RESOLVED | CLOSED — docs corrected, no code change needed |
 | libLiteRtClGlAccelerator.so ~2.8MB/ABI unused GPU lib | memory 09-08 | still packaged; exclusion untested | APK size | lazy-dlopen risk if excluded | P2 | test exclusion in a release batch |
 | ResizableSheet geometry unification (24dp variant) | map §21 LOW | deferred by 09-05 B-R ruling | cosmetic | low | FUTURE | LOW polish |
 
@@ -89,7 +97,7 @@ material; nothing was invented to fill it.
 | Idea (reference origin) | Verdict | Existing Yomitsu equivalent | Reference behavior | Benefit | Downside | Architectural impact | UI impact | Priority |
 |---|---|---|---|---|---|---|---|---|
 | Grouped settings cards (Chimahon/Tadami grouping language) | **ADOPT (already shipped)** | PreferenceGroupCard system | card-per-group settings | scannable settings | none observed | none — shipped | frozen | done |
-| "Tadami-inspired" contextual reader tray (artwork-reactive chrome) | **ADAPT → investigate first** | frosted floating chrome (asFloatingChrome 0.85) | subtle tray deriving from artwork behind | ambient immersion | perf risk over artwork; readability; scope creep into protected reader | investigation required (rendering/battery/AMOLED/scroll perf) BEFORE any code; must reuse frost roles | reader chrome only | FUTURE (phase.md deferred #3) |
+| "Tadami-inspired" contextual reader tray (artwork-reactive chrome) | **ADAPT — IMPLEMENTED 2026-09-11** | frosted floating chrome (asFloatingChrome 0.85) now blends an artwork-derived tone (≤8%) pre-frost; debounced/IO/identity-fallback | subtle tray deriving from artwork behind | ambient immersion | bounded: tiny decode per settled page; neutral guards keep most pages unchanged | none — reused frost roles + stream + ImageDecoder; no viewer/arch change | reader chrome only (4 floating-chrome sites) | SHIPPED pending device verify (phase.md deferred #3 closed) |
 | Reader toolbar reordering (drag/drop customization) | **DEFER** | visibility toggles only (reader settings) | full drag-drop ordering | power-user control | persistence + defaults + mandatory-action edge cases; touches reader settings structure only (NOT ReaderBottomBar behavior) | pref schema addition | settings + bottom bar config | FUTURE (phase.md deferred #1) |
 | True backdrop blur | **REJECT (for now)** | real-alpha frost roles | glass blur everywhere | visual depth | Compose can't sample sibling artwork View; fullscreen RenderEffect rejected on perf; battery/AMOLED cost | blocked by rendering arch | none | stays rejected until feasibility proven |
 | Neon/cyberpunk/glass-everywhere aesthetic | **REJECT** | M3 structured minimal | flashy skins | none for Yomitsu | contradicts design.md §1 identity | none | none | rejected |
@@ -139,7 +147,7 @@ dispositions.
 | TtsPlaybackBar code alignment (if chosen) | :app presentation | **TtsPlaybackBar — PROTECTED** | none | none | none | none | spotless + compile | reader TTS session visual |
 | Feed auto pagination | :app (FeedScreenModel/FeedScreen) | Feed footer | none (state only) | none | none | none | FeedScreenModelStateTest extension | Feed long-scroll session |
 | Reader toolbar reordering | :app reader settings + prefs | reader settings dialog; ReaderBottomBar config | none | none | NEW pref keys (approval gate) | none | unit test on ordering model | reader toolbar session |
-| Artwork-reactive tray investigation | investigation doc first | reader chrome (protected family) | none (read-only study) | none until approved | none | none | perf/battery measurement plan | dedicated perf pass |
+| Artwork-reactive tray (shipped 2026-09-11) | :app presentation + ReaderActivity (param-threaded only) | reader floating chrome (frost roles unchanged) | none | none | none | none | ReaderArtworkToneTest 10 cases | reader session: tone pages + neutral pages + Monochrome |
 | 10B per-voice rate/pitch tuning | :domain prefs + :app ReadAloud SM/screen | SettingsReadAloudScreen | pref model extension | none | NEW keys | none | domain unit tests | voice-switch session |
 | 10B JP/multilingual opt-in preflight | :domain + AndroidTtsEngine (**PROTECTED**) | ReadAloud pickers | none | none | new pref | none | domain tests | JP-content session |
 | 10B Glens-ordering port to local Fast scan | :data OCR engine (**PROTECTED family**) | none | engine internals | OCR cache version bump consideration | none | none | engine ordering tests | local-source JP vertical page |
@@ -149,8 +157,9 @@ dispositions.
 Protected systems (no touch without explicit authorization): ReaderActivity,
 TtsPlaybackBar, TtsPlaybackController, AndroidTtsEngine, OCR engines + pipeline,
 reader navigation, existing TTS/OCR architecture. No proposed cleanup
-refactors target them — including Known issue #2 (dual compose blocks),
-which stays documented-not-fixed.
+refactors target them. (Known issue #2, the dual compose blocks once listed
+here, was disproved by the 2026-09-12 audit — one composition block exists;
+the "issue" was stale documentation, not code.)
 
 ---
 
@@ -208,8 +217,8 @@ reduction and the rebrand) sit unreleased while the in-app updater waits.
 
 ### Later
 - Feed automatic near-end pagination (now eligible — Load-more stable).
-- Reader toolbar reordering (deferred #1).
-- Artwork-reactive tray feasibility study (deferred #3).
+- Reader toolbar reordering — SHIPPED 2026-09-11 (Batch 7, user-verified).
+- Artwork-reactive tray — SHIPPED 2026-09-11 (blend-based; device verify pending).
 - ResizableSheet geometry unification (LOW).
 - Glance widget issue #12 (complaint-driven).
 - OCR cache eviction boundary + GLENS retry live-verify (opportunistic).
@@ -225,7 +234,9 @@ reduction and the rebrand) sit unreleased while the in-app updater waits.
 - Standardized reselect semantics.
 - Library page-level Continue section (reverted twice — per-item button is the approved form).
 - True backdrop blur (until feasibility proven).
-- Any refactor of protected systems for cleanliness (incl. Known issue #2).
+- Any refactor of protected systems for cleanliness. (Former entry
+  "incl. Known issue #2" is moot: the 2026-09-12 audit proved there is only
+  one composition block — there is nothing to refactor.)
 
 ---
 

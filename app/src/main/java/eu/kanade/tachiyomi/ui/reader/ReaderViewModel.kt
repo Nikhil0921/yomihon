@@ -565,6 +565,15 @@ class ReaderViewModel @JvmOverloads constructor(
                 throw e
             }
             logcat(LogPriority.ERROR, e)
+            // TTS auto-advance waits (Preparing) for the chapter this load was
+            // supposed to make active; without a signal it wedges forever.
+            // Only fail when it is actually waiting on this transition.
+            ttsControllerInstance?.let { controller ->
+                val phase = controller.state.value.phase
+                if (phase == TtsPhase.Preparing || phase == TtsPhase.LoadingPage) {
+                    controller.fail(TtsError.ChapterLoadFailed)
+                }
+            }
         } finally {
             mutableState.update { it.copy(isLoadingAdjacentChapter = false) }
         }

@@ -2,9 +2,10 @@
 
 > Status: living document. Describes HOW the system is built.
 > Documents the ACTUAL architecture (Read-Aloud TTS v1 + Phase 10A voice
-> config + 2026-09-01 multi-feature set shipped in v0.5.x; latest release v0.5.2).
+> config + 2026-09-01 multi-feature set shipped in v0.5.x; latest release v0.5.3).
 > WHAT belongs in `docs/prd.md`; rules in `docs/rules.md`; progress in `docs/memory.md`.
-> All paths verified against the repository (branch `main`, v0.5.2, versionCode 28).
+> All paths verified against the repository (branch `main`, v0.5.3, versionCode 29;
+> re-verified against source by the 2026-09-12 master audit + RM-01).
 
 ---
 
@@ -145,9 +146,18 @@ Flow:
    SetOrientation, SetCoverResult, SavedImage/ShareImage/CopyImage, Ocr* errors.
 8. **Lifecycle**: viewers destroyed in `onDestroy`; `ReaderViewModel.onCleared()`
    calls `OcrRepository.cleanup()` / `PanelDetectionRepository.cleanup()`.
-   Compose overlays rendered via `binding.setComposeOverlay()` +
-   `ContentOverlay(...)` (app bars, OCR selection overlay, dialogs,
-   `OcrLoadingIndicator` at BottomCenter).
+    Compose overlays rendered via `binding.setComposeOverlay()` +
+    `ContentOverlay(...)` (app bars, OCR selection overlay, dialogs,
+    `OcrLoadingIndicator` at BottomCenter).
+
+    > Historical note (RESOLVED): an earlier memory.md entry (Known-issue #2)
+    > warned about a second, parallel `setComposeContent` composition block
+    > inside ContentOverlay, requiring TTS bar additions to target the inner
+    > block. The 2026-09-12 master audit verified ReaderActivity has exactly
+    > ONE composition block (`setComposeOverlay` in ReaderActivity.kt:606);
+    > the dual-block landmine no longer exists. Reader overlays compose in a
+    > single tree; the inline z-order contract is codified as a comment at
+    > the Box in ReaderActivity's overlay composition.
 
 ---
 

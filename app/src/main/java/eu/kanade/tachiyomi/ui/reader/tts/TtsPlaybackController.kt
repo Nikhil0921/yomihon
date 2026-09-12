@@ -53,6 +53,7 @@ enum class TtsError {
     EngineError,
     OcrError,
     NoTextFound,
+    ChapterLoadFailed,
 }
 
 data class TtsPlaybackState(
@@ -170,10 +171,19 @@ internal class TtsPlaybackController(
     }
 
     fun pause() {
-        if (mutableState.value.phase != TtsPhase.Playing && !paused) return
+        // Pause in ANY active phase (Preparing/LoadingPage included): OCR
+        // acquisition must not out-speak the user's pause or the focus-loss
+        // pause. Idle/Finished/Error have nothing to pause; starting playback
+        // is never pause's job.
+        when (mutableState.value.phase) {
+            TtsPhase.Idle, TtsPhase.Finished, TtsPhase.Error -> return
+            else -> {}
+        }
         paused = true
         engine.stop() // interrupts the current utterance; speak() returns false
-        mutableState.update { it.copy(phase = TtsPhase.Paused) }
+        if (mutableState.value.phase != TtsPhase.Paused) {
+            mutableState.update { it.copy(phase = TtsPhase.Paused) }
+        }
         logcat(LogPriority.DEBUG) {
             "TTS pause page=${mutableState.value.pageIndex} sentence=${mutableState.value.sentenceIndex}"
         }
@@ -477,7 +487,11 @@ internal class TtsPlaybackController(
 
     /** Returns the page's sentences, an empty list when the page has no text, or null on failure. */
     private suspend fun acquireSentences(pageIndex: Int): List<TtsSentence>? = withIOContext {
-        mutableState.update { it.copy(phase = TtsPhase.LoadingPage) }
+        // Don't clobber Paused: a pause during acquisition must stay visible
+        // (and awaitWhilePaused in runPlayback holds speech until resumed).
+        if (!paused) {
+            mutableState.update { it.copy(phase = TtsPhase.LoadingPage) }
+        }
         val ctx = context ?: return@withIOContext emptyList()
         val acquireStartedAt = SystemClock.elapsedRealtime()
         val cached = try {
@@ -715,7 +729,13 @@ internal class TtsPlaybackController(
         mutableState.update { it.copy(phase = TtsPhase.Idle, sentenceText = "") }
     }
 
-    private fun fail(error: TtsError) {
+    /**
+     * Moves the session to the Error phase with Retry. Also callable by the host
+     * (ReaderViewModel) for failures the controller cannot observe itself —
+     * e.g. a next-chapter load failure during TTS auto-advance, which would
+     * otherwise wedge the controller in Preparing forever.
+     */
+    fun fail(error: TtsError) {
         engine.stop()
         engine.abandonFocus()
         scope.launch { eventChannel.send(TtsEvent.Failed(error)) }
