@@ -10,6 +10,29 @@ The format is a modified version of [Keep a Changelog](https://keepachangelog.co
 - `Fixed` - for any bug fixes.
 - `Other` - for technical stuff.
 
+## [v0.5.4] - 2026-09-12
+
+### Added
+- Reader toolbar customization: drag-and-drop reordering of bottom-bar actions
+  (long-press a button to start dragging), with a management screen under
+  Settings → Reader toolbar, per-manga toolbar memory, and upgrade-safe defaults
+- Reader chrome now tints itself toward the current artwork's color palette
+  (artwork-reactive tray, subtle 20% blend)
+
+### Improved
+- Accessibility pass across core screens: content descriptions, semantics, and
+  toggleable-state semantics for screen readers
+- Continue tab state handling (Batch 6): more reliable stale-state recovery and
+  nested-toolbar cleanup on the Recent screens
+- Read-Aloud pauses correctly during page/chapter preparation (previously a
+  pause during "Preparing…" was silently ignored and playback resumed anyway)
+- Removed dead code (unused badge parameter, no-op touch modifier, duplicate OCR
+  engine branch) and corrected stale documentation
+
+### Fixed
+- Read-Aloud no longer wedges in "Preparing…" forever when the next chapter
+  fails to load — it now shows an error with a Retry button
+
 ## [v0.5.3] - 2026-09-10
 
 ### Changed
