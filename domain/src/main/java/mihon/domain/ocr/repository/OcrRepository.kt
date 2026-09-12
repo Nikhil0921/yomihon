@@ -2,6 +2,7 @@ package mihon.domain.ocr.repository
 
 import mihon.domain.ocr.model.OcrImage
 import mihon.domain.ocr.model.OcrPageResult
+import mihon.domain.ocr.model.OcrScanPriority
 
 interface OcrRepository {
     suspend fun recognizeText(image: OcrImage): String
@@ -10,6 +11,7 @@ interface OcrRepository {
         chapterId: Long,
         pageIndex: Int,
         image: OcrImage,
+        priority: OcrScanPriority = OcrScanPriority.NORMAL,
     ): OcrPageResult
 
     suspend fun getCachedPage(

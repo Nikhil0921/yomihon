@@ -11,6 +11,7 @@ import tachiyomi.core.common.util.system.logcat
 
 internal class PrioritizedTaskQueue(
     private val scope: CoroutineScope,
+    private val maxConcurrentTasks: Int = 3,
     private val onIdle: () -> Unit = {},
 ) {
     enum class Priority {
@@ -47,9 +48,10 @@ internal class PrioritizedTaskQueue(
                 Priority.NORMAL -> normalPriorityTasks.addLast(task)
             }
             logcat(LogPriority.DEBUG) {
-                "OCR queue depth high=${highPriorityTasks.size} normal=${normalPriorityTasks.size}"
+                "OCR queue depth high=${highPriorityTasks.size} normal=${normalPriorityTasks.size} " +
+                    "active=$activeTasks/$maxConcurrentTasks"
             }
-            if (workerJob?.isActive != true) {
+            if (workerJob?.isActive != true && activeTasks < maxConcurrentTasks) {
                 workerJob = scope.launch { processQueue() }
             }
         }
@@ -66,27 +68,40 @@ internal class PrioritizedTaskQueue(
     private suspend fun processQueue() {
         while (true) {
             val task = mutex.withLock {
-                val nextTask = highPriorityTasks.removeFirstOrNull()
-                    ?: normalPriorityTasks.removeFirstOrNull()
-
-                if (nextTask == null) {
+                if (activeTasks >= maxConcurrentTasks) {
+                    // Full: a finishing task restarts the drain loop when capacity frees.
                     workerJob = null
                     null
                 } else {
-                    activeTasks++
+                    val nextTask = highPriorityTasks.removeFirstOrNull()
+                        ?: normalPriorityTasks.removeFirstOrNull()
+                    if (nextTask != null) activeTasks++
                     nextTask
                 }
             } ?: break
 
-            try {
-                task()
-            } finally {
-                val becameIdle = mutex.withLock {
-                    activeTasks--
-                    activeTasks == 0 && highPriorityTasks.isEmpty() && normalPriorityTasks.isEmpty()
-                }
-                if (becameIdle) {
-                    onIdle()
+            // Launch instead of running inline: up to maxConcurrentTasks tasks overlap
+            // (remote GLENS scans are network-bound). The queue task itself owns its
+            // bitmap lifecycle, so an abandoned await never cancels the running scan.
+            scope.launch {
+                try {
+                    task()
+                } finally {
+                    val becameIdle = mutex.withLock {
+                        activeTasks--
+                        activeTasks == 0 && highPriorityTasks.isEmpty() && normalPriorityTasks.isEmpty()
+                    }
+                    if (becameIdle) {
+                        onIdle()
+                    }
+                    mutex.withLock {
+                        if (workerJob?.isActive != true &&
+                            activeTasks < maxConcurrentTasks &&
+                            (highPriorityTasks.isNotEmpty() || normalPriorityTasks.isNotEmpty())
+                        ) {
+                            workerJob = scope.launch { processQueue() }
+                        }
+                    }
                 }
             }
         }

@@ -20,6 +20,9 @@ The format is a modified version of [Keep a Changelog](https://keepachangelog.co
   (artwork-reactive tray, subtle 20% blend)
 
 ### Improved
+- Read-Aloud uncached pages load much faster: page scans now run in parallel (up to
+  3 at a time) instead of one-by-one, the lookahead window is wider, and the page
+  currently being spoken is always scanned ahead of background work
 - Accessibility pass across core screens: content descriptions, semantics, and
   toggleable-state semantics for screen readers
 - Continue tab state handling (Batch 6): more reliable stale-state recovery and

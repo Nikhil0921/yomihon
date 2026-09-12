@@ -35,6 +35,12 @@ enum class OcrTextOrientation {
     Vertical,
 }
 
+/** Scan urgency: Read-Aloud's current page must not queue behind background scans. */
+enum class OcrScanPriority {
+    HIGH,
+    NORMAL,
+}
+
 data class OcrRegion(
     val order: Int,
     val text: String,

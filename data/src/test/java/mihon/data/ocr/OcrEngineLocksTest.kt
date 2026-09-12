@@ -48,6 +48,37 @@ class OcrEngineLocksTest {
         val secondEntered = CompletableDeferred<Unit>()
 
         val first = async {
+            locks.withTextEngineLock(OcrRepositoryImpl.EngineType.FAST) {
+                started.complete(Unit)
+                release.await()
+            }
+        }
+
+        started.await()
+
+        val second = async {
+            locks.withTextEngineLock(OcrRepositoryImpl.EngineType.FAST) {
+                secondEntered.complete(Unit)
+            }
+        }
+
+        testScheduler.runCurrent()
+        assertFalse(secondEntered.isCompleted)
+        assertFalse(second.isCompleted)
+
+        release.complete(Unit)
+        awaitAll(first, second)
+        assertTrue(secondEntered.isCompleted)
+    }
+
+    @Test
+    fun glensTextScansRunInParallel() = runTest {
+        val locks = OcrEngineLocks()
+        val started = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val secondEntered = CompletableDeferred<Unit>()
+
+        val first = async {
             locks.withTextEngineLock(OcrRepositoryImpl.EngineType.GLENS) {
                 started.complete(Unit)
                 release.await()
@@ -62,13 +93,11 @@ class OcrEngineLocksTest {
             }
         }
 
-        testScheduler.runCurrent()
-        assertFalse(secondEntered.isCompleted)
-        assertFalse(second.isCompleted)
+        secondEntered.await()
+        assertTrue(second.isCompleted)
 
         release.complete(Unit)
         awaitAll(first, second)
-        assertTrue(secondEntered.isCompleted)
     }
 
     @Test

@@ -7,7 +7,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,6 +27,7 @@ import mihon.domain.ocr.interactor.ScanPageOcr
 import mihon.domain.ocr.interactor.WithOcrScanSession
 import mihon.domain.ocr.model.ExclusionMatchContext
 import mihon.domain.ocr.model.OcrPageResult
+import mihon.domain.ocr.model.OcrScanPriority
 import mihon.domain.ocr.model.applyExclusions
 import mihon.domain.tts.TtsAdvanceAction
 import mihon.domain.tts.TtsAdvancePolicy
@@ -573,7 +577,9 @@ internal class TtsPlaybackController(
 
     /** Cached-miss path: resolve the bitmap through the shared pipeline, scan, recycle.
      *  Runs on IO: page-list resolution does network via Rx awaitSingle on the calling
-     *  thread, and the prefetch job launches on the Main viewModelScope. */
+     *  thread, and the prefetch job launches on the Main viewModelScope.
+     *  The current page's scan is HIGH priority so it never queues behind prefetch
+     *  or background chapter scans. */
     private suspend fun scanOnDemand(
         ctx: TtsChapterContext,
         pageIndex: Int,
@@ -587,7 +593,12 @@ internal class TtsPlaybackController(
                     val input = resolved.getPageInput(pageIndex) ?: return@use null
                     val bitmap: android.graphics.Bitmap = input.openBitmap() ?: return@use null
                     try {
-                        scanPageOcr.await(ctx.chapter.id, pageIndex, bitmap.toOcrImage())
+                        scanPageOcr.await(
+                            ctx.chapter.id,
+                            pageIndex,
+                            bitmap.toOcrImage(),
+                            priority = if (reportFailure) OcrScanPriority.HIGH else OcrScanPriority.NORMAL,
+                        )
                     } finally {
                         if (!bitmap.isRecycled) bitmap.recycle()
                     }
@@ -606,13 +617,15 @@ internal class TtsPlaybackController(
         null
     }
 
-    /** Prefetch lookahead depth by speech rate: faster speech needs more runway. */
+    /** Prefetch lookahead depth by speech rate: faster speech needs more runway.
+     *  Remote scans commonly take 20-60s per page while one page of speech at
+     *  1x runs ~10-20s, so the default lookahead is 2 pages, overlapping scans. */
     private fun prefetchDepth(): Int {
         val rate = preferences.ttsSpeechRate().get()
         return when {
             rate >= 2.5f -> MAX_PREFETCH_DEPTH
-            rate >= 1.5f -> 2
-            else -> 1
+            rate >= 1.5f -> 3
+            else -> 2
         }
     }
 
@@ -630,33 +643,39 @@ internal class TtsPlaybackController(
                 "TTS prefetch start pages=${targetPages.first}..${targetPages.last} " +
                     "rate=${preferences.ttsSpeechRate().get()}"
             }
-            for (page in targetPages) {
-                val cached = try {
-                    getCachedPageOcr.await(ctx.chapter.id, page)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (_: Exception) {
-                    null
-                }
-                if (cached != null) {
-                    logcat(LogPriority.DEBUG) { "TTS prefetch cache hit page=$page" }
-                    continue
-                }
-                try {
-                    // Best-effort: failures must not kill the session; the main loop
-                    // re-scans and reports its own errors when it reaches this page.
-                    val scanned = scanOnDemand(ctx, page, reportFailure = false)
-                    if (scanned != null) {
-                        logcat(LogPriority.DEBUG) { "TTS prefetch complete page=$page" }
-                    } else {
-                        logcat(LogPriority.DEBUG) { "TTS prefetch scan failed page=$page (best-effort)" }
+            // Pages prefetch in parallel: remote scans take ~20-60s each while one
+            // page of speech lasts ~10-20s, so serial lookahead cannot keep up.
+            // The scan queue bounds actual OCR concurrency.
+            coroutineScope {
+                targetPages.map { page ->
+                    async {
+                        val cached = try {
+                            getCachedPageOcr.await(ctx.chapter.id, page)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            null
+                        }
+                        if (cached != null) {
+                            logcat(LogPriority.DEBUG) { "TTS prefetch cache hit page=$page" }
+                            return@async
+                        }
+                        try {
+                            // Best-effort: failures must not kill the session; the main loop
+                            // re-scans and reports its own errors when it reaches this page.
+                            val scanned = scanOnDemand(ctx, page, reportFailure = false)
+                            if (scanned != null) {
+                                logcat(LogPriority.DEBUG) { "TTS prefetch complete page=$page" }
+                            } else {
+                                logcat(LogPriority.DEBUG) { "TTS prefetch scan failed page=$page (best-effort)" }
+                            }
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            // Prefetch is best-effort; the main loop reports its own failures.
+                        }
                     }
-                } catch (e: CancellationException) {
-                    logcat(LogPriority.DEBUG) { "TTS prefetch cancelled page=$page" }
-                    throw e
-                } catch (_: Exception) {
-                    // Prefetch is best-effort; the main loop reports its own failures.
-                }
+                }.awaitAll()
             }
         }
     }

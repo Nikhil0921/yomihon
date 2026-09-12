@@ -4,6 +4,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -16,7 +17,7 @@ class PrioritizedTaskQueueTest {
     fun highPriorityTaskRunsBeforeQueuedNormalTask() = runTest {
         val events = mutableListOf<String>()
         val holdFirstTask = CompletableDeferred<Unit>()
-        val queue = PrioritizedTaskQueue(backgroundScope)
+        val queue = PrioritizedTaskQueue(backgroundScope, maxConcurrentTasks = 1)
 
         val first = async {
             queue.submit(PrioritizedTaskQueue.Priority.NORMAL) {
@@ -55,7 +56,7 @@ class PrioritizedTaskQueueTest {
     fun highPriorityTaskRunsBeforeLaterPageScanChunks() = runTest {
         val events = mutableListOf<String>()
         val holdFirstChunk = CompletableDeferred<Unit>()
-        val queue = PrioritizedTaskQueue(backgroundScope)
+        val queue = PrioritizedTaskQueue(backgroundScope, maxConcurrentTasks = 1)
 
         val pageScan = async {
             queue.submit(PrioritizedTaskQueue.Priority.NORMAL) {
@@ -83,5 +84,87 @@ class PrioritizedTaskQueueTest {
         recognizeText.await()
 
         assertTrue(events.indexOf("recognize-text") < events.indexOf("region-2"))
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun tasksRunConcurrentlyUpToCapacity() = runTest {
+        val events = mutableListOf<String>()
+        val releaseAll = CompletableDeferred<Unit>()
+        val queue = PrioritizedTaskQueue(backgroundScope, maxConcurrentTasks = 3)
+
+        val jobs = (1..3).map { i ->
+            async {
+                queue.submit(PrioritizedTaskQueue.Priority.NORMAL) {
+                    events += "task-$i-start"
+                    releaseAll.await()
+                    events += "task-$i-end"
+                }
+            }
+        }
+        // All three started without waiting: capacity allows full overlap.
+        runCurrent()
+        assertEquals(3, events.count { it.endsWith("-start") })
+
+        releaseAll.complete(Unit)
+        jobs.forEach { it.await() }
+        assertEquals(6, events.size)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun queuedTaskStartsWhenCapacityFrees() = runTest {
+        val events = mutableListOf<String>()
+        val releaseFirst = CompletableDeferred<Unit>()
+        val queue = PrioritizedTaskQueue(backgroundScope, maxConcurrentTasks = 2)
+
+        val held = (1..2).map { i ->
+            async {
+                queue.submit(PrioritizedTaskQueue.Priority.NORMAL) {
+                    events += "held-$i-start"
+                    releaseFirst.await()
+                    events += "held-$i-end"
+                }
+            }
+        }
+        advanceUntilIdle()
+
+        val overflow = async {
+            queue.submit(PrioritizedTaskQueue.Priority.NORMAL) {
+                events += "overflow-start"
+            }
+        }
+        // Capacity 2 is busy: overflow must not have started yet.
+        runCurrent()
+        assertTrue(!events.contains("overflow-start"))
+
+        releaseFirst.complete(Unit)
+        held.forEach { it.await() }
+        overflow.await()
+
+        assertTrue(events.contains("overflow-start"))
+        assertEquals(listOf("held-1-start", "held-2-start"), events.filter { it.endsWith("start") }.take(2))
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun isIdleReflectsRunningTasks() = runTest {
+        val hold = CompletableDeferred<Unit>()
+        val queue = PrioritizedTaskQueue(backgroundScope)
+
+        val task = async {
+            queue.submit(PrioritizedTaskQueue.Priority.NORMAL) {
+                hold.await()
+            }
+        }
+        advanceUntilIdle()
+
+        assertTrue(!queue.isIdle())
+
+        hold.complete(Unit)
+        task.await()
+        advanceUntilIdle()
+
+        assertTrue(queue.isIdle())
     }
 }

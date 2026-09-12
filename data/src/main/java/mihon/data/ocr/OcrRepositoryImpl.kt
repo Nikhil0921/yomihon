@@ -19,6 +19,7 @@ import mihon.domain.ocr.model.OcrImage
 import mihon.domain.ocr.model.OcrModel
 import mihon.domain.ocr.model.OcrPageResult
 import mihon.domain.ocr.model.OcrRegion
+import mihon.domain.ocr.model.OcrScanPriority
 import mihon.domain.ocr.model.OcrTextOrientation
 import mihon.domain.ocr.repository.OcrRepository
 import tachiyomi.core.common.preference.AndroidPreferenceStore
@@ -218,6 +219,7 @@ class OcrRepositoryImpl(
         chapterId: Long,
         pageIndex: Int,
         image: OcrImage,
+        priority: OcrScanPriority,
     ): OcrPageResult {
         getCachedPage(chapterId, pageIndex)?.let { cached ->
             logcat(LogPriority.DEBUG) { "OCR scan cache hit chapter=$chapterId page=$pageIndex" }
@@ -242,7 +244,7 @@ class OcrRepositoryImpl(
 
             try {
                 if (owner) {
-                    val result = dispatchScan(chapterId, pageIndex, image)
+                    val result = dispatchScan(chapterId, pageIndex, image, priority)
                     deferred.complete(result)
                     result
                 } else {
@@ -265,12 +267,14 @@ class OcrRepositoryImpl(
         chapterId: Long,
         pageIndex: Int,
         image: OcrImage,
+        priority: OcrScanPriority,
     ): OcrPageResult = when (val selectedModel = ocrModelPref.get()) {
         OcrModel.GLENS -> scanWithGlens(
             chapterId = chapterId,
             pageIndex = pageIndex,
             image = image,
             modelKey = selectedModel,
+            priority = priority,
         )
         OcrModel.LEGACY -> scanLocalOrFallback(
             chapterId = chapterId,
@@ -278,6 +282,7 @@ class OcrRepositoryImpl(
             image = image,
             modelKey = selectedModel,
             type = EngineType.LEGACY,
+            priority = priority,
         )
         OcrModel.FAST -> scanLocalOrFallback(
             chapterId = chapterId,
@@ -285,12 +290,14 @@ class OcrRepositoryImpl(
             image = image,
             modelKey = selectedModel,
             type = EngineType.FAST,
+            priority = priority,
         )
         OcrModel.OWOCR -> scanOwOcrOrFallback(
             chapterId = chapterId,
             pageIndex = pageIndex,
             image = image,
             modelKey = selectedModel,
+            priority = priority,
         )
     }
 
@@ -343,6 +350,7 @@ class OcrRepositoryImpl(
         image: OcrImage,
         modelKey: OcrModel,
         type: EngineType,
+        priority: OcrScanPriority,
     ): OcrPageResult {
         return try {
             scanLocally(
@@ -351,6 +359,7 @@ class OcrRepositoryImpl(
                 image = image,
                 modelKey = modelKey,
                 type = type,
+                priority = priority,
             )
         } catch (e: OcrException.DetectionUnavailable) {
             if (!useFallbackModelsPref.get()) {
@@ -364,6 +373,7 @@ class OcrRepositoryImpl(
                 pageIndex = pageIndex,
                 image = image,
                 modelKey = modelKey,
+                priority = priority,
             )
         }
     }
@@ -379,9 +389,10 @@ class OcrRepositoryImpl(
         pageIndex: Int,
         image: OcrImage,
         modelKey: OcrModel,
+        priority: OcrScanPriority,
     ): OcrPageResult {
         try {
-            return scanWithGlensOnce(chapterId, pageIndex, image, modelKey)
+            return scanWithGlensOnce(chapterId, pageIndex, image, modelKey, priority)
         } catch (firstError: Throwable) {
             if (firstError is CancellationException) throw firstError
             // Transient server failures (HTTP 502/429 observed on the Lens endpoint)
@@ -392,7 +403,7 @@ class OcrRepositoryImpl(
                 "OCR (glens) transient scan failure, retrying once"
             }
             return try {
-                scanWithGlensOnce(chapterId, pageIndex, image, modelKey)
+                scanWithGlensOnce(chapterId, pageIndex, image, modelKey, priority)
             } catch (retryError: Throwable) {
                 if (retryError is CancellationException) throw retryError
                 firstError.addSuppressed(retryError)
@@ -406,9 +417,10 @@ class OcrRepositoryImpl(
         pageIndex: Int,
         image: OcrImage,
         modelKey: OcrModel,
+        priority: OcrScanPriority,
     ): OcrPageResult {
         return try {
-            submitTask(PrioritizedTaskQueue.Priority.NORMAL) {
+            submitTask(priority.toQueuePriority()) {
                 // Bitmap lifecycle and caching live inside the task: callers may abandon the
                 // await on navigation, but a queued task runs to completion, recycles its own
                 // bitmap, and leaves the result cached for whoever asks next.
@@ -443,9 +455,10 @@ class OcrRepositoryImpl(
         pageIndex: Int,
         image: OcrImage,
         modelKey: OcrModel,
+        priority: OcrScanPriority,
     ): OcrPageResult {
         return try {
-            submitTask(PrioritizedTaskQueue.Priority.NORMAL) {
+            submitTask(priority.toQueuePriority()) {
                 image.useBitmap { bitmap ->
                     val regions = engineLocks.withTextEngineLock(EngineType.OWOCR) {
                         val engine = owOcrEngine ?: OwOcrEngine(context).also {
@@ -477,6 +490,7 @@ class OcrRepositoryImpl(
         pageIndex: Int,
         image: OcrImage,
         modelKey: OcrModel,
+        priority: OcrScanPriority,
     ): OcrPageResult {
         return try {
             scanWithOwOcr(
@@ -484,6 +498,7 @@ class OcrRepositoryImpl(
                 pageIndex = pageIndex,
                 image = image,
                 modelKey = modelKey,
+                priority = priority,
             )
         } catch (e: Throwable) {
             if (e is CancellationException) throw e
@@ -498,6 +513,7 @@ class OcrRepositoryImpl(
                 pageIndex = pageIndex,
                 image = image,
                 modelKey = modelKey,
+                priority = priority,
             )
         }
     }
@@ -508,8 +524,9 @@ class OcrRepositoryImpl(
         image: OcrImage,
         modelKey: OcrModel,
         type: EngineType,
+        priority: OcrScanPriority,
     ): OcrPageResult {
-        return submitTask(PrioritizedTaskQueue.Priority.NORMAL) {
+        return submitTask(priority.toQueuePriority()) {
             image.useBitmap { bitmap ->
                 val boxes = engineLocks.withDetectionLock {
                     detectionEngine().detectTextRegions(bitmap)
@@ -579,6 +596,11 @@ class OcrRepositoryImpl(
         block: suspend () -> T,
     ): T {
         return taskQueue.submit(priority, block)
+    }
+
+    private fun OcrScanPriority.toQueuePriority(): PrioritizedTaskQueue.Priority = when (this) {
+        OcrScanPriority.HIGH -> PrioritizedTaskQueue.Priority.HIGH
+        OcrScanPriority.NORMAL -> PrioritizedTaskQueue.Priority.NORMAL
     }
 
     private suspend fun <T> withActiveOperation(block: suspend () -> T): T {

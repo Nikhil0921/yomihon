@@ -13,8 +13,14 @@ internal class OcrEngineLocks {
         type: OcrRepositoryImpl.EngineType,
         block: suspend () -> T,
     ): T {
-        return mutexFor(type).withLock {
-            block()
+        // GLENS is a stateless network client (its own tiled path already runs
+        // TILE_CONCURRENCY requests in parallel through the shared instance), so
+        // GLENS text scans run unlocked — serializing them was the dominant cost
+        // of uncached Read-Aloud latency. Local engines keep their locks: their
+        // interpreters are not thread-safe.
+        return when (type) {
+            OcrRepositoryImpl.EngineType.GLENS, OcrRepositoryImpl.EngineType.LEGACY -> block()
+            else -> mutexFor(type).withLock { block() }
         }
     }
 
@@ -38,10 +44,11 @@ internal class OcrEngineLocks {
 
     private fun mutexFor(type: OcrRepositoryImpl.EngineType): Mutex {
         return when (type) {
-            // LEGACY engine removed; persisted LEGACY selection redirects to GLENS.
+            // LEGACY engine removed; persisted LEGACY selection redirects to GLENS
+            // (unlocked, see withTextEngineLock).
             OcrRepositoryImpl.EngineType.LEGACY -> glensMutex
-            OcrRepositoryImpl.EngineType.FAST -> fastMutex
             OcrRepositoryImpl.EngineType.GLENS -> glensMutex
+            OcrRepositoryImpl.EngineType.FAST -> fastMutex
             OcrRepositoryImpl.EngineType.OWOCR -> owOcrMutex
         }
     }
