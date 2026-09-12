@@ -4920,3 +4920,99 @@ RM-01 changes uncommitted beside the pre-existing tone set. No release,
 no tag, no v0.5.4. Next per roadmap queue: user commit decision (U-2) →
 Q1 v0.5.4 release batch.
 ```
+
+```text
+[COMPLETED 2026-09-12 — Q1 v0.5.4 RELEASE BATCH (RM-01 + tone set shipped; release
+published; PLUS user-requested OCR preload latency fix)]
+
+GIT BASELINE CORRECTION (recorded): on session start the RM-01 + artwork-tone
+set was ALREADY COMMITTED by the user as 0434d07a1 (U-2 satisfied — commit
+together, as user directed). Tree was clean; no re-commit needed. Release
+proceeded from that state.
+
+RELEASE SEQUENCE (all executed + verified):
+1. Gates (docker devcontainer vsc-yomihon-e24e3bd…, JDK17, -Xmx4g, both
+   volumes): spotlessCheck + testDebugUnitTest + verifySqlDelightMigration
+   BUILD SUCCESSFUL 3m. No DB change (migration gate run anyway).
+2. Version bump 0.5.4 / versionCode 30 (convention: +1 like v0.5.2→v0.5.3);
+   CHANGELOG entry (release: v0.5.4 commit 9b153610a). Notes list only the
+   actual delta since v0.5.3 (toolbar customization, artwork tray, a11y pass,
+   Batch 6, RM-01 fixes); branding/APK-size were v0.5.3 content — NOT
+   re-claimed.
+3. assembleRelease -Pinclude-telemetry -Penable-updater BUILD SUCCESSFUL
+   12m23s → aapt2: versionCode=30 versionName=0.5.4 label='Yomitsu';
+   ocr_fast ×2 + panel_detector packaged; legacy assets/ocr/ ABSENT.
+   Sizes: arm64 62.3MB / v7a 56.0 / x86 55.5 / x86_64 67.1 / universal 122.2.
+4. Device smoke PASS on SM_M066B (wireless 192.168.29.98:5555; -r install, no
+   data wipe): launch clean, 5 tabs, reader loads (Villain To Kill ch2 13pp),
+   Read Aloud play/pause/resume/stop OK (pill Pause↔Play↔Stop), reader
+   settings + Read aloud tab render, Settings Search works ("read aloud" →
+   "Read aloud button"), a11y content-descs present, ZERO FATAL/crash.
+   Evidence: .device-pass/v054-smoke.log (23.8MB).
+
+USER-REPORTED ISSUE (pre-push): "takes a lot of time to preload new
+uncached OCR" — RELEASE BLOCKED, fix landed BEFORE publish:
+- Evidence: smoke log `TTS startup open->first page ready in 32548ms`;
+  GLENS scans 20-67s/page (service latency; historical rm01 logs identical —
+  structural, NOT a regression).
+- Root causes (code-proven): (1) PrioritizedTaskQueue = strictly serial
+  worker; (2) glensMutex serialized even remote (network-bound) GLENS scans;
+  (3) current-page acquire submitted at NORMAL priority → could queue behind
+  prefetch; (4) prefetchDepth 1 page at 1x rate with a serial for-loop —
+  lookahead can never cover a 30s scan.
+- Fixes (commit 9f228d07c, gates green incl. 9 OCR unit tests):
+  * PrioritizedTaskQueue: bounded parallelism maxConcurrentTasks=3, HIGH
+    dequeued first, finishing tasks restart the drain worker. ALSO fixed an
+    elvis-precedence bug found on-device (HIGH dequeues skipped the
+    activeTasks++ → counter went negative → isIdle never true → engines
+    never cleaned up; first release APK wedged once during acquire — that
+    build was superseded).
+  * OcrEngineLocks: GLENS/LEGACY text scans run UNLOCKED (engine stateless
+    except StringBuilder-based TextPostprocessor — plain function local use;
+    engine's own tiled path already runs TILE_CONCURRENCY=3 parallel requests
+    through the same instance). FAST/OWOCR keep mutexes (tflite not
+    thread-safe). withAllLocks unchanged (cleanup waits via glensMutex +
+    activeOperations refcount).
+  * Priority plumbing: OcrScanPriority{HIGH,NORMAL} in :domain models;
+    OcrRepository.scanPage(priority=) default NORMAL; TTS scanOnDemand
+    current page = HIGH, prefetch = NORMAL.
+  * Controller: prefetch pages scan in PARALLEL (async/awaitAll; OCR queue
+    bounds true concurrency); prefetchDepth 1→2 (2→3 at ≥1.5x, MAX=3 at
+    ≥2.5x).
+  * Tests: PrioritizedTaskQueueTest +5 cases (parallel capacity, capacity
+    gating, idle reflection, priority under capacity 1); OcrEngineLocksTest
+    glensTextScansRunInParallel added. NOTE: runTest virtual-time quirk —
+    use runCurrent() not advanceUntilIdle() before asserting mid-task state
+    (advanceUntilIdle silently swallows children suspended on un-completed
+    deferreds).
+- DEVICE VERIFIED (fixed build, SM_M066B): dev build uncached Absolute Sword
+  Sense ch (webtoon, 24pp): startup 23.4s (was 32.5s; GLENS floor ~15-30s
+  remains — service latency), then gap-free multi-page playback with visible
+  parallel prefetch (two `on-demand scan start` same second, 37.9s + 36.2s
+  scans overlapped); cache-hit advance acquireMs 51-72ms. Release build
+  re-verified: Swordmaster ch4→ch7 (mixed cached/uncached): startup 3.3s
+  cached / 368ms on retry; parallel scans 26.4s+34.7s overlapped; playback
+  continuous ~4min; remote image-fetch SocketTimeout (SOURCE-side, OkHttp
+  page-image download — unrelated to OCR queue) surfaced Error + Retry
+  (BUG-002 path), Retry recovered clean + speech resumed. No wedge, no
+  FATAL. Evidence: .device-pass/v054-smoke2.log.
+- Residual latency (documented ceiling, not fixable in-app): GLENS remote
+  scan itself 15-45s/page; first uncached page cannot beat one scan round
+  trip (~15-30s). Parallel queue only removes the SELF-IMPOSED serialization
+  + queue-behind-prefetch. ponytail: if first-page latency matters more,
+  Phase 10B local/neural OCR is the upgrade path.
+
+RELEASE PUBLISHED:
+- commit 9f228d07c (tag v0.5.4) = 9b153610a (bump) + 9f228d07c (latency fix)
+  + 0434d07a1 (RM-01+tone+docs) + earlier committed feature sets.
+- Pushed main + tag; GitHub release "Yomitsu v0.5.4" published Latest with 5
+  ABI APKs: https://github.com/Nikhil0921/yomitsu/releases/tag/v0.5.4
+- Post-publish verified: branch pushed, tag remote, release non-draft with
+  5 assets, tree clean.
+
+Known-issue note (UNCHANGED, pre-existing, NOT release blockers): BUG-003
+resumeIndex across Paused page change (P3); BUG-004 OCR cache ignores
+ocr_model (P3); BUG-005/006/007 P4s; U-7/8/9 minors.
+Next per roadmap queue: Q2 — Genre-chip Search (user decision U-4 pending
+approval).
+```

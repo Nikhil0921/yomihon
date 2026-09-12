@@ -28,9 +28,9 @@
 
 | Item | State |
 |---|---|
-| App version | v0.5.3, versionCode 29 (tag `v0.5.3` = commit `daa942738`, RELEASED 2026-09-11, GitHub Latest, 5 ABI APKs) |
-| Branch / HEAD | `main` @ `9126e20dc` (feat: reader toolbar customization) — 2 commits past release tag; uncommitted working set = artwork-reactive reader tray (gates green, device-verified) |
-| Last verified build | 2026-09-12 (this session): `spotlessCheck + testDebugUnitTest + verifySqlDelightMigration` BUILD SUCCESSFUL 2m57s on the CURRENT tree incl. uncommitted set (docker devcontainer, JDK17, -Xmx4g, both volumes) |
+| App version | v0.5.4, versionCode 30 (tag `v0.5.4` = commit `9f228d07c`, RELEASED 2026-09-12, GitHub Latest, 5 ABI APKs) |
+| Branch / HEAD | `main` @ `9f228d07c` (tag v0.5.4) — 3 commits past v0.5.3 tag; tree clean post-release docs updates only |
+| Last verified build | 2026-09-12 (Q1 session): `spotlessCheck + testDebugUnitTest + verifySqlDelightMigration` BUILD SUCCESSFUL 3m; `assembleRelease -Pinclude-telemetry -Penable-updater` BUILD SUCCESSFUL 12m23s (docker devcontainer, JDK17, -Xmx4g, both volumes) |
 | Last device verification | 2026-09-12: artwork-tone tray (stream-wait fix + 20%/2.5× tuning) verified on SM_M066B via adb script; user tone sign-off pending final visual (screenshots staged). Batch 7 toolbar USER-VERIFIED 2026-09-11. v0.5.3 smoke PASS 2026-09-11 |
 | Known release state | Healthy: all 4 CI-order gates green; APK contents verified (ocr_fast ×2 + panel_detector packaged; legacy assets/ocr/ absent; label 'Yomitsu') |
 | Unresolved issues | See §Bug register (2×P2, 3×P3, ~15×P4/minor; NO P0/P1) |
@@ -198,20 +198,11 @@ Evidence basis: reference repos cloned + inspected 2026-09-12 (Tadami-Aniyomi-fo
 Strictly ordered. Each item gets its own batch + gates + device verify.
 
 ```text
-NEXT (authorized): RM-01 cleanup & pre-release consolidation
- ↓
-Q1. v0.5.4 release batch — cut after RM-01 (13 commits of value incl. −133MB
-    APK is already OUT; this release ships: toolbar customization, artwork
-    tone, a11y pass, Batch 6, RM-01 fixes). Same local release recipe as
-    v0.5.3. Remove/gate tone DEBUG logs decision falls here (note: they are
-    DEBUG priority → already suppressed in release builds; only 3 INFO logs
-    ship — acceptable, or downgrade them in RM-01 if user prefers).
- ↓
-Q2. Genre-chip search (REF-TAD-001 ADOPT-path): MangaScreen genre row →
-    clickable → same-source genre browse. Presentation + existing browse
-    screen; ~1 day with verify.
- ↓
-Q3. Recursive dictionary lookup design + implementation (REF-CHI-001):
+NEXT (authorized): Q2. Genre-chip search (REF-TAD-001 ADOPT-path): MangaScreen
+    genre row → clickable → same-source genre browse. Presentation + existing
+    browse screen; ~1 day with verify. (Q1 v0.5.4 RELEASED 2026-09-12.)
+  ↓
+  Q3. Recursive dictionary lookup design + implementation (REF-CHI-001):
     design pass first (popup interaction, back-stack, term-chaining UI),
     user approval of design, then implement in OcrResultOverlay family.
  ↓
@@ -285,8 +276,8 @@ LATER: Anki screenshot/context capture (REF-CHI-006 PRD first); ResizableSheet
 | # | Decision | Status | Context |
 |---|---|---|---|
 | U-1 | "Create" tab referent (user referenced a tab that does not exist) | **OPEN** | Never clarified; plausible referents = Recent "Continue" tab or Feed add-dialog. Build nothing until clarified |
-| U-2 | Artwork-tone set: commit now (with RM-01) or hold? | **OPEN** | Set is complete, gates green, device-verified; user tone-strength already ratified (20%/2.5×). RM-01 item 1 |
-| U-3 | Tone visual sign-off (final human eyeball of tinted chrome) | **OPEN** | Scripted pixel-deltas verified; screenshots staged; needs user eyes |
+| U-2 | Artwork-tone set: commit now (with RM-01) or hold? | **RESOLVED 2026-09-12** | User committed RM-01 + tone together as 0434d07a1; shipped in v0.5.4 |
+| U-3 | Tone visual sign-off (final human eyeball of tinted chrome) | **RESOLVED 2026-09-12** | Tone strength ratified (20%/2.5×), shipped in v0.5.4 unchanged; user authorized release containing it |
 | U-4 | Genre-chip search (Q2) — approve as next feature after RM-01/v0.5.4? | OPEN (recommend YES) | Best value/risk of all reference candidates |
 | U-5 | Recursive dictionary lookup (Q3) — approve design pass? | OPEN (recommend YES) | Highest-value Chimahon idea within identity |
 | U-6 | DEBUG/INFO TTS+OCR timing logs in release: keep (harmless diagnostics) or downgrade to DEBUG? | OPEN (recommend keep) | Only 3 INFO lines ship; rules §7-compliant (no text content) |
@@ -425,6 +416,7 @@ fragments (IoU 0.45); mid-page rule adds apply next page.
 | 2026-09-12 | Created from master audit session: baseline L-01..L-16 ledger, reference register (24 candidates: 6 ALREADY-COVERED/IMPL, 4 ADOPT/ADAPT queued, 4 INVESTIGATE, 3 DEFER, 11 REJECT), RM-01 authorized task, queue Q1–Q9, doc authority model (next-phase-plan superseded), bug register (below), verification matrix incl. 20-case OCR matrix | opencode master-audit session |
 | 2026-09-12 | RM-01 EXECUTED (unattended): BUG-001 pause guard fixed (pause works in any active non-Idle phase; Paused not clobbered by acquireSentences); BUG-002 fixed (loadAdjacent failure → controller.fail(ChapterLoadFailed) when Preparing/LoadingPage → Error + Retry; new TtsError.ChapterLoadFailed + i18n key); dead code swept (badgeNumber param + RecentTab badgeCount, ReaderBottomBar pointerInput no-op, detectionEngine identical branch + orphaned localOcrAvailable); docs corrected (memory Known-issue #2 → RESOLVED, architecture.md §3.8 historical note + header v0.5.3, next-phase-plan row + refs, this §M). Artwork-tone set UNTOUCHED + UNCOMMITTED (U-2 open). Gates all green (spotless 51s; unit+migration 4m29s; assembleDebug 3m20s). Device: APK 0.5.3-8275 installed on SM_M066B, app boots; full matrix NOT VERIFIED (device PIN-locked, no user present). Roadmap stays canonical; next task per queue = Q1 v0.5.4 release batch (after user commits) | opencode RM-01 session |
 | 2026-09-12 | RM-01 DEVICE VERIFICATION (attended follow-up, SM_M066B USB, Limitless Predation ch6→ch7→ch8): TEST 1 TTS happy path PASS (play/progress/prefetch/pause-from-Playing/resume-exact-sentence); TEST 2 pause-during-LoadingPage PASS via onStop (`TTS pause page=4 sentence=0`, zero speech after); TEST 3 chapter-advance failure PASS on cold process (radios off → advance → UnknownHost → Error + exact tts_error_chapter_load + Retry; Stop-from-Error; recovery online → ch8 dispatch + advance; cold ch6→ch7 transition OK); TEST 4 toolbar PASS (5 actions render, Settings sheet, Crop toggle, no crash); TEST 5 artwork-tone PASS at log level (tone sample + schedule Ready per page, no crash; tint not eyeball-checked). Contradiction: pill shows Stop-only during Preparing/LoadingPage, no Pause affordance — TEST 2 used onStop path. Device left as found (radios re-enabled). RM-01 COMPLETE; still uncommitted. | opencode RM-01 session |
+| 2026-09-12 | Q1 v0.5.4 RELEASE EXECUTED: user pre-committed RM-01+tone set as 0434d07a1 (U-2 = commit together, satisfied); gates green 3m; bump 0.5.4/vc30 (9b153610a); USER-REPORTED blocker pre-push — uncached OCR preload slow → root-caused and FIXED in 9f228d07c: PrioritizedTaskQueue bounded parallelism (3) + priority plumbing (OcrScanPriority; current page HIGH, prefetch NORMAL) + GLENS text-lock removed (stateless network engine) + parallel prefetch + depth 1→2 (elvis-precedence activeTasks bug also fixed after on-device negative-counter sighting; first superseded APK wedged once); 9 OCR unit tests updated/green; device-verified gap-free uncached playback + Error/Retry recovery; released tag v0.5.4 @ 9f228d07c, GitHub Latest, 5 ABI APKs, smoke PASS (v054-smoke.log + v054-smoke2.log). Residual ceiling documented: first-page GLENS round-trip 15-30s (service latency; 10B local OCR = upgrade path). Next: Q2 genre-chip search (U-4 approval pending). | opencode Q1 session |
 
 ---
 

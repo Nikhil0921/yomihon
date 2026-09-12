@@ -5,7 +5,17 @@
 > A phase is COMPLETED only when its verification steps have actually been run
 > and recorded in `docs/memory.md`.
 
-Current phase pointer: **MASTER ROADMAP CANONICAL 2026-09-12 —
+Current phase pointer: **Q1 v0.5.4 RELEASED 2026-09-12 (tag v0.5.4,
+  commit 9f228d07c, GitHub Latest with 5 ABI APKs; RM-01 + artwork-tone set
+  shipped inside it as commit 0434d07a1, user-committed per U-2). All gates
+  green; device smoke PASS on SM_M066B; PLUS user-requested pre-push fix:
+  parallel OCR scan queue with HIGH priority for the current Read-Aloud
+  page (commit 9f228d07c) — uncached preload much faster; first-page GLENS
+  round-trip (~15-30s, service latency) remains a documented ceiling
+  (Phase 10B local OCR = upgrade path). Next per roadmap queue: Q2 —
+  Genre-chip Search (awaiting user approval U-4); then Q3 recursive
+  dictionary lookup design.**
+  Prior: MASTER ROADMAP CANONICAL 2026-09-12 —
   docs/implementation-roadmap.md is now THE execution register (agent
   execution lock inside it). Current authorized task: RM-01 cleanup &
   pre-release consolidation (TTS pause-guard P2 + chapter-advance-failure
